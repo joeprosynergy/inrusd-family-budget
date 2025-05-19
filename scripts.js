@@ -10,30 +10,33 @@ const firebaseConfig = {
 
 // Initialize Firebase
 console.log('Attempting to initialize Firebase');
+let auth = null;
+let db = null;
 try {
   // Validate firebaseConfig fields
+  console.log('Validating firebaseConfig:', firebaseConfig);
   const requiredFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
   for (const field of requiredFields) {
     if (!firebaseConfig[field] || firebaseConfig[field].trim() === '') {
       throw new Error(`Invalid Firebase configuration: ${field} is missing or empty`);
     }
   }
-  console.log('Firebase config validated:', firebaseConfig);
+  if (typeof firebase === 'undefined') {
+    throw new Error('Firebase SDK not loaded');
+  }
   firebase.initializeApp(firebaseConfig);
   console.log('Firebase initialized successfully');
+  auth = firebase.auth();
+  db = firebase.firestore();
+  console.log('Firebase services initialized:', { auth: !!auth, db: !!db });
 } catch (error) {
-  console.error('Firebase initialization failed:', error.message, error);
-  alert('Failed to initialize Firebase. Please check the configuration and try again.');
-  throw error; // Stop execution to prevent further errors
-}
-
-// Firebase Services
-console.log('Initializing Firebase services');
-const auth = firebase.auth ? firebase.auth() : null;
-const db = firebase.firestore ? firebase.firestore() : null;
-if (!auth || !db) {
-  console.error('Firebase services not available:', { auth: !!auth, db: !!db });
-  alert('Firebase Auth or Firestore not available. Please check SDK loading.');
+  console.error('Firebase initialization failed:', {
+    message: error.message,
+    code: error.code,
+    stack: error.stack
+  });
+  console.warn('Continuing with limited functionality (UI only)');
+  // Don't alert to avoid blocking UI
 }
 
 // DOM Elements
@@ -100,34 +103,43 @@ function clearErrors() {
 }
 
 // Authentication
-auth.onAuthStateChanged(user => {
-  console.log('Auth state changed:', user ? user.uid : 'No user');
-  if (user) {
-    currentUser = user;
-    authSection.classList.add('hidden');
-    appSection.classList.remove('hidden');
-    db.collection('users').doc(user.uid).get().then(doc => {
-      if (doc.exists) {
-        userCurrency = doc.data().currency || 'INR';
-        familyCode = doc.data().familyCode;
-        console.log('User data loaded:', { userCurrency, familyCode });
-        loadAppData();
+if (auth) {
+  auth.onAuthStateChanged(user => {
+    console.log('Auth state changed:', user ? user.uid : 'No user');
+    if (user) {
+      currentUser = user;
+      authSection.classList.add('hidden');
+      appSection.classList.remove('hidden');
+      if (db) {
+        db.collection('users').doc(user.uid).get().then(doc => {
+          if (doc.exists) {
+            userCurrency = doc.data().currency || 'INR';
+            familyCode = doc.data().familyCode;
+            console.log('User data loaded:', { userCurrency, familyCode });
+            loadAppData();
+          } else {
+            console.error('User document not found');
+          }
+        }).catch(error => {
+          console.error('Error fetching user data:', error.code, error.message);
+        });
       } else {
-        console.error('User document not found');
+        console.error('Firestore not available for user data');
       }
-    }).catch(error => {
-      console.error('Error fetching user data:', error);
-    });
-  } else {
-    currentUser = null;
-    authSection.classList.remove('hidden');
-    appSection.classList.add('hidden');
-    loginModal.classList.remove('hidden');
-    signupModal.classList.add('hidden');
-    resetModal.classList.add('hidden');
-  }
-});
+    } else {
+      currentUser = null;
+      authSection.classList.remove('hidden');
+      appSection.classList.add('hidden');
+      loginModal.classList.remove('hidden');
+      signupModal.classList.add('hidden');
+      resetModal.classList.add('hidden');
+    }
+  });
+} else {
+  console.warn('Auth service not available, UI will load without authentication');
+}
 
+// Button Event Listeners
 loginButton.addEventListener('click', () => {
   console.log('Login button clicked');
   clearErrors();
@@ -147,7 +159,7 @@ loginButton.addEventListener('click', () => {
         loginButton.disabled = false;
         loginButton.textContent = 'Login';
         console.error('Login error:', error.code, error.message);
-        showError('login-password', error.message);
+        showError('login-password', error.message || 'Failed to log in');
       });
   } else {
     console.error('Auth service not available or invalid inputs');
@@ -203,7 +215,7 @@ signupButton.addEventListener('click', () => {
       });
   } else {
     console.error('Auth or Firestore service not available or invalid inputs');
-    showError('signup-email', 'Authentication or database service not available');
+    showError('signup-email', auth && db ? 'Invalid input data' : 'Authentication or database service not available');
   }
 });
 
@@ -228,7 +240,7 @@ resetButton.addEventListener('click', () => {
         console.error('Reset error:', error.code, error.message);
         resetButton.disabled = false;
         resetButton.textContent = 'Send Reset Link';
-        showError('reset-email', error.message);
+        showError('reset-email', error.message || 'Failed to send reset email');
       });
   } else {
     console.error('Auth service not available');
@@ -242,13 +254,17 @@ logoutButton.addEventListener('click', () => {
     auth.signOut();
   } else {
     console.error('Auth service not available');
+    showError('logout-button', 'Authentication service not available');
   }
 });
 
 // Load App Data
 function loadAppData() {
   console.log('Loading app data');
-  if (!currentUser || !familyCode || !db) return;
+  if (!currentUser || !familyCode || !db) {
+    console.error('Cannot load app data: missing user, familyCode, or Firestore');
+    return;
+  }
   loadCategories();
   loadBudgets();
   loadTransactions();
@@ -281,7 +297,7 @@ function loadCategories() {
               categoryBudgetSelect.insertBefore(budgetOption, categoryBudgetSelect.querySelector('option[value="add-new"]'));
             }
           }).catch(error => {
-            console.error('Error fetching budget for category:', error);
+            console.error('Error fetching budget for category:', error.code, error.message);
           });
         }
       });
@@ -307,13 +323,13 @@ function loadCategories() {
               tr.children[2].textContent = budgetDoc.data().name;
             }
           }).catch(error => {
-            console.error('Error fetching budget for category table:', error);
+            console.error('Error fetching budget for category table:', error.code, error.message);
           });
         }
       });
     })
     .catch(error => {
-      console.error('Error loading categories:', error);
+      console.error('Error loading categories:', error.code, error.message);
     });
 }
 
@@ -337,10 +353,11 @@ addCategory.addEventListener('click', () => {
       document.getElementById('category-budget').value = 'none';
       loadCategories();
     }).catch(error => {
-      console.error('Error adding category:', error);
+      console.error('Error adding category:', error.code, error.message);
     });
   } else {
     console.error('Firestore or user not available');
+    showError('category-name', 'Database service not available');
   }
 });
 
@@ -373,10 +390,11 @@ saveCategory.addEventListener('click', () => {
       document.getElementById('new-category-budget').value = 'none';
       loadCategories();
     }).catch(error => {
-      console.error('Error saving category:', error);
+      console.error('Error saving category:', error.code, error.message);
     });
   } else {
     console.error('Firestore or user not available');
+    showError('new-category-name', 'Database service not available');
   }
 });
 
@@ -417,13 +435,13 @@ categoryTable.addEventListener('click', e => {
                 addCategory.onclick = null;
                 loadCategories();
               }).catch(error => {
-                console.error('Error updating category:', error);
+                console.error('Error updating category:', error.code, error.message);
               });
             }
           };
         }
       }).catch(error => {
-        console.error('Error fetching category:', error);
+        console.error('Error fetching category:', error.code, error.message);
       });
     }
   }
@@ -434,7 +452,7 @@ categoryTable.addEventListener('click', e => {
       db.collection('categories').doc(id).delete().then(() => {
         loadCategories();
       }).catch(error => {
-        console.error('Error deleting category:', error);
+        console.error('Error deleting category:', error.code, error.message);
       });
     }
   }
@@ -467,7 +485,7 @@ function loadBudgets() {
           <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - (budget.spent || 0), userCurrency)}</td>
           <td class="px-6 py-4 whitespace-nowrap text-sm">
             <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
-            <button class="text-red-600 hover:text-blue-800 delete-budget" data-id="${doc.id}">Delete</button>
+            <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
           </td>
         `;
         budgetTable.appendChild(tr);
@@ -493,7 +511,7 @@ function loadBudgets() {
       totalRemaining.textContent = formatCurrency(totalRemainingAmount, userCurrency);
     })
     .catch(error => {
-      console.error('Error loading budgets:', error);
+      console.error('Error loading budgets:', error.code, error.message);
     });
 }
 
@@ -517,10 +535,11 @@ addBudget.addEventListener('click', () => {
       loadBudgets();
       loadCategories();
     }).catch(error => {
-      console.error('Error adding budget:', error);
+      console.error('Error adding budget:', error.code, error.message);
     });
   } else {
     console.error('Firestore or user not available');
+    showError('budget-name', 'Database service not available');
   }
 });
 
@@ -553,10 +572,11 @@ saveBudget.addEventListener('click', () => {
       loadBudgets();
       loadCategories();
     }).catch(error => {
-      console.error('Error saving budget:', error);
+      console.error('Error saving budget:', error.code, error.message);
     });
   } else {
     console.error('Firestore or user not available');
+    showError('new-budget-name', 'Database service not available');
   }
 });
 
@@ -594,13 +614,13 @@ budgetTable.addEventListener('click', e => {
                 loadBudgets();
                 loadCategories();
               }).catch(error => {
-                console.error('Error updating budget:', error);
+                console.error('Error updating budget:', error.code, error.message);
               });
             }
           };
         }
       }).catch(error => {
-        console.error('Error fetching budget:', error);
+        console.error('Error fetching budget:', error.code, error.message);
       });
     }
   }
@@ -612,7 +632,7 @@ budgetTable.addEventListener('click', e => {
         loadBudgets();
         loadCategories();
       }).catch(error => {
-        console.error('Error deleting budget:', error);
+        console.error('Error deleting budget:', error.code, error.message);
       });
     }
   }
@@ -642,17 +662,17 @@ function loadTransactions() {
             <td class="px-6 py-4 whitespace-nowrap text-sm">
               <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
               <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
-            </td>
-          `;
-          transactionTable.appendChild(tr);
-        }).catch(error => {
-          console.error('Error fetching category for transaction:', error);
-        });
+          </td>
+        `;
+        transactionTable.appendChild(tr);
+      }).catch(error => {
+        console.error('Error fetching category for transaction:', error.code, error.message);
       });
-    })
-    .catch(error => {
-      console.error('Error loading transactions:', error);
     });
+  })
+  .catch(error => {
+    console.error('Error loading transactions:', error.code, error.message);
+  });
 }
 
 addTransaction.addEventListener('click', () => {
@@ -680,10 +700,11 @@ addTransaction.addEventListener('click', () => {
       loadTransactions();
       updateDashboard();
     }).catch(error => {
-      console.error('Error adding transaction:', error);
+      console.error('Error adding transaction:', error.code, error.message);
     });
   } else {
     console.error('Firestore or user not available');
+    showError('category', 'Database service not available');
   }
 });
 
@@ -722,13 +743,13 @@ transactionTable.addEventListener('click', e => {
                 loadTransactions();
                 updateDashboard();
               }).catch(error => {
-                console.error('Error updating transaction:', error);
+                console.error('Error updating transaction:', error.code, error.message);
               });
             }
           };
         }
       }).catch(error => {
-        console.error('Error fetching transaction:', error);
+        console.error('Error fetching transaction:', error.code, error.message);
       });
     }
   }
@@ -740,7 +761,7 @@ transactionTable.addEventListener('click', e => {
         loadTransactions();
         updateDashboard();
       }).catch(error => {
-        console.error('Error deleting transaction:', error);
+        console.error('Error deleting transaction:', error.code, error.message);
       });
     }
   }
@@ -767,6 +788,6 @@ function updateDashboard() {
       balance.textContent = formatCurrency(totalBalance, userCurrency);
     })
     .catch(error => {
-      console.error('Error updating dashboard:', error);
+      console.error('Error updating dashboard:', error.code, error.message);
     });
 }
