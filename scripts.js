@@ -9,11 +9,13 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
+console.log('Initializing Firebase');
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
 // DOM Elements
+console.log('Querying DOM elements');
 const authSection = document.getElementById('auth-section');
 const appSection = document.getElementById('app-section');
 const loginButton = document.getElementById('login-button');
@@ -61,8 +63,13 @@ function showError(elementId, message) {
   const errorDiv = document.createElement('div');
   errorDiv.className = 'text-red-600 text-sm mt-1';
   errorDiv.textContent = message;
-  document.getElementById(elementId).parentElement.appendChild(errorDiv);
-  setTimeout(() => errorDiv.remove(), 3000);
+  const element = document.getElementById(elementId);
+  if (element) {
+    element.parentElement.appendChild(errorDiv);
+    setTimeout(() => errorDiv.remove(), 3000);
+  } else {
+    console.error('Error element not found:', elementId);
+  }
 }
 
 function clearErrors() {
@@ -171,7 +178,7 @@ resetButton.addEventListener('click', () => {
       .then(() => {
         alert('Password reset email sent');
         loginModal.classList.remove('hidden');
- chezModal.classList.add('hidden');
+        resetModal.classList.add('hidden');
         resetButton.disabled = false;
         resetButton.textContent = 'Send Reset Link';
       })
