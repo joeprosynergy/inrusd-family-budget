@@ -6,10 +6,6 @@
   <title>Budget Dashboard</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
   <style>
     /* Custom styles for enhanced visuals */
     .budget-tile {
@@ -419,7 +415,7 @@
             <label for="new-category-budget" class="block text-sm font-medium text-gray-700">Associated Budget</label>
             <select id="new-category-budget" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
               <option value="groceries">Groceries</option>
-              <option value="entertainment">Entertainment</option>
+              <ISON value="entertainment">Entertainment</option>
               <option value="travel">Travel</option>
               <option value="none">None</option>
             </select>
@@ -457,6 +453,172 @@
     <footer class="bg-gray-800 text-white p-4 text-center">
       <p>© 2025 Budget Dashboard. All rights reserved.</p>
     </footer>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
+
+    <!-- Minimal JavaScript for UI -->
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOM loaded, initializing script');
+        try {
+          // Authentication Modals
+          console.log('Querying modal elements');
+          const loginModal = document.getElementById('login-modal');
+          const signupModal = document.getElementById('signup-modal');
+          const resetModal = document.getElementById('reset-modal');
+          const showSignupBtn = document.getElementById('show-signup');
+          const showResetBtn = document.getElementById('show-reset');
+          const showLoginFromSignupBtn = document.getElementById('show-login-from-signup');
+          const showLoginFromResetBtn = document.getElementById('show-login-from-reset');
+
+          if (!loginModal || !signupModal || !resetModal || !showSignupBtn || !showResetBtn || !showLoginFromSignupBtn || !showLoginFromResetBtn) {
+            throw new Error('One or more modal elements not found');
+          }
+
+          console.log('Defining modal toggle functions');
+          function showLoginModal() {
+            console.log('Showing login modal');
+            loginModal.classList.remove('hidden');
+            signupModal.classList.add('hidden');
+            resetModal.classList.add('hidden');
+          }
+
+          function showSignupModal() {
+            console.log('Showing signup modal');
+            signupModal.classList.remove('hidden');
+            loginModal.classList.add('hidden');
+            resetModal.classList.add('hidden');
+          }
+
+          function showResetModal() {
+            console.log('Showing reset modal');
+            resetModal.classList.remove('hidden');
+            loginModal.classList.add('hidden');
+            signupModal.classList.add('hidden');
+          }
+
+          console.log('Binding event listeners for modal buttons');
+          showSignupBtn.addEventListener('click', () => {
+            console.log('Show Signup button clicked');
+            showSignupModal();
+          });
+
+          showResetBtn.addEventListener('click', () => {
+            console.log('Show Reset button clicked');
+            showResetModal();
+          });
+
+          showLoginFromSignupBtn.addEventListener('click', () => {
+            console.log('Show Login from Signup button clicked');
+            showLoginModal();
+          });
+
+          showLoginFromResetBtn.addEventListener('click', () => {
+            console.log('Show Login from Reset button clicked');
+            showLoginModal();
+          });
+
+          // Tab Switching
+          console.log('Querying tab elements');
+          const dashboardTab = document.getElementById('dashboard-tab');
+          const transactionsTab = document.getElementById('transactions-tab');
+          const budgetsTab = document.getElementById('budgets-tab');
+          const categoriesTab = document.getElementById('categories-tab');
+          const dashboardSection = document.getElementById('dashboard-section');
+          const transactionsSection = document.getElementById('transactions-section');
+          const budgetsSection = document.getElementById('budgets-section');
+          const categoriesSection = document.getElementById('categories-section');
+          const pageTitle = document.getElementById('page-title');
+
+          if (!dashboardTab || !transactionsTab || !budgetsTab || !categoriesTab || !dashboardSection || !transactionsSection || !budgetsSection || !categoriesSection || !pageTitle) {
+            throw new Error('One or more tab elements not found');
+          }
+
+          console.log('Defining tab toggle functions');
+          function showDashboard() {
+            console.log('Showing dashboard');
+            dashboardTab.classList.add('bg-blue-800');
+            transactionsTab.classList.remove('bg-blue-800');
+            budgetsTab.classList.remove('bg-blue-800');
+            categoriesTab.classList.remove('bg-blue-800');
+            dashboardSection.classList.remove('hidden');
+            transactionsSection.classList.add('hidden');
+            budgetsSection.classList.add('hidden');
+            categoriesSection.classList.add('hidden');
+            pageTitle.textContent = 'Budget Dashboard';
+          }
+
+          function showTransactions() {
+            console.log('Showing transactions');
+            transactionsTab.classList.add('bg-blue-800');
+            dashboardTab.classList.remove('bg-blue-800');
+            budgetsTab.classList.remove('bg-blue-800');
+            categoriesTab.classList.remove('bg-blue-800');
+            transactionsSection.classList.remove('hidden');
+            dashboardSection.classList.add('hidden');
+            budgetsSection.classList.add('hidden');
+            categoriesSection.classList.add('hidden');
+            pageTitle.textContent = 'Transactions';
+          }
+
+          function showBudgets() {
+            console.log('Showing budgets');
+            budgetsTab.classList.add('bg-blue-800');
+            dashboardTab.classList.remove('bg-blue-800');
+            transactionsTab.classList.remove('bg-blue-800');
+            categoriesTab.classList.remove('bg-blue-800');
+            budgetsSection.classList.remove('hidden');
+            dashboardSection.classList.add('hidden');
+            transactionsSection.classList.add('hidden');
+            categoriesSection.classList.add('hidden');
+            pageTitle.textContent = 'Budgets';
+          }
+
+          function showCategories() {
+            console.log('Showing categories');
+            categoriesTab.classList.add('bg-blue-800');
+            dashboardTab.classList.remove('bg-blue-800');
+            transactionsTab.classList.remove('bg-blue-800');
+            budgetsTab.classList.remove('bg-blue-800');
+            categoriesSection.classList.remove('hidden');
+            dashboardSection.classList.add('hidden');
+            transactionsSection.classList.add('hidden');
+            budgetsSection.classList.add('hidden');
+            pageTitle.textContent = 'Categories';
+          }
+
+          console.log('Binding event listeners for tab buttons');
+          dashboardTab.addEventListener('click', () => {
+            console.log('Dashboard tab clicked');
+            showDashboard();
+          });
+
+          transactionsTab.addEventListener('click', () => {
+            console.log('Transactions tab clicked');
+            showTransactions();
+          });
+
+          budgetsTab.addEventListener('click', () => {
+            console.log('Budgets tab clicked');
+            showBudgets();
+          });
+
+          categoriesTab.addEventListener('click', () => {
+            console.log('Categories tab clicked');
+            showCategories();
+          });
+
+          // Initialize with Auth view
+          console.log('Initializing with login modal');
+          showLoginModal();
+        } catch (error) {
+          console.error('Script error in index.html:', error.message);
+        }
+      });
+    </script>
 
     <!-- External JavaScript -->
     <script src="scripts.js"></script>
