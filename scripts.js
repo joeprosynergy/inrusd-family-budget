@@ -23,11 +23,6 @@ const logoutButton = document.getElementById('logout-button');
 const loginModal = document.getElementById('login-modal');
 const signupModal = document.getElementById('signup-modal');
 const resetModal = document.getElementById('reset-modal');
-const showSignup = document.getElementById('show-signup');
-const showReset = document.getElementById('show-reset');
-const showLoginFromSignup = document.getElementById('show-login-from-signup');
-const showLoginFromReset = document.getElementById('show-login-from-reset');
-
 const addTransaction = document.getElementById('add-transaction');
 const transactionTable = document.getElementById('transaction-table');
 const addBudget = document.getElementById('add-budget');
@@ -43,7 +38,6 @@ const saveCategory = document.getElementById('save-category');
 const cancelCategory = document.getElementById('cancel-category');
 const saveBudget = document.getElementById('save-budget');
 const cancelBudget = document.getElementById('cancel-budget');
-
 const balance = document.getElementById('balance');
 const totalBudget = document.getElementById('total-budget');
 const totalRemaining = document.getElementById('total-remaining');
@@ -51,6 +45,7 @@ const totalRemaining = document.getElementById('total-remaining');
 // User State
 let currentUser = null;
 let userCurrency = 'INR';
+let familyCode = '';
 
 // Utility Functions
 function formatCurrency(amount, currency) {
@@ -82,6 +77,7 @@ auth.onAuthStateChanged(user => {
     db.collection('users').doc(user.uid).get().then(doc => {
       if (doc.exists) {
         userCurrency = doc.data().currency || 'INR';
+        familyCode = doc.data().familyCode;
         loadAppData();
       }
     });
@@ -114,17 +110,17 @@ signupButton.addEventListener('click', () => {
   const password = document.getElementById('signup-password').value;
   const confirmPassword = document.getElementById('signup-confirm-password').value;
   const currency = document.getElementById('signup-currency').value;
-  const familyCode = document.getElementById('signup-family-code').value;
+  const familyCodeInput = document.getElementById('signup-family-code').value;
   const accountType = document.getElementById('signup-account-type').value;
   if (!email) showError('signup-email', 'Email is required');
   if (!password) showError('signup-password', 'Password is required');
   if (password !== confirmPassword) showError('signup-confirm-password', 'Passwords do not match');
-  if (!familyCode) showError('signup-family-code', 'Family code is required');
-  if (email && password && password === confirmPassword && familyCode) {
+  if (!familyCodeInput) showError('signup-family-code', 'Family code is required');
+  if (email && password && password === confirmPassword && familyCodeInput) {
     auth.createUserWithEmailAndPassword(email, password).then(credential => {
       return db.collection('users').doc(credential.user.uid).set({
         currency,
-        familyCode,
+        familyCode: familyCodeInput,
         accountType,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
@@ -155,21 +151,15 @@ logoutButton.addEventListener('click', () => {
 
 // Load App Data
 function loadAppData() {
-  if (!currentUser) return;
-  const familyCodeRef = db.collection('users').doc(currentUser.uid);
-  familyCodeRef.get().then(doc => {
-    if (doc.exists) {
-      const familyCode = doc.data().familyCode;
-      loadCategories(familyCode);
-      loadBudgets(familyCode);
-      loadTransactions(familyCode);
-      updateDashboard(familyCode);
-    }
-  });
+  if (!currentUser || !familyCode) return;
+  loadCategories();
+  loadBudgets();
+  loadTransactions();
+  updateDashboard();
 }
 
 // Categories
-function loadCategories(familyCode) {
+function loadCategories() {
   categorySelect.innerHTML = '<option value="add-new">Add New</option>';
   categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
   db.collection('categories').where('familyCode', '==', familyCode).get().then(snapshot => {
@@ -190,7 +180,6 @@ function loadCategories(familyCode) {
         });
       }
     });
-    // Load category table
     categoryTable.innerHTML = '';
     snapshot.forEach(doc => {
       const category = doc.data();
@@ -225,21 +214,17 @@ addCategory.addEventListener('click', () => {
   const budgetId = document.getElementById('category-budget').value === 'none' ? null : document.getElementById('category-budget').value;
   if (!name) showError('category-name', 'Name is required');
   if (name && currentUser) {
-    db.collection('users').doc(currentUser.uid).get().then(doc => {
-      if (doc.exists) {
-        db.collection('categories').add({
-          name,
-          type,
-          budgetId,
-          familyCode: doc.data().familyCode,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => {
-          document.getElementById('category-name').value = '';
-          document.getElementById('category-type').value = 'income';
-          document.getElementById('category-budget').value = 'none';
-          loadCategories(doc.data().familyCode);
-        });
-      }
+    db.collection('categories').add({
+      name,
+      type,
+      budgetId,
+      familyCode,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(() => {
+      document.getElementById('category-name').value = '';
+      document.getElementById('category-type').value = 'income';
+      document.getElementById('category-budget').value = 'none';
+      loadCategories();
     });
   }
 });
@@ -258,22 +243,18 @@ saveCategory.addEventListener('click', () => {
   const budgetId = document.getElementById('new-category-budget').value === 'none' ? null : document.getElementById('new-category-budget').value;
   if (!name) showError('new-category-name', 'Name is required');
   if (name && currentUser) {
-    db.collection('users').doc(currentUser.uid).get().then(doc => {
-      if (doc.exists) {
-        db.collection('categories').add({
-          name,
-          type,
-          budgetId,
-          familyCode: doc.data().familyCode,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => {
-          addCategoryModal.classList.add('hidden');
-          document.getElementById('new-category-name').value = '';
-          document.getElementById('new-category-type').value = 'income';
-          document.getElementById('new-category-budget').value = 'none';
-          loadCategories(doc.data().familyCode);
-        });
-      }
+    db.collection('categories').add({
+      name,
+      type,
+      budgetId,
+      familyCode,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(() => {
+      addCategoryModal.classList.add('hidden');
+      document.getElementById('new-category-name').value = '';
+      document.getElementById('new-category-type').value = 'income';
+      document.getElementById('new-category-budget').value = 'none';
+      loadCategories();
     });
   }
 });
@@ -295,20 +276,24 @@ categoryTable.addEventListener('click', e => {
         document.getElementById('category-budget').value = doc.data().budgetId || 'none';
         addCategory.innerHTML = 'Update Category';
         addCategory.onclick = () => {
-          db.collection('categories').doc(id).update({
-            name: document.getElementById('category-name').value.trim(),
-            type: document.getElementById('category-type').value,
-            budgetId: document.getElementById('category-budget').value === 'none' ? null : document.getElementById('category-budget').value
-          }).then(() => {
-            document.getElementById('category-name').value = '';
-            document.getElementById('category-type').value = 'income';
-            document.getElementById('category-budget').value = 'none';
-            addCategory.innerHTML = 'Add Category';
-            addCategory.onclick = null;
-            db.collection('users').doc(currentUser.uid).get().then(doc => {
-              loadCategories(doc.data().familyCode);
+          const name = document.getElementById('category-name').value.trim();
+          const type = document.getElementById('category-type').value;
+          const budgetId = document.getElementById('category-budget').value === 'none' ? null : document.getElementById('category-budget').value;
+          if (!name) showError('category-name', 'Name is required');
+          if (name) {
+            db.collection('categories').doc(id).update({
+              name,
+              type,
+              budgetId
+            }).then(() => {
+              document.getElementById('category-name').value = '';
+              document.getElementById('category-type').value = 'income';
+              document.getElementById('category-budget').value = 'none';
+              addCategory.innerHTML = 'Add Category';
+              addCategory.onclick = null;
+              loadCategories();
             });
-          });
+          }
         };
       }
     });
@@ -316,15 +301,13 @@ categoryTable.addEventListener('click', e => {
   if (e.target.classList.contains('delete-category')) {
     const id = e.target.dataset.id;
     db.collection('categories').doc(id).delete().then(() => {
-      db.collection('users').doc(currentUser.uid).get().then(doc => {
-        loadCategories(doc.data().familyCode);
-      });
+      loadCategories();
     });
   }
 });
 
 // Budgets
-function loadBudgets(familyCode) {
+function loadBudgets() {
   budgetTable.innerHTML = '';
   budgetTiles.innerHTML = '';
   db.collection('budgets').where('familyCode', '==', familyCode).get().then(snapshot => {
@@ -378,21 +361,17 @@ addBudget.addEventListener('click', () => {
   if (!name) showError('budget-name', 'Name is required');
   if (!amount || amount <= 0) showError('budget-amount', 'Valid amount is required');
   if (name && amount > 0 && currentUser) {
-    db.collection('users').doc(currentUser.uid).get().then(doc => {
-      if (doc.exists) {
-        db.collection('budgets').add({
-          name,
-          amount,
-          spent: 0,
-          familyCode: doc.data().familyCode,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => {
-          document.getElementById('budget-name').value = '';
-          document.getElementById('budget-amount').value = '';
-          loadBudgets(doc.data().familyCode);
-          loadCategories(doc.data().familyCode); // Update category budget dropdown
-        });
-      }
+    db.collection('budgets').add({
+      name,
+      amount,
+      spent: 0,
+      familyCode,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(() => {
+      document.getElementById('budget-name').value = '';
+      document.getElementById('budget-amount').value = '';
+      loadBudgets();
+      loadCategories();
     });
   }
 });
@@ -411,22 +390,18 @@ saveBudget.addEventListener('click', () => {
   if (!name) showError('new-budget-name', 'Name is required');
   if (!amount || amount <= 0) showError('new-budget-amount', 'Valid amount is required');
   if (name && amount > 0 && currentUser) {
-    db.collection('users').doc(currentUser.uid).get().then(doc => {
-      if (doc.exists) {
-        db.collection('budgets').add({
-          name,
-          amount,
-          spent: 0,
-          familyCode: doc.data().familyCode,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => {
-          addBudgetModal.classList.add('hidden');
-          document.getElementById('new-budget-name').value = '';
-          document.getElementById('new-budget-amount').value = '';
-          loadBudgets(doc.data().familyCode);
-          loadCategories(doc.data().familyCode);
-        });
-      }
+    db.collection('budgets').add({
+      name,
+      amount,
+      spent: 0,
+      familyCode,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(() => {
+      addBudgetModal.classList.add('hidden');
+      document.getElementById('new-budget-name').value = '';
+      document.getElementById('new-budget-amount').value = '';
+      loadBudgets();
+      loadCategories();
     });
   }
 });
@@ -459,10 +434,8 @@ budgetTable.addEventListener('click', e => {
               document.getElementById('budget-amount').value = '';
               addBudget.innerHTML = 'Add Budget';
               addBudget.onclick = null;
-              db.collection('users').doc(currentUser.uid).get().then(doc => {
-                loadBudgets(doc.data().familyCode);
-                loadCategories(doc.data().familyCode);
-              });
+              loadBudgets();
+              loadCategories();
             });
           }
         };
@@ -472,16 +445,14 @@ budgetTable.addEventListener('click', e => {
   if (e.target.classList.contains('delete-budget')) {
     const id = e.target.dataset.id;
     db.collection('budgets').doc(id).delete().then(() => {
-      db.collection('users').doc(currentUser.uid).get().then(doc => {
-        loadBudgets(doc.data().familyCode);
-        loadCategories(doc.data().familyCode);
-      });
+      loadBudgets();
+      loadCategories();
     });
   }
 });
 
 // Transactions
-function loadTransactions(familyCode) {
+function loadTransactions() {
   transactionTable.innerHTML = '';
   db.collection('transactions').where('familyCode', '==', familyCode).get().then(snapshot => {
     snapshot.forEach(doc => {
@@ -515,24 +486,20 @@ addTransaction.addEventListener('click', () => {
   if (!amount || amount <= 0) showError('amount', 'Valid amount is required');
   if (!categoryId) showError('category', 'Category is required');
   if (amount > 0 && categoryId && currentUser) {
-    db.collection('users').doc(currentUser.uid).get().then(doc => {
-      if (doc.exists) {
-        db.collection('transactions').add({
-          type,
-          amount,
-          categoryId,
-          description,
-          familyCode: doc.data().familyCode,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => {
-          document.getElementById('type').value = 'debit';
-          document.getElementById('amount').value = '';
-          document.getElementById('category').value = '';
-          document.getElementById('description').value = '';
-          loadTransactions(doc.data().familyCode);
-          updateDashboard(doc.data().familyCode);
-        });
-      }
+    db.collection('transactions').add({
+      type,
+      amount,
+      categoryId,
+      description,
+      familyCode,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(() => {
+      document.getElementById('type').value = 'debit';
+      document.getElementById('amount').value = '';
+      document.getElementById('category').value = '';
+      document.getElementById('description').value = '';
+      loadTransactions();
+      updateDashboard();
     });
   }
 });
@@ -567,10 +534,8 @@ transactionTable.addEventListener('click', e => {
               document.getElementById('description').value = '';
               addTransaction.innerHTML = 'Add Transaction';
               addTransaction.onclick = null;
-              db.collection('users').doc(currentUser.uid).get().then(doc => {
-                loadTransactions(doc.data().familyCode);
-                updateDashboard(doc.data().familyCode);
-              });
+              loadTransactions();
+              updateDashboard();
             });
           }
         };
@@ -580,16 +545,14 @@ transactionTable.addEventListener('click', e => {
   if (e.target.classList.contains('delete-transaction')) {
     const id = e.target.dataset.id;
     db.collection('transactions').doc(id).delete().then(() => {
-      db.collection('users').doc(currentUser.uid).get().then(doc => {
-        loadTransactions(doc.data().familyCode);
-        updateDashboard(doc.data().familyCode);
-      });
+      loadTransactions();
+      updateDashboard();
     });
   }
 });
 
 // Dashboard Updates
-function updateDashboard(familyCode) {
+function updateDashboard() {
   let totalBalance = 0;
   db.collection('transactions').where('familyCode', '==', familyCode).get().then(snapshot => {
     snapshot.forEach(doc => {
@@ -602,5 +565,4 @@ function updateDashboard(familyCode) {
     });
     balance.textContent = formatCurrency(totalBalance, userCurrency);
   });
-  // Budget updates handled in loadBudgets
 }
