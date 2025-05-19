@@ -735,7 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addCategory) {
       addCategory.addEventListener('click', () => {
         console.log('Add Category clicked', { isEditing: isEditing.category });
-        if (isEditing.category) return; // Prevent add during edit
+        if (isEditing.category) return;
         clearErrors();
         const name = document.getElementById('category-name').value.trim();
         const type = document.getElementById('category-type').value;
@@ -1306,10 +1306,11 @@ document.addEventListener('DOMContentLoaded', () => {
             retryFirestoreOperation(() => 
               db.collection('transactions').doc(id).get().then(doc => {
                 if (doc.exists) {
-                  document.getElementById('type').value = doc.data().type;
-                  document.getElementById('amount').value = doc.data().amount;
-                  document.getElementById('category').value = doc.data().categoryId;
-                  document.getElementById('description').value = doc.data().description;
+                  const oldData = doc.data();
+                  document.getElementById('type').value = oldData.type;
+                  document.getElementById('amount').value = oldData.amount;
+                  document.getElementById('category').value = oldData.categoryId;
+                  document.getElementById('description').value = oldData.description;
                   addTransaction.innerHTML = 'Update Transaction';
                   isEditing.transaction = true;
                   console.log('Entered edit mode for transaction:', id);
@@ -1336,6 +1337,27 @@ document.addEventListener('DOMContentLoaded', () => {
                         description
                       }).then(() => {
                         console.log('Transaction updated successfully:', { id, type, amount, categoryId });
+                        if (oldData.type === 'debit') {
+                          db.collection('categories').doc(oldData.categoryId).get().then(oldCategoryDoc => {
+                            if (oldCategoryDoc.exists && oldCategoryDoc.data().budgetId) {
+                              const budgetId = oldCategoryDoc.data().budgetId;
+                              const amountDiff = amount - oldData.amount;
+                              console.log('Adjusting budget spent for budgetId:', budgetId, 'by amountDiff:', amountDiff);
+                              retryFirestoreOperation(() => 
+                                db.collection('budgets').doc(budgetId).update({
+                                  spent: firebase.firestore.FieldValue.increment(amountDiff)
+                                }).then(() => {
+                                  console.log('Budget spent adjusted successfully:', { budgetId, amountDiff });
+                                  loadBudgets();
+                                })
+                              ).catch(error => {
+                                console.error('Error adjusting budget spent:', error.code, error.message);
+                              });
+                            }
+                          }).catch(error => {
+                            console.error('Error fetching old category for budget update:', error.code, error.message);
+                          });
+                        }
                         document.getElementById('type').value = 'debit';
                         document.getElementById('amount').value = '';
                         document.getElementById('category').value = '';
@@ -1369,7 +1391,32 @@ document.addEventListener('DOMContentLoaded', () => {
           const id = e.target.dataset.id;
           if (db) {
             retryFirestoreOperation(() => 
-              db.collection('transactions').doc(id).delete().then(() => {
+              db.collection('transactions').doc(id).get().then(doc => {
+                if (doc.exists) {
+                  const transaction = doc.data();
+                  if (transaction.type === 'debit' && transaction.categoryId) {
+                    db.collection('categories').doc(transaction.categoryId).get().then(categoryDoc => {
+                      if (categoryDoc.exists && categoryDoc.data().budgetId) {
+                        const budgetId = categoryDoc.data().budgetId;
+                        console.log('Deducting budget spent for budgetId:', budgetId, 'by amount:', transaction.amount);
+                        retryFirestoreOperation(() => 
+                          db.collection('budgets').doc(budgetId).update({
+                            spent: firebase.firestore.FieldValue.increment(-transaction.amount)
+                          }).then(() => {
+                            console.log('Budget spent deducted successfully:', { budgetId, amount: transaction.amount });
+                            loadBudgets();
+                          })
+                        ).catch(error => {
+                          console.error('Error deducting budget spent:', error.code, error.message);
+                        });
+                      }
+                    }).catch(error => {
+                      console.error('Error fetching category for budget deduction:', error.code, error.message);
+                    });
+                  }
+                  return db.collection('transactions').doc(id).delete();
+                }
+              }).then(() => {
                 console.log('Transaction deleted successfully:', { id });
                 loadTransactions();
                 updateDashboard();
