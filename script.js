@@ -1,11 +1,11 @@
 // Firebase Configuration (Replace with your Firebase project config)
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAntsDc3PAwve3kC0AHZ_bx7JhU5sSTrVk",
+  authDomain: "inrusd-family-budget-6cff2.firebaseapp.com",
+  projectId: "inrusd-family-budget-6cff2",
+  storageBucket: "inrusd-family-budget-6cff2.firebasestorage.app",
+  messagingSenderId: "113253470716",
+  appId: "1:113253470716:web:f9030918df878a9adee279"
 };
 
 // Initialize Firebase
