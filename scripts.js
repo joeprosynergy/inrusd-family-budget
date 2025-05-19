@@ -397,50 +397,126 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('Signup button clicked');
         clearErrors();
         console.log('Reading signup form inputs');
-        const email = document.getElementById('signup-email').value;
+        const email = document.getElementById('signup-email').value.trim();
         const password = document.getElementById('signup-password').value;
         const confirmPassword = document.getElementById('signup-confirm-password').value;
         const currency = document.getElementById('signup-currency').value;
-        const familyCodeInput = document.getElementById('signup-family-code').value;
+        const familyCodeInput = document.getElementById('signup-family-code').value.trim();
         const accountType = document.getElementById('signup-account-type').value;
 
-        console.log('Validating inputs:', { email, password, confirmPassword, currency, familyCodeInput, accountType });
-        if (!email) showError('signup-email', 'Email is required');
-        if (!password) showError('signup-password', 'Password is required');
-        if (password !== confirmPassword) showError('signup-confirm-password', 'Passwords do not match');
-        if (!familyCodeInput) showError('signup-family-code', 'Family code is required');
+        console.log('Validating inputs:', {
+          email,
+          password: password ? '[redacted]' : 'missing',
+          confirmPassword: confirmPassword ? '[redacted]' : 'missing',
+          currency,
+          familyCodeInput,
+          accountType
+        });
+
+        // Enhanced input validation
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          showError('signup-email', 'Valid email is required');
+          return;
+        }
+        if (!password || password.length < 6) {
+          showError('signup-password', 'Password must be at least 6 characters');
+          return;
+        }
+        if (password !== confirmPassword) {
+          showError('signup-confirm-password', 'Passwords do not match');
+          return;
+        }
+        if (!familyCodeInput) {
+          showError('signup-family-code', 'Family code is required');
+          return;
+        }
+        if (!currency || !['INR', 'USD'].includes(currency)) {
+          showError('signup-currency', 'Valid currency is required');
+          return;
+        }
+        if (!accountType || !['admin', 'child'].includes(accountType)) {
+          showError('signup-account-type', 'Valid account type is required');
+          return;
+        }
 
         if (email && password && password === confirmPassword && familyCodeInput && auth && db) {
-          console.log('Attempting to create user');
+          console.log('Attempting to create user with email:', email);
           signupButton.disabled = true;
           signupButton.textContent = 'Signing up...';
-          auth.createUserWithEmailAndPassword(email, password)
-            .then(credential => {
-              if (!credential || !credential.user) {
-                throw new Error('No user credential returned');
-              }
-              console.log('User created:', credential.user.uid);
-              console.log('Writing user data to Firestore');
-              return db.collection('users').doc(credential.user.uid).set({
-                currency,
-                familyCode: familyCodeInput,
-                accountType,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          try {
+            auth.createUserWithEmailAndPassword(email, password)
+              .then(credential => {
+                console.log('Authentication response:', {
+                  credential: credential ? 'received' : 'null',
+                  user: credential && credential.user ? credential.user.uid : 'null'
+                });
+                if (!credential || !credential.user) {
+                  throw new Error('No user credential returned from authentication');
+                }
+                console.log('User created successfully:', credential.user.uid);
+                console.log('Writing user data to Firestore:', {
+                  uid: credential.user.uid,
+                  currency,
+                  familyCode: familyCodeInput,
+                  accountType
+                });
+                return db.collection('users').doc(credential.user.uid).set({
+                  currency,
+                  familyCode: familyCodeInput,
+                  accountType,
+                  createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+              })
+              .then(() => {
+                console.log('User data written to Firestore successfully');
+                signupButton.disabled = false;
+                signupButton.textContent = 'Sign Up';
+                // Clear form
+                document.getElementById('signup-email').value = '';
+                document.getElementById('signup-password').value = '';
+                document.getElementById('signup-confirm-password').value = '';
+                document.getElementById('signup-family-code').value = '';
+                document.getElementById('signup-currency').value = 'INR';
+                document.getElementById('signup-account-type').value = 'admin';
+              })
+              .catch(error => {
+                console.error('Signup error:', {
+                  code: error.code,
+                  message: error.message,
+                  email,
+                  familyCode: familyCodeInput,
+                  currency,
+                  accountType,
+                  network: navigator.onLine
+                });
+                signupButton.disabled = false;
+                signupButton.textContent = 'Sign Up';
+                let errorMessage = error.message || 'Failed to sign up. Please check your network or configuration.';
+                if (error.code === 'auth/email-already-in-use') {
+                  errorMessage = 'This email is already registered. Please log in or use a different email.';
+                } else if (error.code === 'auth/invalid-email') {
+                  errorMessage = 'Invalid email format.';
+                } else if (error.code === 'auth/weak-password') {
+                  errorMessage = 'Password is too weak. Please use a stronger password.';
+                }
+                showError('signup-email', errorMessage);
               });
-            })
-            .then(() => {
-              console.log('User data written to Firestore');
-              signupButton.disabled = false;
-              signupButton.textContent = 'Sign Up';
-            })
-            .catch(error => {
-              console.error('Signup error:', error.code, error.message);
-              signupButton.disabled = false;
-              signupButton.textContent = 'Sign Up';
-              showError('signup-email', error.message || 'Failed to sign up. Please check your network or configuration.');
+          } catch (error) {
+            console.error('Unexpected error during signup:', {
+              message: error.message,
+              stack: error.stack,
+              email,
+              familyCode: familyCodeInput
             });
+            signupButton.disabled = false;
+            signupButton.textContent = 'Sign Up';
+            showError('signup-email', 'An unexpected error occurred. Please try again.');
+          }
         } else {
-          console.error('Auth or Firestore service not available or invalid inputs');
+          console.error('Auth or Firestore service not available or invalid inputs', {
+            authAvailable: !!auth,
+            dbAvailable: !!db
+          });
           showError('signup-email', auth && db ? 'Invalid input data' : 'Authentication or database service not available. Please check your network or configuration.');
         }
       });
