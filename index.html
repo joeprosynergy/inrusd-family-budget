@@ -52,10 +52,10 @@
       </div>
       <button id="login-button" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 w-full">Login</button>
       <p class="mt-2 text-sm text-gray-600 text-center">
-        Don't have an account? <button id="show-signup" class="text-blue-600 hover:underline">Sign Up</button>
+        Don't have an account? <button id="show-signup" class="text-blue-600 hover:underline" onclick="console.log('Sign Up clicked'); document.getElementById('signup-modal').classList.remove('hidden'); document.getElementById('login-modal').classList.add('hidden'); document.getElementById('reset-modal').classList.add('hidden');">Sign Up</button>
       </p>
       <p class="mt-1 text-sm text-gray-600 text-center">
-        <button id="show-reset" class="text-blue-600 hover:underline">Forgot Password?</button>
+        <button id="show-reset" class="text-blue-600 hover:underline" onclick="console.log('Forgot Password clicked'); document.getElementById('reset-modal').classList.remove('hidden'); document.getElementById('login-modal').classList.add('hidden'); document.getElementById('signup-modal').classList.add('hidden');">Forgot Password?</button>
       </p>
     </div>
 
@@ -96,7 +96,7 @@
       </div>
       <button id="signup-button" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 w-full">Sign Up</button>
       <p class="mt-2 text-sm text-gray-600 text-center">
-        Already have an account? <button id="show-login-from-signup" class="text-blue-600 hover:underline">Login</button>
+        Already have an account? <button id="show-login-from-signup" class="text-blue-600 hover:underline" onclick="console.log('Back to Login clicked from signup'); document.getElementById('login-modal').classList.remove('hidden'); document.getElementById('signup-modal').classList.add('hidden'); document.getElementById('reset-modal').classList.add('hidden');">Login</button>
       </p>
     </div>
 
@@ -111,7 +111,7 @@
       </div>
       <button id="reset-button" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 w-full">Send Reset Link</button>
       <p class="mt-2 text-sm text-gray-600 text-center">
-        Back to <button id="show-login-from-reset" class="text-blue-600 hover:underline">Login</button>
+        Back to <button id="show-login-from-reset" class="text-blue-600 hover:underline" onclick="console.log('Back to Login clicked from reset'); document.getElementById('login-modal').classList.remove('hidden'); document.getElementById('signup-modal').classList.add('hidden'); document.getElementById('reset-modal').classList.add('hidden');">Login</button>
       </p>
     </div>
   </section>
@@ -346,7 +346,7 @@
                 <tr>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Associated Budget</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium -comedy">Associated Budget</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -359,66 +359,16 @@
       </section>
     </main>
 
-    <!-- Modals -->
-    <!-- Add New Category Modal -->
-    <div id="add-category-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden modal">
-      <div class="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 class="text-xl font-semibold text-gray-700 mb-4">Add New Category</h2>
-        <div class="grid grid-cols-1 gap-4">
-          <div>
-            <label for="new-category-name" class="block text-sm font-medium text-gray-700">Category Name</label>
-            <input type="text" id="new-category-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter category name">
-          </div>
-          <div>
-            <label for="new-category-type" class="block text-sm font-medium text-gray-700">Type</label>
-            <select id="new-category-type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
-            </select>
-          </div>
-          <div>
-            <label for="new-category-budget" class="block text-sm font-medium text-gray-700">Associated Budget</label>
-            <select id="new-category-budget" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-              <option value="none">None</option>
-              <option value="add-new">Add New</option>
-            </select>
-          </div>
-        </div>
-        <div class="mt-4 flex justify-end space-x-2">
-          <button id="cancel-category" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400">Cancel</button>
-          <button id="save-category" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Save</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Add New Budget Modal -->
-    <div id="add-budget-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden modal">
-      <div class="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 class="text-xl font-semibold text-gray-700 mb-4">Add New Budget</h2>
-        <div class="grid grid-cols-1 gap-4">
-          <div>
-            <label for="new-budget-name" class="block text-sm font-medium text-gray-700">Budget Name</label>
-            <input type="text" id="new-budget-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter budget name">
-          </div>
-          <div>
-            <label for="new-budget-amount" class="block text-sm font-medium text-gray-700">Amount</label>
-            <input type="number" id="new-budget-amount" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter amount">
-          </div>
-        </div>
-        <div class="mt-4 flex justify-end space-x-2">
-          <button id="cancel-budget" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400">Cancel</button>
-          <button id="save-budget" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Save</button>
-        </div>
-      </div>
-    </div>
-
     <!-- Footer -->
     <footer class="bg-gray-800 text-white p-4 text-center">
       <p>© 2025 Budget Dashboard. All rights reserved.</p>
     </footer>
 
-    <!-- Firebase SDK Scripts (Version 9) with Fallback -->
+    <!-- Firebase SDK Scripts (Version 9) -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
+    <!-- SDK Load Detection -->
     <script>
       document.addEventListener('DOMContentLoaded', () => {
         console.log('Checking Firebase SDK load status');
@@ -435,8 +385,6 @@
         }, 5000);
       });
     </script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
     <!-- Custom Script -->
     <script src="scripts.js" defer></script>
 </body>
