@@ -4,10 +4,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // DOM Elements
   let authSection, appSection, loginModal, signupModal, resetModal, loginButton, signupButton, resetButton, logoutButton,
       showSignupBtn, showResetBtn, showLoginFromSignupBtn, showLoginFromResetBtn, dashboardTab, transactionsTab,
-      budgetsTab, categoriesTab, dashboardSection, transactionsSection, budgetsSection, categoriesSection, pageTitle,
-      addTransaction, transactionTable, addBudget, budgetTable, budgetTiles, addCategory, categoryTable, categorySelect,
-      categoryBudgetSelect, addCategoryModal, addBudgetModal, saveCategory, cancelCategory, saveBudget, cancelBudget,
-      balance, totalBudget, totalRemaining;
+      budgetsTab, categoriesTab, profileTab, dashboardSection, transactionsSection, budgetsSection, categoriesSection,
+      profileSection, pageTitle, addTransaction, transactionTable, addBudget, budgetTable, budgetTiles, addCategory,
+      categoryTable, categorySelect, categoryBudgetSelect, addCategoryModal, addBudgetModal, saveCategory, cancelCategory,
+      saveBudget, cancelBudget, balance, totalBudget, totalRemaining, profileEmail, profileCurrency, profileFamilyCode,
+      profileAccountType;
 
   try {
     authSection = document.getElementById('auth-section');
@@ -27,10 +28,12 @@ document.addEventListener('DOMContentLoaded', () => {
     transactionsTab = document.getElementById('transactions-tab');
     budgetsTab = document.getElementById('budgets-tab');
     categoriesTab = document.getElementById('categories-tab');
+    profileTab = document.getElementById('profile-tab');
     dashboardSection = document.getElementById('dashboard-section');
     transactionsSection = document.getElementById('transactions-section');
     budgetsSection = document.getElementById('budgets-section');
     categoriesSection = document.getElementById('categories-section');
+    profileSection = document.getElementById('profile-section');
     pageTitle = document.getElementById('page-title');
     addTransaction = document.getElementById('add-transaction');
     transactionTable = document.getElementById('transaction-table');
@@ -50,13 +53,18 @@ document.addEventListener('DOMContentLoaded', () => {
     balance = document.getElementById('balance');
     totalBudget = document.getElementById('total-budget');
     totalRemaining = document.getElementById('total-remaining');
+    profileEmail = document.getElementById('profile-email');
+    profileCurrency = document.getElementById('profile-currency');
+    profileFamilyCode = document.getElementById('profile-family-code');
+    profileAccountType = document.getElementById('profile-account-type');
 
     // Validate critical DOM elements
     const criticalElements = {
       authSection, appSection, loginModal, signupModal, resetModal, loginButton, signupButton, resetButton, logoutButton,
       showSignupBtn, showResetBtn, showLoginFromSignupBtn, showLoginFromResetBtn, dashboardTab, transactionsTab,
-      budgetsTab, categoriesTab, dashboardSection, transactionsSection, budgetsSection, categoriesSection, pageTitle,
-      categoryBudgetSelect, addCategoryModal
+      budgetsTab, categoriesTab, profileTab, dashboardSection, transactionsSection, budgetsSection, categoriesSection,
+      profileSection, pageTitle, categoryBudgetSelect, addCategoryModal, profileEmail, profileCurrency, profileFamilyCode,
+      profileAccountType
     };
     for (const [key, element] of Object.entries(criticalElements)) {
       console.log(`Checking DOM element ${key}: ${element ? 'found' : 'not found'}`);
@@ -278,10 +286,12 @@ document.addEventListener('DOMContentLoaded', () => {
       transactionsTab.classList.remove('bg-blue-800');
       budgetsTab.classList.remove('bg-blue-800');
       categoriesTab.classList.remove('bg-blue-800');
+      profileTab.classList.remove('bg-blue-800');
       dashboardSection.classList.remove('hidden');
       transactionsSection.classList.add('hidden');
       budgetsSection.classList.add('hidden');
       categoriesSection.classList.add('hidden');
+      profileSection.classList.add('hidden');
       pageTitle.textContent = 'Budget Dashboard';
     }
 
@@ -291,10 +301,12 @@ document.addEventListener('DOMContentLoaded', () => {
       dashboardTab.classList.remove('bg-blue-800');
       budgetsTab.classList.remove('bg-blue-800');
       categoriesTab.classList.remove('bg-blue-800');
+      profileTab.classList.remove('bg-blue-800');
       transactionsSection.classList.remove('hidden');
       dashboardSection.classList.add('hidden');
       budgetsSection.classList.add('hidden');
       categoriesSection.classList.add('hidden');
+      profileSection.classList.add('hidden');
       pageTitle.textContent = 'Transactions';
     }
 
@@ -304,10 +316,12 @@ document.addEventListener('DOMContentLoaded', () => {
       dashboardTab.classList.remove('bg-blue-800');
       transactionsTab.classList.remove('bg-blue-800');
       categoriesTab.classList.remove('bg-blue-800');
+      profileTab.classList.remove('bg-blue-800');
       budgetsSection.classList.remove('hidden');
       dashboardSection.classList.add('hidden');
       transactionsSection.classList.add('hidden');
       categoriesSection.classList.add('hidden');
+      profileSection.classList.add('hidden');
       pageTitle.textContent = 'Budgets';
     }
 
@@ -317,11 +331,29 @@ document.addEventListener('DOMContentLoaded', () => {
       dashboardTab.classList.remove('bg-blue-800');
       transactionsTab.classList.remove('bg-blue-800');
       budgetsTab.classList.remove('bg-blue-800');
+      profileTab.classList.remove('bg-blue-800');
       categoriesSection.classList.remove('hidden');
       dashboardSection.classList.add('hidden');
       transactionsSection.classList.add('hidden');
       budgetsSection.classList.add('hidden');
+      profileSection.classList.add('hidden');
       pageTitle.textContent = 'Categories';
+    }
+
+    function showProfile() {
+      console.log('Showing profile');
+      profileTab.classList.add('bg-blue-800');
+      dashboardTab.classList.remove('bg-blue-800');
+      transactionsTab.classList.remove('bg-blue-800');
+      budgetsTab.classList.remove('bg-blue-800');
+      categoriesTab.classList.remove('bg-blue-800');
+      profileSection.classList.remove('hidden');
+      dashboardSection.classList.add('hidden');
+      transactionsSection.classList.add('hidden');
+      budgetsSection.classList.add('hidden');
+      categoriesSection.classList.add('hidden');
+      pageTitle.textContent = 'User Profile';
+      loadProfileData();
     }
 
     if (showSignupBtn) {
@@ -355,6 +387,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (categoriesTab) {
       categoriesTab.addEventListener('click', showCategories);
+    }
+    if (profileTab) {
+      profileTab.addEventListener('click', showProfile);
+    } else {
+      console.error('profileTab not found');
     }
   } catch (error) {
     console.error('Error setting up modal/tab switching:', {
@@ -420,6 +457,47 @@ document.addEventListener('DOMContentLoaded', () => {
         message: error.message,
         stack: error.stack
       });
+    }
+  }
+
+  // Load Profile Data
+  async function loadProfileData() {
+    try {
+      console.log('Loading profile data');
+      if (!currentUser || !db) {
+        console.error('Cannot load profile data: missing user or Firestore');
+        return;
+      }
+      profileEmail.textContent = currentUser.email || '--';
+      profileCurrency.textContent = userCurrency || '--';
+      profileFamilyCode.textContent = familyCode || '--';
+      profileAccountType.textContent = '--';
+      await retryFirestoreOperation(() => 
+        db.collection('users').doc(currentUser.uid).get()
+          .then(doc => {
+            if (doc.exists) {
+              const data = doc.data();
+              profileCurrency.textContent = data.currency || '--';
+              profileFamilyCode.textContent = data.familyCode || '--';
+              profileAccountType.textContent = data.accountType ? data.accountType.charAt(0).toUpperCase() + data.accountType.slice(1) : '--';
+              console.log('Profile data loaded:', {
+                email: currentUser.email,
+                currency: data.currency,
+                familyCode: data.familyCode,
+                accountType: data.accountType
+              });
+            } else {
+              console.error('User document not found for UID:', currentUser.uid);
+              showError('profile-email', 'Profile data not found.');
+            }
+          })
+      );
+    } catch (error) {
+      console.error('Error loading profile data:', {
+        message: error.message,
+        stack: error.stack
+      });
+      showError('profile-email', 'Failed to load profile data.');
     }
   }
 
@@ -643,6 +721,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadCategories(),
         loadBudgets(),
         loadTransactions(),
+        loadProfileData(),
         updateDashboard()
       ]);
       console.log('App data loaded successfully');
