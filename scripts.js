@@ -66,6 +66,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     console.log(`Signup button: ${signupButton ? 'found' : 'not found'}`);
     console.log(`Category budget dropdown: ${categoryBudgetSelect ? 'found' : 'not found'}`);
+
+    // Hide sections initially to prevent flashing
+    authSection.classList.add('hidden');
+    appSection.classList.add('hidden');
+    // Create loading spinner
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'loading-spinner';
+    loadingDiv.className = 'flex justify-center items-center h-screen';
+    loadingDiv.innerHTML = `<div class="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-600"></div>`;
+    document.body.appendChild(loadingDiv);
   } catch (error) {
     console.error('Error querying DOM elements:', {
       message: error.message,
@@ -96,6 +106,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (initAttempts >= maxAttempts) {
       console.error('Max Firebase initialization attempts reached');
       alert('Failed to connect to Firebase. Please check your network and try again.');
+      document.getElementById('loading-spinner')?.remove();
+      authSection.classList.remove('hidden');
       return;
     }
     initAttempts++;
@@ -139,7 +151,8 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(initializeFirebase, retryDelay);
       } else {
         alert('Failed to initialize Firebase. Please check your network or configuration.');
-        showLoginModal();
+        document.getElementById('loading-spinner')?.remove();
+        authSection.classList.remove('hidden');
       }
     }
   }
@@ -151,6 +164,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!auth) {
         console.error('Auth service not available');
         showError('login-email', 'Authentication service not available.');
+        document.getElementById('loading-spinner')?.remove();
+        authSection.classList.remove('hidden');
         return;
       }
       console.log('Setting up auth state listener');
@@ -158,8 +173,6 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('Auth state changed:', user ? user.uid : 'No user');
         if (user) {
           currentUser = user;
-          authSection.classList.add('hidden');
-          appSection.classList.remove('hidden');
           if (db) {
             console.log('Fetching user data for UID:', user.uid);
             retryFirestoreOperation(() => 
@@ -169,10 +182,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     userCurrency = doc.data().currency || 'INR';
                     familyCode = doc.data().familyCode;
                     console.log('User data loaded:', { userCurrency, familyCode });
-                    loadAppData();
+                    loadAppData().then(() => {
+                      authSection.classList.add('hidden');
+                      appSection.classList.remove('hidden');
+                      document.getElementById('loading-spinner')?.remove();
+                    });
                   } else {
                     console.error('User document not found for UID:', user.uid);
                     showError('login-email', 'User data not found. Please sign up again.');
+                    authSection.classList.remove('hidden');
+                    document.getElementById('loading-spinner')?.remove();
                   }
                 })
             ).catch(error => {
@@ -182,16 +201,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 uid: user.uid
               });
               showError('login-email', 'Failed to load user data.');
+              authSection.classList.remove('hidden');
+              document.getElementById('loading-spinner')?.remove();
             });
           } else {
             console.error('Firestore not available');
             showError('login-email', 'Database service not available.');
+            authSection.classList.remove('hidden');
+            document.getElementById('loading-spinner')?.remove();
           }
         } else {
           currentUser = null;
           authSection.classList.remove('hidden');
           appSection.classList.add('hidden');
           showLoginModal();
+          document.getElementById('loading-spinner')?.remove();
         }
       });
     } catch (error) {
@@ -200,6 +224,8 @@ document.addEventListener('DOMContentLoaded', () => {
         stack: error.stack
       });
       showError('login-email', 'Authentication error occurred.');
+      authSection.classList.remove('hidden');
+      document.getElementById('loading-spinner')?.remove();
     }
   }
 
@@ -330,8 +356,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (categoriesTab) {
       categoriesTab.addEventListener('click', showCategories);
     }
-
-    showLoginModal();
   } catch (error) {
     console.error('Error setting up modal/tab switching:', {
       message: error.message,
@@ -608,17 +632,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Load App Data
-  function loadAppData() {
+  async function loadAppData() {
     try {
       console.log('Loading app data');
       if (!currentUser || !familyCode || !db) {
         console.error('Cannot load app data: missing user, familyCode, or Firestore');
         return;
       }
-      loadCategories();
-      loadBudgets();
-      loadTransactions();
-      updateDashboard();
+      await Promise.all([
+        loadCategories(),
+        loadBudgets(),
+        loadTransactions(),
+        updateDashboard()
+      ]);
+      console.log('App data loaded successfully');
     } catch (error) {
       console.error('Error loading app data:', {
         message: error.message,
@@ -628,7 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Categories
-  function loadCategories() {
+  async function loadCategories() {
     try {
       console.log('Loading categories and budgets for dropdowns');
       if (!db) {
@@ -644,7 +671,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('new-category-budget dropdown not found');
       }
 
-      retryFirestoreOperation(() => 
+      await retryFirestoreOperation(() => 
         db.collection('budgets').where('familyCode', '==', familyCode).get()
           .then(budgetSnapshot => {
             console.log('Budgets fetched:', { count: budgetSnapshot.size });
@@ -663,15 +690,9 @@ document.addEventListener('DOMContentLoaded', () => {
               }
             });
           })
-      ).catch(error => {
-        console.error('Error fetching budgets for dropdowns:', {
-          code: error.code,
-          message: error.message
-        });
-        showError('category-budget', 'Failed to load budgets.');
-      });
+      );
 
-      retryFirestoreOperation(() => 
+      await retryFirestoreOperation(() => 
         db.collection('categories').where('familyCode', '==', familyCode).get()
           .then(snapshot => {
             console.log('Categories fetched:', { count: snapshot.size });
@@ -716,13 +737,7 @@ document.addEventListener('DOMContentLoaded', () => {
               }
             });
           })
-      ).catch(error => {
-        console.error('Error loading categories:', {
-          code: error.code,
-          message: error.message
-        });
-        showError('category-name', 'Failed to load categories.');
-      });
+      );
     } catch (error) {
       console.error('Error loading categories:', {
         message: error.message,
@@ -917,19 +932,21 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Budgets
-  function loadBudgets() {
+  async function loadBudgets() {
     try {
       console.log('Loading budgets');
       if (!db) {
         console.error('Firestore not available');
         return;
       }
-      budgetTable.innerHTML = '';
-      budgetTiles.innerHTML = '';
-      retryFirestoreOperation(() => 
+      budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
+      budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
+      await retryFirestoreOperation(() => 
         db.collection('budgets').where('familyCode', '==', familyCode).get()
           .then(snapshot => {
             console.log('Budgets fetched for table and tiles:', { count: snapshot.size });
+            budgetTable.innerHTML = '';
+            budgetTiles.innerHTML = '';
             let totalBudgetAmount = 0;
             let totalRemainingAmount = 0;
             snapshot.forEach(doc => {
@@ -979,15 +996,13 @@ document.addEventListener('DOMContentLoaded', () => {
               totalRemaining: formatCurrency(totalRemainingAmount, userCurrency)
             });
           })
-      ).catch(error => {
-        console.error('Error loading budgets:', error.code, error.message);
-        showError('budget-name', 'Failed to load budgets.');
-      });
+      );
     } catch (error) {
       console.error('Error loading budgets:', {
         message: error.message,
         stack: error.stack
       });
+      showError('budget-name', 'Failed to load budgets.');
     }
   }
 
@@ -1178,18 +1193,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Transactions
-  function loadTransactions() {
+  async function loadTransactions() {
     try {
       console.log('Loading transactions');
       if (!db) {
         console.error('Firestore not available');
         return;
       }
-      transactionTable.innerHTML = '';
-      retryFirestoreOperation(() => 
+      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
+      await retryFirestoreOperation(() => 
         db.collection('transactions').where('familyCode', '==', familyCode).get()
           .then(snapshot => {
             console.log('Transactions fetched:', { count: snapshot.size });
+            transactionTable.innerHTML = '';
             snapshot.forEach(doc => {
               const transaction = doc.data();
               const tr = document.createElement('tr');
@@ -1218,10 +1234,7 @@ document.addEventListener('DOMContentLoaded', () => {
               });
             });
           })
-      ).catch(error => {
-        console.error('Error loading transactions:', error.code, error.message);
-        showError('category', 'Failed to load transactions.');
-      });
+      );
     } catch (error) {
       console.error('Error loading transactions:', {
         message: error.message,
@@ -1253,27 +1266,21 @@ document.addEventListener('DOMContentLoaded', () => {
               description,
               familyCode,
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            }).then(docRef => {
+            }).then(async docRef => {
               console.log('Transaction added successfully:', { id: docRef.id, type, amount, categoryId });
               if (type === 'debit') {
-                db.collection('categories').doc(categoryId).get().then(categoryDoc => {
-                  if (categoryDoc.exists && categoryDoc.data().budgetId) {
-                    const budgetId = categoryDoc.data().budgetId;
-                    console.log('Updating budget spent for budgetId:', budgetId, 'with amount:', amount);
-                    retryFirestoreOperation(() => 
-                      db.collection('budgets').doc(budgetId).update({
-                        spent: firebase.firestore.FieldValue.increment(amount)
-                      }).then(() => {
-                        console.log('Budget spent updated successfully:', { budgetId, amount });
-                        loadBudgets();
-                      })
-                    ).catch(error => {
-                      console.error('Error updating budget spent:', error.code, error.message);
-                    });
-                  }
-                }).catch(error => {
-                  console.error('Error fetching category for budget update:', error.code, error.message);
-                });
+                const categoryDoc = await db.collection('categories').doc(categoryId).get();
+                if (categoryDoc.exists && categoryDoc.data().budgetId) {
+                  const budgetId = categoryDoc.data().budgetId;
+                  console.log('Updating budget spent for budgetId:', budgetId, 'with amount:', amount);
+                  await retryFirestoreOperation(() => 
+                    db.collection('budgets').doc(budgetId).update({
+                      spent: firebase.firestore.FieldValue.increment(amount)
+                    })
+                  );
+                  console.log('Budget spent updated successfully:', { budgetId, amount });
+                  await loadBudgets();
+                }
               }
               document.getElementById('type').value = 'debit';
               document.getElementById('amount').value = '';
@@ -1281,8 +1288,8 @@ document.addEventListener('DOMContentLoaded', () => {
               document.getElementById('description').value = '';
               addTransaction.innerHTML = 'Add Transaction';
               addTransaction.disabled = false;
-              loadTransactions();
-              updateDashboard();
+              await loadTransactions();
+              await updateDashboard();
             })
           ).catch(error => {
             console.error('Error adding transaction:', error.code, error.message);
@@ -1304,7 +1311,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const id = e.target.dataset.id;
           if (db) {
             retryFirestoreOperation(() => 
-              db.collection('transactions').doc(id).get().then(doc => {
+              db.collection('transactions').doc(id).get().then(async doc => {
                 if (doc.exists) {
                   const oldData = doc.data();
                   document.getElementById('type').value = oldData.type;
@@ -1314,7 +1321,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   addTransaction.innerHTML = 'Update Transaction';
                   isEditing.transaction = true;
                   console.log('Entered edit mode for transaction:', id);
-                  const updateHandler = () => {
+                  const updateHandler = async () => {
                     const type = document.getElementById('type').value;
                     const amount = parseFloat(document.getElementById('amount').value);
                     const categoryId = document.getElementById('category').value;
@@ -1329,53 +1336,85 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     addTransaction.disabled = true;
                     addTransaction.textContent = 'Updating...';
-                    retryFirestoreOperation(() => 
-                      db.collection('transactions').doc(id).update({
-                        type,
-                        amount,
-                        categoryId,
-                        description
-                      }).then(() => {
-                        console.log('Transaction updated successfully:', { id, type, amount, categoryId });
+                    try {
+                      // Handle budget spent adjustments
+                      if (oldData.type === 'debit' || type === 'debit') {
+                        let oldBudgetId = null;
+                        let newBudgetId = null;
                         if (oldData.type === 'debit') {
-                          db.collection('categories').doc(oldData.categoryId).get().then(oldCategoryDoc => {
-                            if (oldCategoryDoc.exists && oldCategoryDoc.data().budgetId) {
-                              const budgetId = oldCategoryDoc.data().budgetId;
-                              const amountDiff = amount - oldData.amount;
-                              console.log('Adjusting budget spent for budgetId:', budgetId, 'by amountDiff:', amountDiff);
-                              retryFirestoreOperation(() => 
-                                db.collection('budgets').doc(budgetId).update({
-                                  spent: firebase.firestore.FieldValue.increment(amountDiff)
-                                }).then(() => {
-                                  console.log('Budget spent adjusted successfully:', { budgetId, amountDiff });
-                                  loadBudgets();
-                                })
-                              ).catch(error => {
-                                console.error('Error adjusting budget spent:', error.code, error.message);
-                              });
-                            }
-                          }).catch(error => {
-                            console.error('Error fetching old category for budget update:', error.code, error.message);
-                          });
+                          const oldCategoryDoc = await db.collection('categories').doc(oldData.categoryId).get();
+                          if (oldCategoryDoc.exists && oldCategoryDoc.data().budgetId) {
+                            oldBudgetId = oldCategoryDoc.data().budgetId;
+                          }
                         }
-                        document.getElementById('type').value = 'debit';
-                        document.getElementById('amount').value = '';
-                        document.getElementById('category').value = '';
-                        document.getElementById('description').value = '';
-                        addTransaction.innerHTML = 'Add Transaction';
-                        addTransaction.disabled = false;
-                        isEditing.transaction = false;
-                        console.log('Exited edit mode for transaction:', id);
-                        loadTransactions();
-                        updateDashboard();
-                      })
-                    ).catch(error => {
+                        if (type === 'debit') {
+                          const newCategoryDoc = await db.collection('categories').doc(categoryId).get();
+                          if (newCategoryDoc.exists && newCategoryDoc.data().budgetId) {
+                            newBudgetId = newCategoryDoc.data().budgetId;
+                          }
+                        }
+                        if (oldBudgetId && oldBudgetId === newBudgetId) {
+                          // Same budget: adjust by amount difference
+                          const amountDiff = amount - oldData.amount;
+                          if (amountDiff !== 0) {
+                            console.log('Adjusting budget spent for budgetId:', oldBudgetId, 'by amountDiff:', amountDiff);
+                            await retryFirestoreOperation(() => 
+                              db.collection('budgets').doc(oldBudgetId).update({
+                                spent: firebase.firestore.FieldValue.increment(amountDiff)
+                              })
+                            );
+                            console.log('Budget spent adjusted successfully:', { budgetId: oldBudgetId, amountDiff });
+                          }
+                        } else {
+                          // Different budgets or type change
+                          if (oldBudgetId && oldData.type === 'debit') {
+                            console.log('Deducting old budget spent for budgetId:', oldBudgetId, 'by amount:', oldData.amount);
+                            await retryFirestoreOperation(() => 
+                              db.collection('budgets').doc(oldBudgetId).update({
+                                spent: firebase.firestore.FieldValue.increment(-oldData.amount)
+                              })
+                            );
+                            console.log('Old budget spent deducted successfully:', { budgetId: oldBudgetId, amount: oldData.amount });
+                          }
+                          if (newBudgetId && type === 'debit') {
+                            console.log('Adding to new budget spent for budgetId:', newBudgetId, 'by amount:', amount);
+                            await retryFirestoreOperation(() => 
+                              db.collection('budgets').doc(newBudgetId).update({
+                                spent: firebase.firestore.FieldValue.increment(amount)
+                              })
+                            );
+                            console.log('New budget spent updated successfully:', { budgetId: newBudgetId, amount });
+                          }
+                        }
+                      }
+                      // Update transaction
+                      await retryFirestoreOperation(() => 
+                        db.collection('transactions').doc(id).update({
+                          type,
+                          amount,
+                          categoryId,
+                          description
+                        })
+                      );
+                      console.log('Transaction updated successfully:', { id, type, amount, categoryId });
+                      document.getElementById('type').value = 'debit';
+                      document.getElementById('amount').value = '';
+                      document.getElementById('category').value = '';
+                      document.getElementById('description').value = '';
+                      addTransaction.innerHTML = 'Add Transaction';
+                      addTransaction.disabled = false;
+                      isEditing.transaction = false;
+                      console.log('Exited edit mode for transaction:', id);
+                      await loadBudgets();
+                      await loadTransactions();
+                      await updateDashboard();
+                    } catch (error) {
                       console.error('Error updating transaction:', error.code, error.message);
                       showError('category', 'Failed to update transaction.');
                       addTransaction.disabled = false;
                       addTransaction.innerHTML = 'Add Transaction';
                       isEditing.transaction = false;
-                    });
+                    }
                   };
                   addTransaction.addEventListener('click', updateHandler, { once: true });
                 }
@@ -1391,35 +1430,28 @@ document.addEventListener('DOMContentLoaded', () => {
           const id = e.target.dataset.id;
           if (db) {
             retryFirestoreOperation(() => 
-              db.collection('transactions').doc(id).get().then(doc => {
+              db.collection('transactions').doc(id).get().then(async doc => {
                 if (doc.exists) {
                   const transaction = doc.data();
                   if (transaction.type === 'debit' && transaction.categoryId) {
-                    db.collection('categories').doc(transaction.categoryId).get().then(categoryDoc => {
-                      if (categoryDoc.exists && categoryDoc.data().budgetId) {
-                        const budgetId = categoryDoc.data().budgetId;
-                        console.log('Deducting budget spent for budgetId:', budgetId, 'by amount:', transaction.amount);
-                        retryFirestoreOperation(() => 
-                          db.collection('budgets').doc(budgetId).update({
-                            spent: firebase.firestore.FieldValue.increment(-transaction.amount)
-                          }).then(() => {
-                            console.log('Budget spent deducted successfully:', { budgetId, amount: transaction.amount });
-                            loadBudgets();
-                          })
-                        ).catch(error => {
-                          console.error('Error deducting budget spent:', error.code, error.message);
-                        });
-                      }
-                    }).catch(error => {
-                      console.error('Error fetching category for budget deduction:', error.code, error.message);
-                    });
+                    const categoryDoc = await db.collection('categories').doc(transaction.categoryId).get();
+                    if (categoryDoc.exists && categoryDoc.data().budgetId) {
+                      const budgetId = categoryDoc.data().budgetId;
+                      console.log('Deducting budget spent for budgetId:', budgetId, 'by amount:', transaction.amount);
+                      await retryFirestoreOperation(() => 
+                        db.collection('budgets').doc(budgetId).update({
+                          spent: firebase.firestore.FieldValue.increment(-transaction.amount)
+                        })
+                      );
+                      console.log('Budget spent deducted successfully:', { budgetId, amount: transaction.amount });
+                      await loadBudgets();
+                    }
                   }
-                  return db.collection('transactions').doc(id).delete();
+                  await db.collection('transactions').doc(id).delete();
+                  console.log('Transaction deleted successfully:', { id });
+                  await loadTransactions();
+                  await updateDashboard();
                 }
-              }).then(() => {
-                console.log('Transaction deleted successfully:', { id });
-                loadTransactions();
-                updateDashboard();
               })
             ).catch(error => {
               console.error('Error deleting transaction:', error.code, error.message);
@@ -1437,7 +1469,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Dashboard Updates
-  function updateDashboard() {
+  async function updateDashboard() {
     try {
       console.log('Updating dashboard');
       if (!db) {
@@ -1445,7 +1477,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       let totalBalance = 0;
-      retryFirestoreOperation(() => 
+      await retryFirestoreOperation(() => 
         db.collection('transactions').where('familyCode', '==', familyCode).get()
           .then(snapshot => {
             snapshot.forEach(doc => {
@@ -1459,15 +1491,13 @@ document.addEventListener('DOMContentLoaded', () => {
             balance.textContent = formatCurrency(totalBalance, userCurrency);
             console.log('Dashboard balance updated:', { totalBalance: formatCurrency(totalBalance, userCurrency) });
           })
-      ).catch(error => {
-        console.error('Error updating dashboard:', error.code, error.message);
-        showError('balance', 'Failed to update dashboard.');
-      });
+      );
     } catch (error) {
       console.error('Error updating dashboard:', {
         message: error.message,
         stack: error.stack
       });
+      showError('balance', 'Failed to update dashboard.');
     }
   }
 });
