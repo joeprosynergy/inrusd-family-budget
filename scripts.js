@@ -843,7 +843,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (resetButton) {
-      resetButton.addEventListener('click', () => {
+      loginButton.addEventListener('click', () => {
         console.log('Reset button clicked');
         clearErrors();
         const email = document.getElementById('reset-email').value;
@@ -1426,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
               })
             ).catch(error => {
-              console.error'script.js' ('Error fetching budget:', error.code, error.message);
+              console.error('Error fetching budget:', error.code, error.message);
               showError('budget-name', 'Failed to fetch budget.');
             });
           }
