@@ -55,7 +55,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const criticalElements = {
       authSection, appSection, loginModal, signupModal, resetModal, loginButton, signupButton, resetButton, logoutButton,
       showSignupBtn, showResetBtn, showLoginFromSignupBtn, showLoginFromResetBtn, dashboardTab, transactionsTab,
-      budgetsTab, categoriesTab, dashboardSection, transactionsSection, budgetsSection, categoriesSection, pageTitle
+      budgetsTab, categoriesTab, dashboardSection, transactionsSection, budgetsSection, categoriesSection, pageTitle,
+      categoryBudgetSelect, addCategoryModal
     };
     for (const [key, element] of Object.entries(criticalElements)) {
       console.log(`Checking DOM element ${key}: ${element ? 'found' : 'not found'}`);
@@ -63,8 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error(`Critical DOM element not found: ${key}`);
       }
     }
-    // Specifically check signupButton
+    // Specifically check signupButton and category dropdowns
     console.log(`Signup button: ${signupButton ? 'found' : 'not found'}`);
+    console.log(`Category budget dropdown: ${categoryBudgetSelect ? 'found' : 'not found'}`);
   } catch (error) {
     console.error('Error querying DOM elements:', {
       message: error.message,
@@ -622,34 +624,62 @@ document.addEventListener('DOMContentLoaded', () => {
   // Categories
   function loadCategories() {
     try {
-      console.log('Loading categories');
+      console.log('Loading categories and budgets for dropdowns');
       if (!db) {
         console.error('Firestore not available');
         return;
       }
+      // Initialize dropdowns
       categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
       categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
+      const newCategoryBudgetSelect = document.getElementById('new-category-budget');
+      if (newCategoryBudgetSelect) {
+        newCategoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
+      } else {
+        console.error('new-category-budget dropdown not found');
+      }
+
+      // Load all budgets for familyCode
+      console.log('Fetching all budgets for familyCode:', familyCode);
+      db.collection('budgets').where('familyCode', '==', familyCode).get()
+        .then(budgetSnapshot => {
+          console.log('Budgets fetched:', { count: budgetSnapshot.size });
+          budgetSnapshot.forEach(budgetDoc => {
+            const budget = budgetDoc.data();
+            console.log('Adding budget to dropdowns:', { id: budgetDoc.id, name: budget.name });
+            const budgetOption = document.createElement('option');
+            budgetOption.value = budgetDoc.id;
+            budgetOption.textContent = budget.name;
+            categoryBudgetSelect.insertBefore(budgetOption, categoryBudgetSelect.querySelector('option[value="add-new"]'));
+            if (newCategoryBudgetSelect) {
+              const newBudgetOption = document.createElement('option');
+              newBudgetOption.value = budgetDoc.id;
+              newBudgetOption.textContent = budget.name;
+              newCategoryBudgetSelect.insertBefore(newBudgetOption, newCategoryBudgetSelect.querySelector('option[value="add-new"]'));
+            }
+          });
+        })
+        .catch(error => {
+          console.error('Error fetching budgets for dropdowns:', {
+            code: error.code,
+            message: error.message
+          });
+          showError('category-budget', 'Failed to load budgets.');
+        });
+
+      // Load categories
       db.collection('categories').where('familyCode', '==', familyCode).get()
         .then(snapshot => {
+          console.log('Categories fetched:', { count: snapshot.size });
           snapshot.forEach(doc => {
             const category = doc.data();
             const option = document.createElement('option');
             option.value = doc.id;
             option.textContent = category.name;
             categorySelect.insertBefore(option, categorySelect.querySelector('option[value="add-new"]'));
-            if (category.budgetId) {
-              db.collection('budgets').doc(category.budgetId).get().then(budgetDoc => {
-                if (budgetDoc.exists) {
-                  const budgetOption = document.createElement('option');
-                  budgetOption.value = budgetDoc.id;
-                  budgetOption.textContent = budgetDoc.data().name;
-                  categoryBudgetSelect.insertBefore(budgetOption, categoryBudgetSelect.querySelector('option[value="add-new"]'));
-                }
-              }).catch(error => {
-                console.error('Error fetching budget for category:', error.code, error.message);
-              });
-            }
           });
+
+          // Populate category table
           categoryTable.innerHTML = '';
           snapshot.forEach(doc => {
             const category = doc.data();
@@ -670,15 +700,25 @@ document.addEventListener('DOMContentLoaded', () => {
               db.collection('budgets').doc(category.budgetId).get().then(budgetDoc => {
                 if (budgetDoc.exists) {
                   tr.children[2].textContent = budgetDoc.data().name;
+                } else {
+                  tr.children[2].textContent = 'None';
                 }
               }).catch(error => {
-                console.error('Error fetching budget for category table:', error.code, error.message);
+                console.error('Error fetching budget for category table:', {
+                  code: error.code,
+                  message: error.message
+                });
+                tr.children[2].textContent = 'Error';
               });
             }
           });
         })
         .catch(error => {
-          console.error('Error loading categories:', error.code, error.message);
+          console.error('Error loading categories:', {
+            code: error.code,
+            message: error.message
+          });
+          showError('category-name', 'Failed to load categories.');
         });
     } catch (error) {
       console.error('Error loading categories:', {
@@ -705,6 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
             familyCode,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }).then(() => {
+            console.log('Category added successfully:', { name, type, budgetId });
             document.getElementById('category-name').value = '';
             document.getElementById('category-type').value = 'income';
             document.getElementById('category-budget').value = 'none';
@@ -746,6 +787,7 @@ document.addEventListener('DOMContentLoaded', () => {
             familyCode,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }).then(() => {
+            console.log('Category saved successfully:', { name, type, budgetId });
             addCategoryModal.classList.add('hidden');
             document.getElementById('new-category-name').value = '';
             document.getElementById('new-category-type').value = 'income';
@@ -795,6 +837,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       type,
                       budgetId
                     }).then(() => {
+                      console.log('Category updated successfully:', { id, name, type, budgetId });
                       document.getElementById('category-name').value = '';
                       document.getElementById('category-type').value = 'income';
                       document.getElementById('category-budget').value = 'none';
@@ -819,6 +862,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const id = e.target.dataset.id;
           if (db) {
             db.collection('categories').doc(id).delete().then(() => {
+              console.log('Category deleted successfully:', { id });
               loadCategories();
             }).catch(error => {
               console.error('Error deleting category:', error.code, error.message);
@@ -847,6 +891,7 @@ document.addEventListener('DOMContentLoaded', () => {
       budgetTiles.innerHTML = '';
       db.collection('budgets').where('familyCode', '==', familyCode).get()
         .then(snapshot => {
+          console.log('Budgets fetched for table and tiles:', { count: snapshot.size });
           let totalBudgetAmount = 0;
           let totalRemainingAmount = 0;
           snapshot.forEach(doc => {
@@ -917,6 +962,7 @@ document.addEventListener('DOMContentLoaded', () => {
             familyCode,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }).then(() => {
+            console.log('Budget added successfully:', { name, amount });
             document.getElementById('budget-name').value = '';
             document.getElementById('budget-amount').value = '';
             loadBudgets();
@@ -958,6 +1004,7 @@ document.addEventListener('DOMContentLoaded', () => {
             familyCode,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }).then(() => {
+            console.log('Budget saved successfully:', { name, amount });
             addBudgetModal.classList.add('hidden');
             document.getElementById('new-budget-name').value = '';
             document.getElementById('new-budget-amount').value = '';
@@ -1004,6 +1051,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       name,
                       amount
                     }).then(() => {
+                      console.log('Budget updated successfully:', { id, name, amount });
                       document.getElementById('budget-name').value = '';
                       document.getElementById('budget-amount').value = '';
                       addBudget.innerHTML = 'Add Budget';
@@ -1028,6 +1076,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const id = e.target.dataset.id;
           if (db) {
             db.collection('budgets').doc(id).delete().then(() => {
+              console.log('Budget deleted successfully:', { id });
               loadBudgets();
               loadCategories();
             }).catch(error => {
@@ -1056,6 +1105,7 @@ document.addEventListener('DOMContentLoaded', () => {
       transactionTable.innerHTML = '';
       db.collection('transactions').where('familyCode', '==', familyCode).get()
         .then(snapshot => {
+          console.log('Transactions fetched:', { count: snapshot.size });
           snapshot.forEach(doc => {
             const transaction = doc.data();
             const tr = document.createElement('tr');
@@ -1064,7 +1114,7 @@ document.addEventListener('DOMContentLoaded', () => {
               const categoryName = categoryDoc.exists ? categoryDoc.data().name : 'Unknown';
               tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
-                < TD class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, userCurrency)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, userCurrency)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm">
@@ -1072,6 +1122,12 @@ document.addEventListener('DOMContentLoaded', () => {
                   <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
                 </td>
               `;
+              console.log('Transaction row added:', {
+                id: doc.id,
+                type: transaction.type,
+                amount: formatCurrency(transaction.amount, userCurrency),
+                category: categoryName
+              });
               transactionTable.appendChild(tr);
             }).catch(error => {
               console.error('Error fetching category for transaction:', error.code, error.message);
@@ -1110,6 +1166,7 @@ document.addEventListener('DOMContentLoaded', () => {
             familyCode,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }).then(() => {
+            console.log('Transaction added successfully:', { type, amount, categoryId });
             document.getElementById('type').value = 'debit';
             document.getElementById('amount').value = '';
             document.getElementById('category').value = '';
@@ -1154,6 +1211,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       categoryId,
                       description
                     }).then(() => {
+                      console.log('Transaction updated successfully:', { id, type, amount, categoryId });
                       document.getElementById('type').value = 'debit';
                       document.getElementById('amount').value = '';
                       document.getElementById('category').value = '';
@@ -1180,6 +1238,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const id = e.target.dataset.id;
           if (db) {
             db.collection('transactions').doc(id).delete().then(() => {
+              console.log('Transaction deleted successfully:', { id });
               loadTransactions();
               updateDashboard();
             }).catch(error => {
