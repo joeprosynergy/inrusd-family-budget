@@ -240,6 +240,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Firestore Retry Utility
+  async function retryFirestoreOperation(operation, maxRetries = 3, delay = 1000) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Firestore operation attempt ${attempt}/${maxRetries}`);
+        return await operation();
+      } catch (error) {
+        console.error('Firestore operation failed:', {
+          attempt,
+          code: error.code,
+          message: error.message
+        });
+        if (attempt === maxRetries || error.code === 'permission-denied') {
+          throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
   // Exchange Rate Cache
   let exchangeRateCache = {
     rate: null,
@@ -270,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
         message: error.message,
         stack: error.stack
       });
-      return 0.012; // Fallback rate (approx INR to USD as of May 2025)
+      return 0.012; // Fallback rate (approx INR to USD)
     }
   }
 
@@ -674,214 +694,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   } catch (error) {
     console.error('Error setting up modal/tab switching:', {
-      message: error.message,
-      stack: error.stack
-    });
-  }
-
-  // Authentication
-  try {
-    if (signupButton) {
-      signupButton.addEventListener('click', () => {
-        console.log('Signup button clicked');
-        clearErrors();
-        console.log('Reading signup form inputs');
-        const email = document.getElementById('signup-email')?.value.trim();
-        const password = document.getElementById('signup-password')?.value;
-        const confirmPassword = document.getElementById('signup-confirm-password')?.value;
-        const currency = document.getElementById('signup-currency')?.value;
-        const familyCodeInput = document.getElementById('signup-family-code')?.value.trim();
-        const accountType = document.getElementById('signup-account-type')?.value;
-
-        console.log('Validating inputs:', {
-          email,
-          password: password ? '[redacted]' : 'missing',
-          confirmPassword: confirmPassword ? '[redacted]' : 'missing',
-          currency,
-          familyCodeInput,
-          accountType
-        });
-
-        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          showError('signup-email', 'Valid email is required');
-          console.log('Validation failed: Invalid or missing email');
-          return;
-        }
-        if (!password || password.length < 6) {
-          showError('signup-password', 'Password must be at least 6 characters');
-          console.log('Validation failed: Invalid or missing password');
-          return;
-        }
-        if (password !== confirmPassword) {
-          showError('signup-confirm-password', 'Passwords do not match');
-          console.log('Validation failed: Passwords do not match');
-          return;
-        }
-        if (!familyCodeInput) {
-          showError('signup-family-code', 'Family code is required');
-          console.log('Validation failed: Missing family code');
-          return;
-        }
-        if (!currency || !['INR', 'USD'].includes(currency)) {
-          showError('signup-currency', 'Valid currency is required');
-          console.log('Validation failed: Invalid currency');
-          return;
-        }
-        if (!accountType || !['admin', 'child'].includes(accountType)) {
-          showError('signup-account-type', 'Valid account type is required');
-          console.log('Validation failed: Invalid account type');
-          return;
-        }
-
-        if (!auth) {
-          console.error('Auth service not available');
-          showError('signup-email', 'Authentication service not available.');
-          return;
-        }
-        if (!db) {
-          console.error('Firestore service not available');
-          showError('signup-email', 'Database service not available.');
-          return;
-        }
-
-        console.log('Attempting to create user with email:', email);
-        signupButton.disabled = true;
-        signupButton.textContent = 'Signing up...';
-        auth.createUserWithEmailAndPassword(email, password)
-          .then(credential => {
-            console.log('Authentication response:', {
-              credential: credential ? 'received' : 'null',
-              user: credential && credential.user ? credential.user.uid : 'null'
-            });
-            if (!credential || !credential.user) {
-              throw new Error('No user credential returned from authentication');
-            }
-            console.log('User created successfully:', credential.user.uid);
-            console.log('Writing user data to Firestore:', {
-              uid: credential.user.uid,
-              currency,
-              familyCode: familyCodeInput,
-              accountType
-            });
-            return db.collection('users').doc(credential.user.uid).set({
-              currency,
-              familyCode: familyCodeInput,
-              accountType,
-              createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-          })
-          .then(() => {
-            console.log('User data written to Firestore successfully');
-            signupButton.disabled = false;
-            signupButton.textContent = 'Sign Up';
-            document.getElementById('signup-email').value = '';
-            document.getElementById('signup-password').value = '';
-            document.getElementById('signup-confirm-password').value = '';
-            document.getElementById('signup-family-code').value = '';
-            document.getElementById('signup-currency').value = 'INR';
-            document.getElementById('signup-account-type').value = 'admin';
-          })
-          .catch(error => {
-            console.error('Signup error:', {
-              code: error.code,
-              message: error.message,
-              email,
-              familyCode: familyCodeInput,
-              currency,
-              accountType,
-              network: navigator.onLine
-            });
-            signupButton.disabled = false;
-            signupButton.textContent = 'Sign Up';
-            let errorMessage = error.message || 'Failed to sign up.';
-            if (error.code === 'auth/email-already-in-use') {
-              errorMessage = 'This email is already registered. Please log in or use a different email.';
-            } else if (error.code === 'auth/invalid-email') {
-              errorMessage = 'Invalid email format.';
-            } else if (error.code === 'auth/weak-password') {
-              errorMessage = 'Password is too weak.';
-            } else if (error.code === 'auth/network-request-failed') {
-              errorMessage = 'Network error. Please check your connection.';
-            }
-            showError('signup-email', errorMessage);
-          });
-      });
-    } else {
-      console.error('signupButton not found');
-    }
-
-    if (loginButton) {
-      loginButton.addEventListener('click', () => {
-        console.log('Login button clicked');
-        clearErrors();
-        const email = document.getElementById('login-email').value;
-        const password = document.getElementById('login-password').value;
-        if (!email) showError('login-email', 'Email is required');
-        if (!password) showError('login-password', 'Password is required');
-        if (email && password && auth) {
-          loginButton.disabled = true;
-          loginButton.textContent = 'Logging in...';
-          auth.signInWithEmailAndPassword(email, password)
-            .then(() => {
-              loginButton.disabled = false;
-              loginButton.textContent = 'Login';
-            })
-            .catch(error => {
-              loginButton.disabled = false;
-              loginButton.textContent = 'Login';
-              console.error('Login error:', error.code, error.message);
-              showError('login-password', error.message || 'Failed to log in.');
-            });
-        } else {
-          console.error('Auth service not available or invalid inputs');
-          showError('login-email', auth ? 'Invalid input data' : 'Authentication service not available.');
-        }
-      });
-    }
-
-    if (resetButton) {
-      resetButton.addEventListener('click', () => {
-        console.log('Reset button clicked');
-        clearErrors();
-        const email = document.getElementById('reset-email').value;
-        if (!email) showError('reset-email', 'Email is required');
-        if (email && auth) {
-          resetButton.disabled = true;
-          resetButton.textContent = 'Sending...';
-          auth.sendPasswordResetEmail(email)
-            .then(() => {
-              console.log('Password reset email sent');
-              alert('Password reset email sent');
-              showLoginModal();
-              resetButton.disabled = false;
-              resetButton.textContent = 'Send Reset Link';
-            })
-            .catch(error => {
-              console.error('Reset error:', error.code, error.message);
-              resetButton.disabled = false;
-              resetButton.textContent = 'Send Reset Link';
-              showError('reset-email', error.message || 'Failed to send reset email');
-            });
-        } else {
-          console.error('Auth service not available');
-          showError('reset-email', auth ? 'Invalid email' : 'Authentication service not available.');
-        }
-      });
-    }
-
-    if (logoutButton) {
-      logoutButton.addEventListener('click', () => {
-        console.log('Logout button clicked');
-        if (auth) {
-          auth.signOut();
-        } else {
-          console.error('Auth service not available');
-          showError('logout-button', 'Authentication service not available');
-        }
-      });
-    }
-  } catch (error) {
-    console.error('Error binding auth event listeners:', {
       message: error.message,
       stack: error.stack
     });
