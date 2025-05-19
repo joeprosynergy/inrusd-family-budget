@@ -9,10 +9,24 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-console.log('Initializing Firebase');
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
+console.log('Attempting to initialize Firebase');
+try {
+  if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
+    throw new Error('Invalid Firebase configuration: apiKey is missing or placeholder');
+  }
+  firebase.initializeApp(firebaseConfig);
+  console.log('Firebase initialized successfully');
+} catch (error) {
+  console.error('Firebase initialization failed:', error.message);
+  alert('Failed to initialize Firebase. Please check the configuration.');
+}
+
+// Firebase Services
+const auth = firebase.auth ? firebase.auth() : null;
+const db = firebase.firestore ? firebase.firestore() : null;
+if (!auth || !db) {
+  console.error('Firebase auth or firestore not available');
+}
 
 // DOM Elements
 console.log('Querying DOM elements');
@@ -132,21 +146,28 @@ loginButton.addEventListener('click', () => {
 signupButton.addEventListener('click', () => {
   console.log('Signup button clicked');
   clearErrors();
+  console.log('Reading signup form inputs');
   const email = document.getElementById('signup-email').value;
   const password = document.getElementById('signup-password').value;
   const confirmPassword = document.getElementById('signup-confirm-password').value;
   const currency = document.getElementById('signup-currency').value;
   const familyCodeInput = document.getElementById('signup-family-code').value;
   const accountType = document.getElementById('signup-account-type').value;
+
+  console.log('Validating inputs:', { email, password, confirmPassword, currency, familyCodeInput, accountType });
   if (!email) showError('signup-email', 'Email is required');
   if (!password) showError('signup-password', 'Password is required');
   if (password !== confirmPassword) showError('signup-confirm-password', 'Passwords do not match');
   if (!familyCodeInput) showError('signup-family-code', 'Family code is required');
+
   if (email && password && password === confirmPassword && familyCodeInput) {
+    console.log('Attempting to create user');
     signupButton.disabled = true;
     signupButton.textContent = 'Signing up...';
     auth.createUserWithEmailAndPassword(email, password)
       .then(credential => {
+        console.log('User created:', credential.user.uid);
+        console.log('Writing user data to Firestore');
         return db.collection('users').doc(credential.user.uid).set({
           currency,
           familyCode: familyCodeInput,
@@ -155,14 +176,18 @@ signupButton.addEventListener('click', () => {
         });
       })
       .then(() => {
+        console.log('User data written to Firestore');
         signupButton.disabled = false;
         signupButton.textContent = 'Sign Up';
       })
       .catch(error => {
+        console.error('Signup error:', error.code, error.message);
         signupButton.disabled = false;
         signupButton.textContent = 'Sign Up';
         showError('signup-email', error.message);
       });
+  } else {
+    console.log('Signup validation failed');
   }
 });
 
@@ -176,6 +201,7 @@ resetButton.addEventListener('click', () => {
     resetButton.textContent = 'Sending...';
     auth.sendPasswordResetEmail(email)
       .then(() => {
+        console.log('Password reset email sent');
         alert('Password reset email sent');
         loginModal.classList.remove('hidden');
         resetModal.classList.add('hidden');
@@ -183,6 +209,7 @@ resetButton.addEventListener('click', () => {
         resetButton.textContent = 'Send Reset Link';
       })
       .catch(error => {
+        console.error('Reset error:', error.message);
         resetButton.disabled = false;
         resetButton.textContent = 'Send Reset Link';
         showError('reset-email', error.message);
@@ -564,17 +591,17 @@ function loadTransactions() {
             <td class="px-6 py-4 whitespace-nowrap text-sm">
               <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
               <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
-            </td>
-          `;
-          transactionTable.appendChild(tr);
-        }).catch(error => {
-          console.error('Error fetching category for transaction:', error);
-        });
+          </td>
+        `;
+        transactionTable.appendChild(tr);
+      }).catch(error => {
+        console.error('Error fetching category for transaction:', error);
       });
-    })
-    .catch(error => {
-      console.error('Error loading transactions:', error);
     });
+  })
+  .catch(error => {
+    console.error('Error loading transactions:', error);
+  });
 }
 
 addTransaction.addEventListener('click', () => {
