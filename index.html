@@ -6,6 +6,10 @@
   <title>Budget Dashboard</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
   <style>
     /* Custom styles for enhanced visuals */
     .budget-tile {
@@ -236,7 +240,7 @@
             <div>
               <label for="category" class="block text-sm font-medium text-gray-700">Category</label>
               <select id="category" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                <option附录 value="groceries">Groceries</option>
+                <option value="groceries">Groceries</option>
                 <option value="entertainment">Entertainment</option>
                 <option value="travel">Travel</option>
                 <option value="add-new">Add New</option>
@@ -454,113 +458,7 @@
       <p>© 2025 Budget Dashboard. All rights reserved.</p>
     </footer>
 
-    <!-- Minimal JavaScript for UI -->
-    <script>
-      // Authentication Modals
-      const loginModal = document.getElementById('login-modal');
-      const signupModal = document.getElementById('signup-modal');
-      const resetModal = document.getElementById('reset-modal');
-      const showSignup = document.getElementById('show-signup');
-      const showReset = document.getElementById('show-reset');
-      const showLoginFromSignup = document.getElementById('show-login-from-signup');
-      const showLoginFromReset = document.getElementById('show-login-from-reset');
-
-      function showLogin() {
-        loginModal.classList.remove('hidden');
-        signupModal.classList.add('hidden');
-        resetModal.classList.add('hidden');
-      }
-
-      function showSignup() {
-        signupModal.classList.remove('hidden');
-        loginModal.classList.add('hidden');
-        resetModal.classList.add('hidden');
-      }
-
-      function showReset() {
-        resetModal.classList.remove('hidden');
-        loginModal.classList.add('hidden');
-        signupModal.classList.add('hidden');
-      }
-
-      showSignup.addEventListener('click', showSignup);
-      showReset.addEventListener('click', showReset);
-      showLoginFromSignup.addEventListener('click', showLogin);
-      showLoginFromReset.addEventListener('click', showLogin);
-
-      // Tab Switching
-      const dashboardTab = document.getElementById('dashboard-tab');
-      const transactionsTab = document.getElementById('transactions-tab');
-      const budgetsTab = document.getElementById('budgets-tab');
-      const categoriesTab = document.getElementById('categories-tab');
-      const dashboardSection = document.getElementById('dashboard-section');
-      const transactionsSection = document.getElementById('transactions-section');
-      const budgetsSection = document.getElementById('budgets-section');
-      const categoriesSection = document.getElementById('categories-section');
-      const pageTitle = document.getElementById('page-title');
-
-      function showDashboard() {
-        dashboardTab.classList.add('bg-blue-800');
-        transactionsTab.classList.remove('bg-blue-800');
-        budgetsTab.classList.remove('bg-blue-800');
-        categoriesTab.classList.remove('bg-blue-800');
-        dashboardSection.classList.remove('hidden');
-        transactionsSection.classList.add('hidden');
-        budgetsSection.classList.add('hidden');
-        categoriesSection.classList.add('hidden');
-        pageTitle.textContent = 'Budget Dashboard';
-      }
-
-      function showTransactions() {
-        transactionsTab.classList.add('bg-blue-800');
-        dashboardTab.classList.remove('bg-blue-800');
-        budgetsTab.classList.remove('bg-blue-800');
-        categoriesTab.classList.remove('bg-blue-800');
-        transactionsSection.classList.remove('hidden');
-        dashboardSection.classList.add('hidden');
-        budgetsSection.classList.add('hidden');
-        categoriesSection.classList.add('hidden');
-        pageTitle.textContent = 'Transactions';
-      }
-
-      function showBudgets() {
-        budgetsTab.classList.add('bg-blue-800');
-        dashboardTab.classList.remove('bg-blue-800');
-        transactionsTab.classList.remove('bg-blue-800');
-        categoriesTab.classList.remove('bg-blue-800');
-        budgetsSection.classList.remove('hidden');
-        dashboardSection.classList.add('hidden');
-        transactionsSection.classList.add('hidden');
-        categoriesSection.classList.add('hidden');
-        pageTitle.textContent = 'Budgets';
-      }
-
-      function showCategories() {
-        categoriesTab.classList.add('bg-blue-800');
-        dashboardTab.classList.remove('bg-blue-800');
-        transactionsTab.classList.remove('bg-blue-800');
-        budgetsTab.classList.remove('bg-blue-800');
-        categoriesSection.classList.remove('hidden');
-        dashboardSection.classList.add('hidden');
-        transactionsSection.classList.add('hidden');
-        budgetsSection.classList.add('hidden');
-        pageTitle.textContent = 'Categories';
-      }
-
-      dashboardTab.addEventListener('click', showDashboard);
-      transactionsTab.addEventListener('click', showTransactions);
-      budgetsTab.addEventListener('click', showBudgets);
-      categoriesTab.addEventListener('click', showCategories);
-
-      // Initialize with Dashboard view (app hidden initially)
-      showDashboard();
-    </script>
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
-
-  <!-- External JavaScript -->
-  <script src="scripts.js"></script>
+    <!-- External JavaScript -->
+    <script src="scripts.js"></script>
 </body>
 </html>
