@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
       profileSection, pageTitle, addTransaction, transactionTable, addBudget, budgetTable, budgetTiles, addCategory,
       categoryTable, categorySelect, categoryBudgetSelect, addCategoryModal, addBudgetModal, saveCategory, cancelCategory,
       saveBudget, cancelBudget, balance, totalBudget, totalRemaining, profileEmail, profileCurrency, profileFamilyCode,
-      profileAccountType;
+      profileAccountType, editProfile, saveProfile, currencyToggle;
 
   try {
     authSection = document.getElementById('auth-section');
@@ -57,6 +57,9 @@ document.addEventListener('DOMContentLoaded', () => {
     profileCurrency = document.getElementById('profile-currency');
     profileFamilyCode = document.getElementById('profile-family-code');
     profileAccountType = document.getElementById('profile-account-type');
+    editProfile = document.getElementById('edit-profile');
+    saveProfile = document.getElementById('save-profile');
+    currencyToggle = document.getElementById('currency-toggle');
 
     // Validate critical DOM elements
     const criticalElements = {
@@ -64,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showSignupBtn, showResetBtn, showLoginFromSignupBtn, showLoginFromResetBtn, dashboardTab, transactionsTab,
       budgetsTab, categoriesTab, profileTab, dashboardSection, transactionsSection, budgetsSection, categoriesSection,
       profileSection, pageTitle, categoryBudgetSelect, addCategoryModal, profileEmail, profileCurrency, profileFamilyCode,
-      profileAccountType
+      profileAccountType, editProfile, saveProfile, currencyToggle
     };
     for (const [key, element] of Object.entries(criticalElements)) {
       console.log(`Checking DOM element ${key}: ${element ? 'found' : 'not found'}`);
@@ -257,6 +260,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Exchange Rate Cache
+  let exchangeRateCache = {
+    rate: null,
+    timestamp: null
+  };
+  const CACHE_TTL = 3600000; // 1 hour in milliseconds
+
+  // Fetch Exchange Rate
+  async function fetchExchangeRate() {
+    try {
+      const now = Date.now();
+      if (exchangeRateCache.rate && exchangeRateCache.timestamp && (now - exchangeRateCache.timestamp) < CACHE_TTL) {
+        console.log('Using cached exchange rate:', exchangeRateCache.rate);
+        return exchangeRateCache.rate;
+      }
+      console.log('Fetching exchange rate from API');
+      const response = await fetch('https://v6.exchangerate-api.com/v6/18891e972833c8dd062c1283/latest/INR');
+      const data = await response.json();
+      if (data.result !== 'success') {
+        throw new Error('Failed to fetch exchange rate');
+      }
+      const rate = data.conversion_rates.USD;
+      exchangeRateCache = { rate, timestamp: now };
+      console.log('Exchange rate fetched:', rate);
+      return rate;
+    } catch (error) {
+      console.error('Error fetching exchange rate:', {
+        message: error.message,
+        stack: error.stack
+      });
+      return 0.012; // Fallback rate (approx INR to USD as of May 2025)
+    }
+  }
+
   // Modal and Tab Switching
   try {
     function showLoginModal() {
@@ -393,27 +430,142 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       console.error('profileTab not found');
     }
+    if (editProfile) {
+      editProfile.addEventListener('click', () => {
+        console.log('Edit Profile clicked');
+        isEditing.profile = true;
+        profileEmail.removeAttribute('readonly');
+        profileCurrency.removeAttribute('disabled');
+        profileFamilyCode.removeAttribute('readonly');
+        profileAccountType.removeAttribute('disabled');
+        profileEmail.classList.remove('bg-gray-100');
+        profileCurrency.classList.remove('bg-gray-100');
+        profileFamilyCode.classList.remove('bg-gray-100');
+        profileAccountType.classList.remove('bg-gray-100');
+        editProfile.classList.add('hidden');
+        saveProfile.classList.remove('hidden');
+      });
+    } else {
+      console.error('editProfile not found');
+    }
+    if (saveProfile) {
+      saveProfile.addEventListener('click', async () => {
+        console.log('Save Profile clicked');
+        clearErrors();
+        const email = profileEmail.value.trim();
+        const currency = profileCurrency.value;
+        const familyCodeInput = profileFamilyCode.value.trim();
+        const accountType = profileAccountType.value;
+
+        console.log('Validating profile inputs:', { email, currency, familyCode: familyCodeInput, accountType });
+
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          showError('profile-email', 'Valid email is required');
+          return;
+        }
+        if (!familyCodeInput) {
+          showError('profile-family-code', 'Family code is required');
+          return;
+        }
+        if (!currency || !['INR', 'USD'].includes(currency)) {
+          showError('profile-currency', 'Valid currency is required');
+          return;
+        }
+        if (!accountType || !['admin', 'child'].includes(accountType)) {
+          showError('profile-account-type', 'Valid account type is required');
+          return;
+        }
+
+        try {
+          saveProfile.disabled = true;
+          saveProfile.textContent = 'Saving...';
+          if (email !== currentUser.email) {
+            console.log('Updating email in Firebase Auth:', email);
+            await auth.currentUser.updateEmail(email);
+          }
+          await retryFirestoreOperation(() => 
+            db.collection('users').doc(currentUser.uid).update({
+              currency,
+              familyCode: familyCodeInput,
+              accountType
+            })
+          );
+          console.log('Profile updated successfully:', { email, currency, familyCode: familyCodeInput, accountType });
+          userCurrency = currency;
+          familyCode = familyCodeInput;
+          isEditing.profile = false;
+          profileEmail.setAttribute('readonly', 'true');
+          profileCurrency.setAttribute('disabled', 'true');
+          profileFamilyCode.setAttribute('readonly', 'true');
+          profileAccountType.setAttribute('disabled', 'true');
+          profileEmail.classList.add('bg-gray-100');
+          profileCurrency.classList.add('bg-gray-100');
+          profileFamilyCode.classList.add('bg-gray-100');
+          profileAccountType.classList.add('bg-gray-100');
+          editProfile.classList.remove('hidden');
+          saveProfile.classList.add('hidden');
+          saveProfile.disabled = false;
+          saveProfile.textContent = 'Save';
+          if (currencyToggle) {
+            currencyToggle.value = currency;
+          }
+          await loadBudgets();
+          await loadTransactions();
+          await updateDashboard();
+        } catch (error) {
+          console.error('Error saving profile:', { code: error.code, message: error.message });
+          let errorMessage = error.message || 'Failed to save profile.';
+          if (error.code === 'auth/email-already-in-use') {
+            errorMessage = 'This email is already in use.';
+          } else if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Invalid email format.';
+          } else if (error.code === 'auth/requires-recent-login') {
+            errorMessage = 'Please log out and log in again to update email.';
+          }
+          showError('profile-email', errorMessage);
+          saveProfile.disabled = false;
+          saveProfile.textContent = 'Save';
+        }
+      });
+    } else {
+      console.error('saveProfile not found');
+    }
+    if (currencyToggle) {
+      currencyToggle.addEventListener('change', async () => {
+        const newCurrency = currencyToggle.value;
+        console.log('Currency toggle changed to:', newCurrency);
+        await updateCurrency(newCurrency);
+      });
+    } else {
+      console.error('currencyToggle not found');
+    }
   } catch (error) {
     console.error('Error setting up modal/tab switching:', {
       message: error.message,
       stack: error.stack
     });
   }
-
+  
   // User State
   let currentUser = null;
   let userCurrency = 'INR';
   let familyCode = '';
-  let isEditing = { transaction: false, budget: false, category: false };
+  let isEditing = { transaction: false, budget: false, category: false, profile: false };
 
   // Utility Functions
   function formatCurrency(amount, currency) {
     try {
       console.log('Formatting currency:', { amount, currency });
-      if (currency === 'USD') {
-        return `$${Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      let displayAmount = amount;
+      if (currency === 'INR' && userCurrency === 'USD') {
+        displayAmount = amount * exchangeRateCache.rate;
+      } else if (currency === 'USD' && userCurrency === 'INR') {
+        displayAmount = amount / exchangeRateCache.rate;
       }
-      return `₹${Number(amount).toLocaleString('en-IN')}`;
+      if (userCurrency === 'USD') {
+        return `$${Number(displayAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
+      return `₹${Number(displayAmount).toLocaleString('en-IN')}`;
     } catch (error) {
       console.error('Error formatting currency:', {
         message: error.message,
@@ -460,6 +612,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Update Currency
+  async function updateCurrency(newCurrency) {
+    try {
+      console.log('Updating currency to:', newCurrency);
+      if (!currentUser || !db) {
+        console.error('Cannot update currency: missing user or Firestore');
+        return;
+      }
+      userCurrency = newCurrency;
+      await retryFirestoreOperation(() => 
+        db.collection('users').doc(currentUser.uid).update({
+          currency: newCurrency
+        })
+      );
+      console.log('Currency updated in Firestore:', newCurrency);
+      currencyToggle.value = newCurrency;
+      profileCurrency.value = newCurrency;
+      await loadBudgets();
+      await loadTransactions();
+      await updateDashboard();
+    } catch (error) {
+      console.error('Error updating currency:', {
+        message: error.message,
+        stack: error.stack
+      });
+      showError('currency-toggle', 'Failed to update currency.');
+    }
+  }
+
   // Load Profile Data
   async function loadProfileData() {
     try {
@@ -468,18 +649,18 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Cannot load profile data: missing user or Firestore');
         return;
       }
-      profileEmail.textContent = currentUser.email || '--';
-      profileCurrency.textContent = userCurrency || '--';
-      profileFamilyCode.textContent = familyCode || '--';
-      profileAccountType.textContent = '--';
+      profileEmail.value = currentUser.email || '--';
+      profileCurrency.value = userCurrency || 'INR';
+      profileFamilyCode.value = familyCode || '--';
+      profileAccountType.value = '--';
       await retryFirestoreOperation(() => 
         db.collection('users').doc(currentUser.uid).get()
           .then(doc => {
             if (doc.exists) {
               const data = doc.data();
-              profileCurrency.textContent = data.currency || '--';
-              profileFamilyCode.textContent = data.familyCode || '--';
-              profileAccountType.textContent = data.accountType ? data.accountType.charAt(0).toUpperCase() + data.accountType.slice(1) : '--';
+              profileCurrency.value = data.currency || 'INR';
+              profileFamilyCode.value = data.familyCode || '--';
+              profileAccountType.value = data.accountType || '--';
               console.log('Profile data loaded:', {
                 email: currentUser.email,
                 currency: data.currency,
@@ -716,6 +897,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!currentUser || !familyCode || !db) {
         console.error('Cannot load app data: missing user, familyCode, or Firestore');
         return;
+      }
+      exchangeRateCache.rate = await fetchExchangeRate();
+      if (currencyToggle) {
+        currencyToggle.value = userCurrency;
       }
       await Promise.all([
         loadCategories(),
@@ -1037,9 +1222,9 @@ document.addEventListener('DOMContentLoaded', () => {
               tr.classList.add('table-row');
               tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, userCurrency)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, userCurrency)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, userCurrency)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, 'INR')}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, 'INR')}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, 'INR')}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm">
                   <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
                   <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
@@ -1051,10 +1236,10 @@ document.addEventListener('DOMContentLoaded', () => {
               const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
               tile.innerHTML = `
                 <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
-                <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, userCurrency)}</span></p>
-                <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, userCurrency)}</span></p>
+                <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, 'INR')}</span></p>
+                <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, 'INR')}</span></p>
                 <p class="text-sm font-semibold text-gray-700 mt-2">
-                  Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, userCurrency)}</span>
+                  Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, 'INR')}</span>
                 </p>
                 <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
                   <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
@@ -1063,16 +1248,16 @@ document.addEventListener('DOMContentLoaded', () => {
               console.log('Budget tile added:', {
                 id: doc.id,
                 name: budget.name,
-                amount: formatCurrency(budget.amount, userCurrency),
-                spent: formatCurrency(spent, userCurrency)
+                amount: formatCurrency(budget.amount, 'INR'),
+                spent: formatCurrency(spent, 'INR')
               });
               budgetTiles.appendChild(tile);
             });
-            totalBudget.textContent = formatCurrency(totalBudgetAmount, userCurrency);
-            totalRemaining.textContent = formatCurrency(totalRemainingAmount, userCurrency);
+            totalBudget.textContent = formatCurrency(totalBudgetAmount, 'INR');
+            totalRemaining.textContent = formatCurrency(totalRemainingAmount, 'INR');
             console.log('Total budget and remaining updated:', {
-              totalBudget: formatCurrency(totalBudgetAmount, userCurrency),
-              totalRemaining: formatCurrency(totalRemainingAmount, userCurrency)
+              totalBudget: formatCurrency(totalBudgetAmount, 'INR'),
+              totalRemaining: formatCurrency(totalRemainingAmount, 'INR')
             });
           })
       );
@@ -1241,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
               })
             ).catch(error => {
-              console.error('Error fetching budget:', error.code, error.message);
+              console.error'script.js' ('Error fetching budget:', error.code, error.message);
               showError('budget-name', 'Failed to fetch budget.');
             });
           }
@@ -1293,7 +1478,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const categoryName = categoryDoc.exists ? categoryDoc.data().name : 'Unknown';
                 tr.innerHTML = `
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, userCurrency)}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm">
@@ -1304,7 +1489,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('Transaction row added:', {
                   id: doc.id,
                   type: transaction.type,
-                  amount: formatCurrency(transaction.amount, userCurrency),
+                  amount: formatCurrency(transaction.amount, 'INR'),
                   category: categoryName
                 });
                 transactionTable.appendChild(tr);
@@ -1567,8 +1752,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 totalBalance -= transaction.amount;
               }
             });
-            balance.textContent = formatCurrency(totalBalance, userCurrency);
-            console.log('Dashboard balance updated:', { totalBalance: formatCurrency(totalBalance, userCurrency) });
+            balance.textContent = formatCurrency(totalBalance, 'INR');
+            console.log('Dashboard balance updated:', { totalBalance: formatCurrency(totalBalance, 'INR') });
           })
       );
     } catch (error) {
