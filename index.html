@@ -29,8 +29,8 @@
 </head>
 <body class="bg-gray-100 font-sans">
   <div id="auth-section" class="min-h-screen flex items-center justify-center bg-gray-100">
-    <div id="login-modal" class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-      <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Login</h2>
+    <div id="login-modal" class="bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+      <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Login</h2>
       <div class="space-y-4">
         <input id="login-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
         <input id="login-password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
@@ -41,8 +41,8 @@
         </div>
       </div>
     </div>
-    <div id="signup-modal" class="hidden bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-      <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Sign Up</h2>
+    <div id="signup-modal" class="hidden bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+      <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Sign Up</h2>
       <div class="space-y-4">
         <input id="signup-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
         <input id="signup-password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
@@ -62,8 +62,8 @@
         </div>
       </div>
     </div>
-    <div id="reset-modal" class="hidden bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-      <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Reset Password</h2>
+    <div id="reset-modal" class="hidden bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+      <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Reset Password</h2>
       <div class="space-y-4">
         <input id="reset-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
         <button id="reset-button" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Send Reset Link</button>
@@ -75,41 +75,47 @@
   </div>
 
   <div id="app-section" class="hidden min-h-screen bg-gray-100">
-    <header class="bg-blue-600 text-white p-4 flex justify-between items-center">
-      <h1 id="page-title" class="text-2xl font-bold">Budget Dashboard</h1>
-      <button id="logout-button" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition">Logout</button>
+    <header class="bg-blue-600 text-white p-3 sm:p-4 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-0">
+      <h1 id="page-title" class="text-xl sm:text-2xl font-bold">Budget Dashboard</h1>
+      <div class="flex items-center gap-2 sm:gap-4">
+        <select id="currency-toggle" class="p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-gray-700 text-sm">
+          <option value="INR">INR</option>
+          <option value="USD">USD</option>
+        </select>
+        <button id="logout-button" class="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition text-sm sm:text-base">Logout</button>
+      </div>
     </header>
-    <nav class="bg-gray-800 text-white p-4">
-      <div class="nav flex space-x-4">
-        <button id="dashboard-tab" class="px-4 py-2 rounded-lg bg-blue-800 hover:bg-blue-900 transition">Dashboard</button>
-        <button id="transactions-tab" class="px-4 py-2 rounded-lg hover:bg-blue-900 transition">Transactions</button>
-        <button id="budgets-tab" class="px-4 py-2 rounded-lg hover:bg-blue-900 transition">Budgets</button>
-        <button id="categories-tab" class="px-4 py-2 rounded-lg hover:bg-blue-900 transition">Categories</button>
-        <button id="profile-tab" class="px-4 py-2 rounded-lg hover:bg-blue-900 transition">Profile</button>
+    <nav class="bg-gray-800 text-white p-3 sm:p-4">
+      <div class="nav flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
+        <button id="dashboard-tab" class="px-3 py-2 rounded-lg bg-blue-800 hover:bg-blue-900 transition text-sm sm:text-base">Dashboard</button>
+        <button id="transactions-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base">Transactions</button>
+        <button id="budgets-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base">Budgets</button>
+        <button id="categories-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base">Categories</button>
+        <button id="profile-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base">Profile</button>
       </div>
     </nav>
-    <main class="p-6">
-      <div id="dashboard-section" class="space-y-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div class="bg-white p-6 rounded-lg shadow-md">
-            <h3 class="text-lg font-semibold text-gray-700">Balance</h3>
-            <p id="balance" class="text-2xl font-bold text-gray-900">₹0</p>
+    <main class="p-4 sm:p-6">
+      <div id="dashboard-section" class="space-y-4 sm:space-y-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+          <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-700">Balance</h3>
+            <p id="balance" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
           </div>
-          <div class="bg-white p-6 rounded-lg shadow-md">
-            <h3 class="text-lg font-semibold text-gray-700">Total Budget</h3>
-            <p id="total-budget" class="text-2xl font-bold text-gray-900">₹0</p>
+          <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-700">Total Budget</h3>
+            <p id="total-budget" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
           </div>
-          <div class="bg-white p-6 rounded-lg shadow-md">
-            <h3 class="text-lg font-semibold text-gray-700">Total Remaining</h3>
-            <p id="total-remaining" class="text-2xl font-bold text-gray-900">₹0</p>
+          <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-700">Total Remaining</h3>
+            <p id="total-remaining" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
           </div>
         </div>
-        <div id="budget-tiles" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        <div id="budget-tiles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"></div>
       </div>
-      <div id="transactions-section" class="hidden space-y-6">
-        <div class="bg-white p-6 rounded-lg shadow-md">
-          <h3 class="text-lg font-semibold text-gray-700 mb-4">Add Transaction</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div id="transactions-section" class="hidden space-y-4 sm:space-y-6">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Transaction</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <select id="type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
               <option value="debit">Debit</option>
               <option value="credit">Credit</option>
@@ -121,51 +127,51 @@
             </select>
             <input id="description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
           </div>
-          <button id="add-transaction" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Add Transaction</button>
+          <button id="add-transaction" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Transaction</button>
         </div>
-        <div class="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto">
           <table class="w-full">
             <thead>
               <tr class="bg-gray-200">
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Amount</th>
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Category</th>
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Type</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Amount</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Category</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Description</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody id="transaction-table"></tbody>
           </table>
         </div>
       </div>
-      <div id="budgets-section" class="hidden space-y-6">
-        <div class="bg-white p-6 rounded-lg shadow-md">
-          <h3 class="text-lg font-semibold text-gray-700 mb-4">Add Budget</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div id="budgets-section" class="hidden space-y-4 sm:space-y-6">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Budget</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <input id="budget-name" type="text" placeholder="Budget Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
             <input id="budget-amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
           </div>
-          <button id="add-budget" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Add Budget</button>
+          <button id="add-budget" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Budget</button>
         </div>
-        <div class="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto">
           <table class="w-full">
             <thead>
               <tr class="bg-gray-200">
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Amount</th>
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Spent</th>
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Remaining</th>
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Name</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Amount</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Spent</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Remaining</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody id="budget-table"></tbody>
           </table>
         </div>
       </div>
-      <div id="categories-section" class="hidden space-y-6">
-        <div class="bg-white p-6 rounded-lg shadow-md">
-          <h3 class="text-lg font-semibold text-gray-700 mb-4">Add Category</h3>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div id="categories-section" class="hidden space-y-4 sm:space-y-6">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Category</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <input id="category-name" type="text" placeholder="Category Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
             <select id="category-type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
               <option value="income">Income</option>
@@ -176,41 +182,53 @@
               <option value="add-new">Add New</option>
             </select>
           </div>
-          <button id="add-category" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Add Category</button>
+          <button id="add-category" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Category</button>
         </div>
-        <div class="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto">
           <table class="w-full">
             <thead>
               <tr class="bg-gray-200">
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Budget</th>
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Name</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Type</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Budget</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody id="category-table"></tbody>
           </table>
         </div>
       </div>
-      <div id="profile-section" class="hidden space-y-6">
-        <div class="bg-white p-6 rounded-lg shadow-md">
-          <h3 class="text-lg font-semibold text-gray-700 mb-4">User Profile</h3>
+      <div id="profile-section" class="hidden space-y-4 sm:space-y-6">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-700">User Profile</h3>
+            <div class="space-x-2">
+              <button id="edit-profile" class="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-sm">Edit</button>
+              <button id="save-profile" class="hidden bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition text-sm">Save</button>
+            </div>
+          </div>
           <div class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-gray-700">Email</label>
-              <p id="profile-email" class="mt-1 text-gray-900">--</p>
+              <input id="profile-email" type="email" class="mt-1 w-full p-2 border rounded-lg bg-gray-100" readonly>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700">Currency</label>
-              <p id="profile-currency" class="mt-1 text-gray-900">--</p>
+              <select id="profile-currency" class="mt-1 w-full p-2 border rounded-lg bg-gray-100" disabled>
+                <option value="INR">INR</option>
+                <option value="USD">USD</option>
+              </select>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700">Family Code</label>
-              <p id="profile-family-code" class="mt-1 text-gray-900">--</p>
+              <input id="profile-family-code" type="text" class="mt-1 w-full p-2 border rounded-lg bg-gray-100" readonly>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700">Account Type</label>
-              <p id="profile-account-type" class="mt-1 text-gray-900">--</p>
+              <select id="profile-account-type" class="mt-1 w-full p-2 border rounded-lg bg-gray-100" disabled>
+                <option value="admin">Admin</option>
+                <option value="child">Child</option>
+              </select>
             </div>
           </div>
         </div>
@@ -219,8 +237,8 @@
   </div>
 
   <div id="add-category-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
-    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-      <h3 class="text-lg font-semibold text-gray-700 mb-4">Add New Category</h3>
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+      <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add New Category</h3>
       <div class="space-y-4">
         <input id="new-category-name" type="text" placeholder="Category Name" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
         <select id="new-category-type" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
@@ -240,8 +258,8 @@
   </div>
 
   <div id="add-budget-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
-    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-      <h3 class="text-lg font-semibold text-gray-700 mb-4">Add New Budget</h3>
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+      <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add New Budget</h3>
       <div class="space-y-4">
         <input id="new-budget-name" type="text" placeholder="Budget Name" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
         <input id="new-budget-amount" type="number" placeholder="Amount" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
