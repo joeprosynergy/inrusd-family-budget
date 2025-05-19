@@ -73,13 +73,14 @@ auth.onAuthStateChanged(user => {
     currentUser = user;
     authSection.classList.add('hidden');
     appSection.classList.remove('hidden');
-    // Fetch user metadata
     db.collection('users').doc(user.uid).get().then(doc => {
       if (doc.exists) {
         userCurrency = doc.data().currency || 'INR';
         familyCode = doc.data().familyCode;
         loadAppData();
       }
+    }).catch(error => {
+      console.error('Error fetching user data:', error);
     });
   } else {
     currentUser = null;
@@ -92,19 +93,30 @@ auth.onAuthStateChanged(user => {
 });
 
 loginButton.addEventListener('click', () => {
+  console.log('Login button clicked');
   clearErrors();
   const email = document.getElementById('login-email').value;
   const password = document.getElementById('login-password').value;
   if (!email) showError('login-email', 'Email is required');
   if (!password) showError('login-password', 'Password is required');
   if (email && password) {
-    auth.signInWithEmailAndPassword(email, password).catch(error => {
-      showError('login-password', error.message);
-    });
+    loginButton.disabled = true;
+    loginButton.textContent = 'Logging in...';
+    auth.signInWithEmailAndPassword(email, password)
+      .then(() => {
+        loginButton.disabled = false;
+        loginButton.textContent = 'Login';
+      })
+      .catch(error => {
+        loginButton.disabled = false;
+        loginButton.textContent = 'Login';
+        showError('login-password', error.message);
+      });
   }
 });
 
 signupButton.addEventListener('click', () => {
+  console.log('Signup button clicked');
   clearErrors();
   const email = document.getElementById('signup-email').value;
   const password = document.getElementById('signup-password').value;
@@ -117,35 +129,55 @@ signupButton.addEventListener('click', () => {
   if (password !== confirmPassword) showError('signup-confirm-password', 'Passwords do not match');
   if (!familyCodeInput) showError('signup-family-code', 'Family code is required');
   if (email && password && password === confirmPassword && familyCodeInput) {
-    auth.createUserWithEmailAndPassword(email, password).then(credential => {
-      return db.collection('users').doc(credential.user.uid).set({
-        currency,
-        familyCode: familyCodeInput,
-        accountType,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    signupButton.disabled = true;
+    signupButton.textContent = 'Signing up...';
+    auth.createUserWithEmailAndPassword(email, password)
+      .then(credential => {
+        return db.collection('users').doc(credential.user.uid).set({
+          currency,
+          familyCode: familyCodeInput,
+          accountType,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      })
+      .then(() => {
+        signupButton.disabled = false;
+        signupButton.textContent = 'Sign Up';
+      })
+      .catch(error => {
+        signupButton.disabled = false;
+        signupButton.textContent = 'Sign Up';
+        showError('signup-email', error.message);
       });
-    }).catch(error => {
-      showError('signup-email', error.message);
-    });
   }
 });
 
 resetButton.addEventListener('click', () => {
+  console.log('Reset button clicked');
   clearErrors();
   const email = document.getElementById('reset-email').value;
   if (!email) showError('reset-email', 'Email is required');
   if (email) {
-    auth.sendPasswordResetEmail(email).then(() => {
-      alert('Password reset email sent');
-      loginModal.classList.remove('hidden');
-      resetModal.classList.add('hidden');
-    }).catch(error => {
-      showError('reset-email', error.message);
-    });
+    resetButton.disabled = true;
+    resetButton.textContent = 'Sending...';
+    auth.sendPasswordResetEmail(email)
+      .then(() => {
+        alert('Password reset email sent');
+        loginModal.classList.remove('hidden');
+        resetModal.classList.add('hidden');
+        resetButton.disabled = false;
+        resetButton.textContent = 'Send Reset Link';
+      })
+      .catch(error => {
+        resetButton.disabled = false;
+        resetButton.textContent = 'Send Reset Link';
+        showError('reset-email', error.message);
+      });
   }
 });
 
 logoutButton.addEventListener('click', () => {
+  console.log('Logout button clicked');
   auth.signOut();
 });
 
@@ -160,54 +192,59 @@ function loadAppData() {
 
 // Categories
 function loadCategories() {
-  categorySelect.innerHTML = '<option value="add-new">Add New</option>';
+  categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
   categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
-  db.collection('categories').where('familyCode', '==', familyCode).get().then(snapshot => {
-    snapshot.forEach(doc => {
-      const category = doc.data();
-      const option = document.createElement('option');
-      option.value = doc.id;
-      option.textContent = category.name;
-      categorySelect.insertBefore(option, categorySelect.querySelector('option[value="add-new"]'));
-      if (category.budgetId) {
-        db.collection('budgets').doc(category.budgetId).get().then(budgetDoc => {
-          if (budgetDoc.exists) {
-            const budgetOption = document.createElement('option');
-            budgetOption.value = budgetDoc.id;
-            budgetOption.textContent = budgetDoc.data().name;
-            categoryBudgetSelect.insertBefore(budgetOption, categoryBudgetSelect.querySelector('option[value="add-new"]'));
-          }
-        });
-      }
+  db.collection('categories').where('familyCode', '==', familyCode).get()
+    .then(snapshot => {
+      snapshot.forEach(doc => {
+        const category = doc.data();
+        const option = document.createElement('option');
+        option.value = doc.id;
+        option.textContent = category.name;
+        categorySelect.insertBefore(option, categorySelect.querySelector('option[value="add-new"]'));
+        if (category.budgetId) {
+          db.collection('budgets').doc(category.budgetId).get().then(budgetDoc => {
+            if (budgetDoc.exists) {
+              const budgetOption = document.createElement('option');
+              budgetOption.value = budgetDoc.id;
+              budgetOption.textContent = budgetDoc.data().name;
+              categoryBudgetSelect.insertBefore(budgetOption, categoryBudgetSelect.querySelector('option[value="add-new"]"));
+            }
+          });
+        }
+      });
+      categoryTable.innerHTML = '';
+      snapshot.forEach(doc => {
+        const category = doc.data();
+        const tr = document.createElement('tr');
+        tr.classList.add('table-row');
+        const budgetName = category.budgetId ? 'Loading...' : 'None';
+        tr.innerHTML = `
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${category.name}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${category.type}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budgetName}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm">
+            <button class="text-blue-600 hover:text-blue-800 mr-2 edit-category" data-id="${doc.id}">Edit</button>
+            <button class="text-red-600 hover:text-red-800 delete-category" data-id="${doc.id}">Delete</button>
+          </td>
+        `;
+        categoryTable.appendChild(tr);
+        if (category.budgetId) {
+          db.collection('budgets').doc(category.budgetId).get().then(budgetDoc => {
+            if (budgetDoc.exists) {
+              tr.children[2].textContent = budgetDoc.data().name;
+            }
+          });
+        }
+      });
+    })
+    .catch(error => {
+      console.error('Error loading categories:', error);
     });
-    categoryTable.innerHTML = '';
-    snapshot.forEach(doc => {
-      const category = doc.data();
-      const tr = document.createElement('tr');
-      tr.classList.add('table-row');
-      const budgetName = category.budgetId ? 'Loading...' : 'None';
-      tr.innerHTML = `
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${category.name}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${category.type}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budgetName}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm">
-          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-category" data-id="${doc.id}">Edit</button>
-          <button class="text-red-600 hover:text-red-800 delete-category" data-id="${doc.id}">Delete</button>
-        </td>
-      `;
-      categoryTable.appendChild(tr);
-      if (category.budgetId) {
-        db.collection('budgets').doc(category.budgetId).get().then(budgetDoc => {
-          if (budgetDoc.exists) {
-            tr.children[2].textContent = budgetDoc.data().name;
-          }
-        });
-      }
-    });
-  });
 }
 
 addCategory.addEventListener('click', () => {
+  console.log('Add Category clicked');
   clearErrors();
   const name = document.getElementById('category-name').value.trim();
   const type = document.getElementById('category-type').value;
@@ -225,11 +262,14 @@ addCategory.addEventListener('click', () => {
       document.getElementById('category-type').value = 'income';
       document.getElementById('category-budget').value = 'none';
       loadCategories();
+    }).catch(error => {
+      console.error('Error adding category:', error);
     });
   }
 });
 
 categorySelect.addEventListener('change', () => {
+  console.log('Category select changed:', categorySelect.value);
   if (categorySelect.value === 'add-new') {
     addCategoryModal.classList.remove('hidden');
     categorySelect.value = '';
@@ -237,6 +277,7 @@ categorySelect.addEventListener('change', () => {
 });
 
 saveCategory.addEventListener('click', () => {
+  console.log('Save Category clicked');
   clearErrors();
   const name = document.getElementById('new-category-name').value.trim();
   const type = document.getElementById('new-category-type').value;
@@ -255,11 +296,14 @@ saveCategory.addEventListener('click', () => {
       document.getElementById('new-category-type').value = 'income';
       document.getElementById('new-category-budget').value = 'none';
       loadCategories();
+    }).catch(error => {
+      console.error('Error saving category:', error);
     });
   }
 });
 
 cancelCategory.addEventListener('click', () => {
+  console.log('Cancel Category clicked');
   addCategoryModal.classList.add('hidden');
   document.getElementById('new-category-name').value = '';
   document.getElementById('new-category-type').value = 'income';
@@ -268,6 +312,7 @@ cancelCategory.addEventListener('click', () => {
 
 categoryTable.addEventListener('click', e => {
   if (e.target.classList.contains('edit-category')) {
+    console.log('Edit Category clicked:', e.target.dataset.id);
     const id = e.target.dataset.id;
     db.collection('categories').doc(id).get().then(doc => {
       if (doc.exists) {
@@ -292,16 +337,23 @@ categoryTable.addEventListener('click', e => {
               addCategory.innerHTML = 'Add Category';
               addCategory.onclick = null;
               loadCategories();
+            }).catch(error => {
+              console.error('Error updating category:', error);
             });
           }
         };
       }
+    }).catch(error => {
+      console.error('Error fetching category:', error);
     });
   }
   if (e.target.classList.contains('delete-category')) {
+    console.log('Delete Category clicked:', e.target.dataset.id);
     const id = e.target.dataset.id;
     db.collection('categories').doc(id).delete().then(() => {
       loadCategories();
+    }).catch(error => {
+      console.error('Error deleting category:', error);
     });
   }
 });
@@ -310,51 +362,56 @@ categoryTable.addEventListener('click', e => {
 function loadBudgets() {
   budgetTable.innerHTML = '';
   budgetTiles.innerHTML = '';
-  db.collection('budgets').where('familyCode', '==', familyCode).get().then(snapshot => {
-    let totalBudgetAmount = 0;
-    let totalRemainingAmount = 0;
-    snapshot.forEach(doc => {
-      const budget = doc.data();
-      totalBudgetAmount += budget.amount;
-      totalRemainingAmount += budget.amount - (budget.spent || 0);
-      // Budget Table
-      const tr = document.createElement('tr');
-      tr.classList.add('table-row');
-      tr.innerHTML = `
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, userCurrency)}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.spent || 0, userCurrency)}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - (budget.spent || 0), userCurrency)}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm">
-          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
-          <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
-        </td>
-      `;
-      budgetTable.appendChild(tr);
-      // Budget Tiles
-      const tile = document.createElement('div');
-      tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
-      const spent = budget.spent || 0;
-      const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
-      tile.innerHTML = `
-        <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
-        <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, userCurrency)}</span></p>
-        <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, userCurrency)}</span></p>
-        <p class="text-sm font-semibold text-gray-700 mt-2">
-          Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, userCurrency)}</span>
-        </p>
-        <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
-          <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
-        </div>
-      `;
-      budgetTiles.appendChild(tile);
+  db.collection('budgets').where('familyCode', '==', familyCode).get()
+    .then(snapshot => {
+      let totalBudgetAmount = 0;
+      let totalRemainingAmount = 0;
+      snapshot.forEach(doc => {
+        const budget = doc.data();
+        totalBudgetAmount += budget.amount;
+        totalRemainingAmount += budget.amount - (budget.spent || 0);
+        // Budget Table
+        const tr = document.createElement('tr');
+        tr.classList.add('table-row');
+        tr.innerHTML = `
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, userCurrency)}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.spent || 0, userCurrency)}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - (budget.spent || 0), userCurrency)}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm">
+            <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
+            <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
+          </td>
+        `;
+        budgetTable.appendChild(tr);
+        // Budget Tiles
+        const tile = document.createElement('div');
+        tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
+        const spent = budget.spent || 0;
+        const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
+        tile.innerHTML = `
+          <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
+          <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, userCurrency)}</span></p>
+          <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, userCurrency)}</span></p>
+          <p class="text-sm font-semibold text-gray-700 mt-2">
+            Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, userCurrency)}</span>
+          </p>
+          <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
+            <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
+          </div>
+        `;
+        budgetTiles.appendChild(tile);
+      });
+      totalBudget.textContent = formatCurrency(totalBudgetAmount, userCurrency);
+      totalRemaining.textContent = formatCurrency(totalRemainingAmount, userCurrency);
+    })
+    .catch(error => {
+      console.error('Error loading budgets:', error);
     });
-    totalBudget.textContent = formatCurrency(totalBudgetAmount, userCurrency);
-    totalRemaining.textContent = formatCurrency(totalRemainingAmount, userCurrency);
-  });
 }
 
 addBudget.addEventListener('click', () => {
+  console.log('Add Budget clicked');
   clearErrors();
   const name = document.getElementById('budget-name').value.trim();
   const amount = parseFloat(document.getElementById('budget-amount').value);
@@ -372,11 +429,14 @@ addBudget.addEventListener('click', () => {
       document.getElementById('budget-amount').value = '';
       loadBudgets();
       loadCategories();
+    }).catch(error => {
+      console.error('Error adding budget:', error);
     });
   }
 });
 
 categoryBudgetSelect.addEventListener('change', () => {
+  console.log('Category Budget select changed:', categoryBudgetSelect.value);
   if (categoryBudgetSelect.value === 'add-new') {
     addBudgetModal.classList.remove('hidden');
     categoryBudgetSelect.value = 'none';
@@ -384,6 +444,7 @@ categoryBudgetSelect.addEventListener('change', () => {
 });
 
 saveBudget.addEventListener('click', () => {
+  console.log('Save Budget clicked');
   clearErrors();
   const name = document.getElementById('new-budget-name').value.trim();
   const amount = parseFloat(document.getElementById('new-budget-amount').value);
@@ -402,11 +463,14 @@ saveBudget.addEventListener('click', () => {
       document.getElementById('new-budget-amount').value = '';
       loadBudgets();
       loadCategories();
+    }).catch(error => {
+      console.error('Error saving budget:', error);
     });
   }
 });
 
 cancelBudget.addEventListener('click', () => {
+  console.log('Cancel Budget clicked');
   addBudgetModal.classList.add('hidden');
   document.getElementById('new-budget-name').value = '';
   document.getElementById('new-budget-amount').value = '';
@@ -414,6 +478,7 @@ cancelBudget.addEventListener('click', () => {
 
 budgetTable.addEventListener('click', e => {
   if (e.target.classList.contains('edit-budget')) {
+    console.log('Edit Budget clicked:', e.target.dataset.id);
     const id = e.target.dataset.id;
     db.collection('budgets').doc(id).get().then(doc => {
       if (doc.exists) {
@@ -436,17 +501,24 @@ budgetTable.addEventListener('click', e => {
               addBudget.onclick = null;
               loadBudgets();
               loadCategories();
+            }).catch(error => {
+              console.error('Error updating budget:', error);
             });
           }
         };
       }
+    }).catch(error => {
+      console.error('Error fetching budget:', error);
     });
   }
   if (e.target.classList.contains('delete-budget')) {
+    console.log('Delete Budget clicked:', e.target.dataset.id);
     const id = e.target.dataset.id;
     db.collection('budgets').doc(id).delete().then(() => {
       loadBudgets();
       loadCategories();
+    }).catch(error => {
+      console.error('Error deleting budget:', error);
     });
   }
 });
@@ -454,30 +526,37 @@ budgetTable.addEventListener('click', e => {
 // Transactions
 function loadTransactions() {
   transactionTable.innerHTML = '';
-  db.collection('transactions').where('familyCode', '==', familyCode).get().then(snapshot => {
-    snapshot.forEach(doc => {
-      const transaction = doc.data();
-      const tr = document.createElement('tr');
-      tr.classList.add('table-row');
-      db.collection('categories').doc(transaction.categoryId).get().then(categoryDoc => {
-        const categoryName = categoryDoc.exists ? categoryDoc.data().name : 'Unknown';
-        tr.innerHTML = `
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, userCurrency)}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm">
-            <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
-            <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
-          </td>
-        `;
-        transactionTable.appendChild(tr);
+  db.collection('transactions').where('familyCode', '==', familyCode).get()
+    .then(snapshot => {
+      snapshot.forEach(doc => {
+        const transaction = doc.data();
+        const tr = document.createElement('tr');
+        tr.classList.add('table-row');
+        db.collection('categories').doc(transaction.categoryId).get().then(categoryDoc => {
+          const categoryName = categoryDoc.exists ? categoryDoc.data().name : 'Unknown';
+          tr.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, userCurrency)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+              <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
+              <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
+            </td>
+          `;
+          transactionTable.appendChild(tr);
+        }).catch(error => {
+          console.error('Error fetching category for transaction:', error);
+        });
       });
+    })
+    .catch(error => {
+      console.error('Error loading transactions:', error);
     });
-  });
 }
 
 addTransaction.addEventListener('click', () => {
+  console.log('Add Transaction clicked');
   clearErrors();
   const type = document.getElementById('type').value;
   const amount = parseFloat(document.getElementById('amount').value);
@@ -500,12 +579,15 @@ addTransaction.addEventListener('click', () => {
       document.getElementById('description').value = '';
       loadTransactions();
       updateDashboard();
+    }).catch(error => {
+      console.error('Error adding transaction:', error);
     });
   }
 });
 
 transactionTable.addEventListener('click', e => {
   if (e.target.classList.contains('edit-transaction')) {
+    console.log('Edit Transaction clicked:', e.target.dataset.id);
     const id = e.target.dataset.id;
     db.collection('transactions').doc(id).get().then(doc => {
       if (doc.exists) {
@@ -536,17 +618,24 @@ transactionTable.addEventListener('click', e => {
               addTransaction.onclick = null;
               loadTransactions();
               updateDashboard();
+            }).catch(error => {
+              console.error('Error updating transaction:', error);
             });
           }
         };
       }
+    }).catch(error => {
+      console.error('Error fetching transaction:', error);
     });
   }
   if (e.target.classList.contains('delete-transaction')) {
+    console.log('Delete Transaction clicked:', e.target.dataset.id);
     const id = e.target.dataset.id;
     db.collection('transactions').doc(id).delete().then(() => {
       loadTransactions();
       updateDashboard();
+    }).catch(error => {
+      console.error('Error deleting transaction:', error);
     });
   }
 });
@@ -554,15 +643,19 @@ transactionTable.addEventListener('click', e => {
 // Dashboard Updates
 function updateDashboard() {
   let totalBalance = 0;
-  db.collection('transactions').where('familyCode', '==', familyCode).get().then(snapshot => {
-    snapshot.forEach(doc => {
-      const transaction = doc.data();
-      if (transaction.type === 'credit') {
-        totalBalance += transaction.amount;
-      } else {
-        totalBalance -= transaction.amount;
-      }
+  db.collection('transactions').where('familyCode', '==', familyCode).get()
+    .then(snapshot => {
+      snapshot.forEach(doc => {
+        const transaction = doc.data();
+        if (transaction.type === 'credit') {
+          totalBalance += transaction.amount;
+        } else {
+          totalBalance -= transaction.amount;
+        }
+      });
+      balance.textContent = formatCurrency(totalBalance, userCurrency);
+    })
+    .catch(error => {
+      console.error('Error updating dashboard:', error);
     });
-    balance.textContent = formatCurrency(totalBalance, userCurrency);
-  });
 }
