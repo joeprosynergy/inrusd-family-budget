@@ -13,16 +13,24 @@ console.log('Attempting to initialize Firebase');
 let auth = null;
 let db = null;
 try {
+  // Check if Firebase SDK is loaded
+  if (typeof firebase === 'undefined' || !firebase.initializeApp) {
+    throw new Error('Firebase SDK not loaded or incomplete');
+  }
   // Validate firebaseConfig fields
-  console.log('Validating firebaseConfig:', firebaseConfig);
+  console.log('Validating firebaseConfig:', {
+    apiKey: firebaseConfig.apiKey ? '<redacted>' : 'missing',
+    authDomain: firebaseConfig.authDomain,
+    projectId: firebaseConfig.projectId,
+    storageBucket: firebaseConfig.storageBucket,
+    messagingSenderId: firebaseConfig.messagingSenderId,
+    appId: firebaseConfig.appId
+  });
   const requiredFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
   for (const field of requiredFields) {
     if (!firebaseConfig[field] || firebaseConfig[field].trim() === '') {
       throw new Error(`Invalid Firebase configuration: ${field} is missing or empty`);
     }
-  }
-  if (typeof firebase === 'undefined') {
-    throw new Error('Firebase SDK not loaded');
   }
   firebase.initializeApp(firebaseConfig);
   console.log('Firebase initialized successfully');
@@ -33,10 +41,14 @@ try {
   console.error('Firebase initialization failed:', {
     message: error.message,
     code: error.code,
-    stack: error.stack
+    stack: error.stack,
+    config: {
+      apiKey: firebaseConfig.apiKey ? '<redacted>' : 'missing',
+      authDomain: firebaseConfig.authDomain,
+      projectId: firebaseConfig.projectId
+    }
   });
   console.warn('Continuing with limited functionality (UI only)');
-  // Don't alert to avoid blocking UI
 }
 
 // DOM Elements
@@ -163,7 +175,7 @@ loginButton.addEventListener('click', () => {
       });
   } else {
     console.error('Auth service not available or invalid inputs');
-    showError('login-email', 'Authentication service not available');
+    showError('login-email', auth ? 'Invalid input data' : 'Authentication service not available. Please try again later.');
   }
 });
 
@@ -211,11 +223,11 @@ signupButton.addEventListener('click', () => {
         console.error('Signup error:', error.code, error.message);
         signupButton.disabled = false;
         signupButton.textContent = 'Sign Up';
-        showError('signup-email', error.message || 'Failed to sign up. Please try again.');
+        showError('signup-email', error.message || 'Failed to sign up. Please check your network or configuration.');
       });
   } else {
     console.error('Auth or Firestore service not available or invalid inputs');
-    showError('signup-email', auth && db ? 'Invalid input data' : 'Authentication or database service not available');
+    showError('signup-email', auth && db ? 'Invalid input data' : 'Authentication or database service not available. Please check your network or configuration.');
   }
 });
 
@@ -244,7 +256,7 @@ resetButton.addEventListener('click', () => {
       });
   } else {
     console.error('Auth service not available');
-    showError('reset-email', 'Authentication service not available');
+    showError('reset-email', auth ? 'Invalid email' : 'Authentication service not available. Please check your network or configuration.');
   }
 });
 
@@ -357,7 +369,7 @@ addCategory.addEventListener('click', () => {
     });
   } else {
     console.error('Firestore or user not available');
-    showError('category-name', 'Database service not available');
+    showError('category-name', db ? 'Invalid input data' : 'Database service not available');
   }
 });
 
@@ -394,7 +406,7 @@ saveCategory.addEventListener('click', () => {
     });
   } else {
     console.error('Firestore or user not available');
-    showError('new-category-name', 'Database service not available');
+    showError('new-category-name', db ? 'Invalid input data' : 'Database service not available');
   }
 });
 
@@ -539,7 +551,7 @@ addBudget.addEventListener('click', () => {
     });
   } else {
     console.error('Firestore or user not available');
-    showError('budget-name', 'Database service not available');
+    showError('budget-name', db ? 'Invalid input data' : 'Database service not available');
   }
 });
 
@@ -576,7 +588,7 @@ saveBudget.addEventListener('click', () => {
     });
   } else {
     console.error('Firestore or user not available');
-    showError('new-budget-name', 'Database service not available');
+    showError('new-budget-name', db ? 'Invalid input data' : 'Database service not available');
   }
 });
 
@@ -704,7 +716,7 @@ addTransaction.addEventListener('click', () => {
     });
   } else {
     console.error('Firestore or user not available');
-    showError('category', 'Database service not available');
+    showError('category', db ? 'Invalid input data' : 'Database service not available');
   }
 });
 
