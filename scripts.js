@@ -49,6 +49,7 @@ let familyCode = '';
 
 // Utility Functions
 function formatCurrency(amount, currency) {
+  console.log('Formatting currency:', { amount, currency });
   if (currency === 'USD') {
     return `$${Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
@@ -56,6 +57,7 @@ function formatCurrency(amount, currency) {
 }
 
 function showError(elementId, message) {
+  console.log('Showing error:', { elementId, message });
   const errorDiv = document.createElement('div');
   errorDiv.className = 'text-red-600 text-sm mt-1';
   errorDiv.textContent = message;
@@ -64,11 +66,13 @@ function showError(elementId, message) {
 }
 
 function clearErrors() {
+  console.log('Clearing errors');
   document.querySelectorAll('.text-red-600').forEach(el => el.remove());
 }
 
 // Authentication
 auth.onAuthStateChanged(user => {
+  console.log('Auth state changed:', user ? user.uid : 'No user');
   if (user) {
     currentUser = user;
     authSection.classList.add('hidden');
@@ -77,7 +81,10 @@ auth.onAuthStateChanged(user => {
       if (doc.exists) {
         userCurrency = doc.data().currency || 'INR';
         familyCode = doc.data().familyCode;
+        console.log('User data loaded:', { userCurrency, familyCode });
         loadAppData();
+      } else {
+        console.error('User document not found');
       }
     }).catch(error => {
       console.error('Error fetching user data:', error);
@@ -164,7 +171,7 @@ resetButton.addEventListener('click', () => {
       .then(() => {
         alert('Password reset email sent');
         loginModal.classList.remove('hidden');
-        resetModal.classList.add('hidden');
+ chezModal.classList.add('hidden');
         resetButton.disabled = false;
         resetButton.textContent = 'Send Reset Link';
       })
@@ -183,6 +190,7 @@ logoutButton.addEventListener('click', () => {
 
 // Load App Data
 function loadAppData() {
+  console.log('Loading app data');
   if (!currentUser || !familyCode) return;
   loadCategories();
   loadBudgets();
@@ -192,6 +200,7 @@ function loadAppData() {
 
 // Categories
 function loadCategories() {
+  console.log('Loading categories');
   categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
   categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
   db.collection('categories').where('familyCode', '==', familyCode).get()
@@ -208,8 +217,10 @@ function loadCategories() {
               const budgetOption = document.createElement('option');
               budgetOption.value = budgetDoc.id;
               budgetOption.textContent = budgetDoc.data().name;
-              categoryBudgetSelect.insertBefore(budgetOption, categoryBudgetSelect.querySelector('option[value="add-new"]"));
+              categoryBudgetSelect.insertBefore(budgetOption, categoryBudgetSelect.querySelector('option[value="add-new"]'));
             }
+          }).catch(error => {
+            console.error('Error fetching budget for category:', error);
           });
         }
       });
@@ -234,6 +245,8 @@ function loadCategories() {
             if (budgetDoc.exists) {
               tr.children[2].textContent = budgetDoc.data().name;
             }
+          }).catch(error => {
+            console.error('Error fetching budget for category table:', error);
           });
         }
       });
@@ -360,6 +373,7 @@ categoryTable.addEventListener('click', e => {
 
 // Budgets
 function loadBudgets() {
+  console.log('Loading budgets');
   budgetTable.innerHTML = '';
   budgetTiles.innerHTML = '';
   db.collection('budgets').where('familyCode', '==', familyCode).get()
@@ -525,6 +539,7 @@ budgetTable.addEventListener('click', e => {
 
 // Transactions
 function loadTransactions() {
+  console.log('Loading transactions');
   transactionTable.innerHTML = '';
   db.collection('transactions').where('familyCode', '==', familyCode).get()
     .then(snapshot => {
@@ -642,6 +657,7 @@ transactionTable.addEventListener('click', e => {
 
 // Dashboard Updates
 function updateDashboard() {
+  console.log('Updating dashboard');
   let totalBalance = 0;
   db.collection('transactions').where('familyCode', '==', familyCode).get()
     .then(snapshot => {
