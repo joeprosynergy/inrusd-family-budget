@@ -2,61 +2,69 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM fully loaded, querying elements');
 
   // DOM Elements
+  let authSection, appSection, loginModal, signupModal, resetModal, loginButton, signupButton, resetButton, logoutButton,
+      showSignupBtn, showResetBtn, showLoginFromSignupBtn, showLoginFromResetBtn, dashboardTab, transactionsTab,
+      budgetsTab, categoriesTab, dashboardSection, transactionsSection, budgetsSection, categoriesSection, pageTitle,
+      addTransaction, transactionTable, addBudget, budgetTable, budgetTiles, addCategory, categoryTable, categorySelect,
+      categoryBudgetSelect, addCategoryModal, addBudgetModal, saveCategory, cancelCategory, saveBudget, cancelBudget,
+      balance, totalBudget, totalRemaining;
+
   try {
-    const authSection = document.getElementById('auth-section');
-    const appSection = document.getElementById('app-section');
-    const loginModal = document.getElementById('login-modal');
-    const signupModal = document.getElementById('signup-modal');
-    const resetModal = document.getElementById('reset-modal');
-    const loginButton = document.getElementById('login-button');
-    const signupButton = document.getElementById('signup-button');
-    const resetButton = document.getElementById('reset-button');
-    const logoutButton = document.getElementById('logout-button');
-    const showSignupBtn = document.getElementById('show-signup');
-    const showResetBtn = document.getElementById('show-reset');
-    const showLoginFromSignupBtn = document.getElementById('show-login-from-signup');
-    const showLoginFromResetBtn = document.getElementById('show-login-from-reset');
-    const dashboardTab = document.getElementById('dashboard-tab');
-    const transactionsTab = document.getElementById('transactions-tab');
-    const budgetsTab = document.getElementById('budgets-tab');
-    const categoriesTab = document.getElementById('categories-tab');
-    const dashboardSection = document.getElementById('dashboard-section');
-    const transactionsSection = document.getElementById('transactions-section');
-    const budgetsSection = document.getElementById('budgets-section');
-    const categoriesSection = document.getElementById('categories-section');
-    const pageTitle = document.getElementById('page-title');
-    const addTransaction = document.getElementById('add-transaction');
-    const transactionTable = document.getElementById('transaction-table');
-    const addBudget = document.getElementById('add-budget');
-    const budgetTable = document.getElementById('budget-table');
-    const budgetTiles = document.getElementById('budget-tiles');
-    const addCategory = document.getElementById('add-category');
-    const categoryTable = document.getElementById('category-table');
-    const categorySelect = document.getElementById('category');
-    const categoryBudgetSelect = document.getElementById('category-budget');
-    const addCategoryModal = document.getElementById('add-category-modal');
-    const addBudgetModal = document.getElementById('add-budget-modal');
-    const saveCategory = document.getElementById('save-category');
-    const cancelCategory = document.getElementById('cancel-category');
-    const saveBudget = document.getElementById('save-budget');
-    const cancelBudget = document.getElementById('cancel-budget');
-    const balance = document.getElementById('balance');
-    const totalBudget = document.getElementById('total-budget');
-    const totalRemaining = document.getElementById('total-remaining');
+    authSection = document.getElementById('auth-section');
+    appSection = document.getElementById('app-section');
+    loginModal = document.getElementById('login-modal');
+    signupModal = document.getElementById('signup-modal');
+    resetModal = document.getElementById('reset-modal');
+    loginButton = document.getElementById('login-button');
+    signupButton = document.getElementById('signup-button');
+    resetButton = document.getElementById('reset-button');
+    logoutButton = document.getElementById('logout-button');
+    showSignupBtn = document.getElementById('show-signup');
+    showResetBtn = document.getElementById('show-reset');
+    showLoginFromSignupBtn = document.getElementById('show-login-from-signup');
+    showLoginFromResetBtn = document.getElementById('show-login-from-reset');
+    dashboardTab = document.getElementById('dashboard-tab');
+    transactionsTab = document.getElementById('transactions-tab');
+    budgetsTab = document.getElementById('budgets-tab');
+    categoriesTab = document.getElementById('categories-tab');
+    dashboardSection = document.getElementById('dashboard-section');
+    transactionsSection = document.getElementById('transactions-section');
+    budgetsSection = document.getElementById('budgets-section');
+    categoriesSection = document.getElementById('categories-section');
+    pageTitle = document.getElementById('page-title');
+    addTransaction = document.getElementById('add-transaction');
+    transactionTable = document.getElementById('transaction-table');
+    addBudget = document.getElementById('add-budget');
+    budgetTable = document.getElementById('budget-table');
+    budgetTiles = document.getElementById('budget-tiles');
+    addCategory = document.getElementById('add-category');
+    categoryTable = document.getElementById('category-table');
+    categorySelect = document.getElementById('category');
+    categoryBudgetSelect = document.getElementById('category-budget');
+    addCategoryModal = document.getElementById('add-category-modal');
+    addBudgetModal = document.getElementById('add-budget-modal');
+    saveCategory = document.getElementById('save-category');
+    cancelCategory = document.getElementById('cancel-category');
+    saveBudget = document.getElementById('save-budget');
+    cancelBudget = document.getElementById('cancel-budget');
+    balance = document.getElementById('balance');
+    totalBudget = document.getElementById('total-budget');
+    totalRemaining = document.getElementById('total-remaining');
 
     // Validate critical DOM elements
     const criticalElements = {
-      authSection, appSection, loginModal, signupModal, resetModal,
-      loginButton, signupButton, resetButton, logoutButton,
-      showSignupBtn, showResetBtn, showLoginFromSignupBtn, showLoginFromResetBtn,
-      dashboardTab, transactionsTab, budgetsTab, categoriesTab,
-      dashboardSection, transactionsSection, budgetsSection, categoriesSection, pageTitle
+      authSection, appSection, loginModal, signupModal, resetModal, loginButton, signupButton, resetButton, logoutButton,
+      showSignupBtn, showResetBtn, showLoginFromSignupBtn, showLoginFromResetBtn, dashboardTab, transactionsTab,
+      budgetsTab, categoriesTab, dashboardSection, transactionsSection, budgetsSection, categoriesSection, pageTitle
     };
     for (const [key, element] of Object.entries(criticalElements)) {
+      console.log(`Checking DOM element ${key}: ${element ? 'found' : 'not found'}`);
       if (!element) {
         console.error(`Critical DOM element not found: ${key}`);
       }
     }
+    // Specifically check signupButton
+    console.log(`Signup button: ${signupButton ? 'found' : 'not found'}`);
   } catch (error) {
     console.error('Error querying DOM elements:', {
       message: error.message,
@@ -123,6 +131,8 @@ document.addEventListener('DOMContentLoaded', () => {
       auth = firebase.auth();
       db = firebase.firestore();
       console.log('Firebase initialized successfully:', { app: !!app, auth: !!auth, db: !!db });
+      // Initialize auth state listener only after successful initialization
+      setupAuthStateListener();
     } catch (error) {
       console.error('Firebase initialization failed:', {
         message: error.message,
@@ -141,10 +151,66 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(initializeFirebase, retryDelay);
       } else {
         alert('Failed to initialize Firebase after multiple attempts. Please check your network or configuration.');
+        showLoginModal();
       }
     }
   }
   initializeFirebase();
+
+  // Setup Auth State Listener
+  function setupAuthStateListener() {
+    try {
+      if (!auth) {
+        console.error('Auth service not available, cannot set up auth state listener');
+        showError('login-email', 'Authentication service not available.');
+        return;
+      }
+      console.log('Setting up auth state listener');
+      auth.onAuthStateChanged(user => {
+        console.log('Auth state changed:', user ? user.uid : 'No user');
+        if (user) {
+          currentUser = user;
+          authSection.classList.add('hidden');
+          appSection.classList.remove('hidden');
+          if (db) {
+            console.log('Fetching user data from Firestore for UID:', user.uid);
+            db.collection('users').doc(user.uid).get().then(doc => {
+              if (doc.exists) {
+                userCurrency = doc.data().currency || 'INR';
+                familyCode = doc.data().familyCode;
+                console.log('User data loaded:', { userCurrency, familyCode });
+                loadAppData();
+              } else {
+                console.error('User document not found for UID:', user.uid);
+                showError('login-email', 'User data not found. Please sign up again.');
+              }
+            }).catch(error => {
+              console.error('Error fetching user data:', {
+                code: error.code,
+                message: error.message,
+                uid: user.uid
+              });
+              showError('login-email', 'Failed to load user data.');
+            });
+          } else {
+            console.error('Firestore not available for user data');
+            showError('login-email', 'Database service not available.');
+          }
+        } else {
+          currentUser = null;
+          authSection.classList.remove('hidden');
+          appSection.classList.add('hidden');
+          showLoginModal();
+        }
+      });
+    } catch (error) {
+      console.error('Error in auth state handling:', {
+        message: error.message,
+        stack: error.stack
+      });
+      showError('login-email', 'Authentication error occurred.');
+    }
+  }
 
   // Modal and Tab Switching
   try {
@@ -224,15 +290,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // Bind modal and tab event listeners
     if (showSignupBtn) {
       showSignupBtn.addEventListener('click', showSignupModal);
+    } else {
+      console.error('showSignupBtn not found, signup modal navigation may not work');
     }
     if (showResetBtn) {
       showResetBtn.addEventListener('click', showResetModal);
+    } else {
+      console.error('showResetBtn not found, reset modal navigation may not work');
     }
     if (showLoginFromSignupBtn) {
       showLoginFromSignupBtn.addEventListener('click', showLoginModal);
+    } else {
+      console.error('showLoginFromSignupBtn not found, login from signup navigation may not work');
     }
     if (showLoginFromResetBtn) {
       showLoginFromResetBtn.addEventListener('click', showLoginModal);
+    } else {
+      console.error('showLoginFromResetBtn not found, login from reset navigation may not work');
     }
     if (dashboardTab) {
       dashboardTab.addEventListener('click', showDashboard);
@@ -317,52 +391,137 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Authentication
   try {
-    if (auth) {
-      auth.onAuthStateChanged(user => {
-        console.log('Auth state changed:', user ? user.uid : 'No user');
-        if (user) {
-          currentUser = user;
-          authSection.classList.add('hidden');
-          appSection.classList.remove('hidden');
-          if (db) {
-            db.collection('users').doc(user.uid).get().then(doc => {
-              if (doc.exists) {
-                userCurrency = doc.data().currency || 'INR';
-                familyCode = doc.data().familyCode;
-                console.log('User data loaded:', { userCurrency, familyCode });
-                loadAppData();
-              } else {
-                console.error('User document not found');
-                showError('login-email', 'User data not found. Please sign up again.');
-              }
-            }).catch(error => {
-              console.error('Error fetching user data:', error.code, error.message);
-              showError('login-email', 'Failed to load user data.');
-            });
-          } else {
-            console.error('Firestore not available for user data');
-            showError('login-email', 'Database service not available.');
-          }
-        } else {
-          currentUser = null;
-          authSection.classList.remove('hidden');
-          appSection.classList.add('hidden');
-          showLoginModal();
+    if (signupButton) {
+      signupButton.addEventListener('click', () => {
+        console.log('Signup button clicked');
+        clearErrors();
+        console.log('Reading signup form inputs');
+        const email = document.getElementById('signup-email')?.value.trim();
+        const password = document.getElementById('signup-password')?.value;
+        const confirmPassword = document.getElementById('signup-confirm-password')?.value;
+        const currency = document.getElementById('signup-currency')?.value;
+        const familyCodeInput = document.getElementById('signup-family-code')?.value.trim();
+        const accountType = document.getElementById('signup-account-type')?.value;
+
+        console.log('Validating inputs:', {
+          email,
+          password: password ? '[redacted]' : 'missing',
+          confirmPassword: confirmPassword ? '[redacted]' : 'missing',
+          currency,
+          familyCodeInput,
+          accountType
+        });
+
+        // Enhanced input validation
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          showError('signup-email', 'Valid email is required');
+          console.log('Validation failed: Invalid or missing email');
+          return;
         }
+        if (!password || password.length < 6) {
+          showError('signup-password', 'Password must be at least 6 characters');
+          console.log('Validation failed: Invalid or missing password');
+          return;
+        }
+        if (password !== confirmPassword) {
+          showError('signup-confirm-password', 'Passwords do not match');
+          console.log('Validation failed: Passwords do not match');
+          return;
+        }
+        if (!familyCodeInput) {
+          showError('signup-family-code', 'Family code is required');
+          console.log('Validation failed: Missing family code');
+          return;
+        }
+        if (!currency || !['INR', 'USD'].includes(currency)) {
+          showError('signup-currency', 'Valid currency is required');
+          console.log('Validation failed: Invalid currency');
+          return;
+        }
+        if (!accountType || !['admin', 'child'].includes(accountType)) {
+          showError('signup-account-type', 'Valid account type is required');
+          console.log('Validation failed: Invalid account type');
+          return;
+        }
+
+        if (!auth) {
+          console.error('Auth service not available');
+          showError('signup-email', 'Authentication service not available. Please check your network or configuration.');
+          return;
+        }
+        if (!db) {
+          console.error('Firestore service not available');
+          showError('signup-email', 'Database service not available. Please check your network or configuration.');
+          return;
+        }
+
+        console.log('Attempting to create user with email:', email);
+        signupButton.disabled = true;
+        signupButton.textContent = 'Signing up...';
+        auth.createUserWithEmailAndPassword(email, password)
+          .then(credential => {
+            console.log('Authentication response:', {
+              credential: credential ? 'received' : 'null',
+              user: credential && credential.user ? credential.user.uid : 'null'
+            });
+            if (!credential || !credential.user) {
+              throw new Error('No user credential returned from authentication');
+            }
+            console.log('User created successfully:', credential.user.uid);
+            console.log('Writing user data to Firestore:', {
+              uid: credential.user.uid,
+              currency,
+              familyCode: familyCodeInput,
+              accountType
+            });
+            return db.collection('users').doc(credential.user.uid).set({
+              currency,
+              familyCode: familyCodeInput,
+              accountType,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+          })
+          .then(() => {
+            console.log('User data written to Firestore successfully');
+            signupButton.disabled = false;
+            signupButton.textContent = 'Sign Up';
+            // Clear form
+            document.getElementById('signup-email').value = '';
+            document.getElementById('signup-password').value = '';
+            document.getElementById('signup-confirm-password').value = '';
+            document.getElementById('signup-family-code').value = '';
+            document.getElementById('signup-currency').value = 'INR';
+            document.getElementById('signup-account-type').value = 'admin';
+          })
+          .catch(error => {
+            console.error('Signup error:', {
+              code: error.code,
+              message: error.message,
+              email,
+              familyCode: familyCodeInput,
+              currency,
+              accountType,
+              network: navigator.onLine
+            });
+            signupButton.disabled = false;
+            signupButton.textContent = 'Sign Up';
+            let errorMessage = error.message || 'Failed to sign up. Please check your network or configuration.';
+            if (error.code === 'auth/email-already-in-use') {
+              errorMessage = 'This email is already registered. Please log in or use a different email.';
+            } else if (error.code === 'auth/invalid-email') {
+              errorMessage = 'Invalid email format.';
+            } else if (error.code === 'auth/weak-password') {
+              errorMessage = 'Password is too weak. Please use a stronger password.';
+            } else if (error.code === 'auth/network-request-failed') {
+              errorMessage = 'Network error. Please check your connection and try again.';
+            }
+            showError('signup-email', errorMessage);
+          });
       });
     } else {
-      console.warn('Auth service not available, UI will load without authentication');
-      showLoginModal();
+      console.error('signupButton not found, signup functionality will not work');
     }
-  } catch (error) {
-    console.error('Error in auth state handling:', {
-      message: error.message,
-      stack: error.stack
-    });
-  }
 
-  // Button Event Listeners
-  try {
     if (loginButton) {
       loginButton.addEventListener('click', () => {
         console.log('Login button clicked');
@@ -388,136 +547,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           console.error('Auth service not available or invalid inputs');
           showError('login-email', auth ? 'Invalid input data' : 'Authentication service not available. Please check your network or configuration.');
-        }
-      });
-    }
-
-    if (signupButton) {
-      signupButton.addEventListener('click', () => {
-        console.log('Signup button clicked');
-        clearErrors();
-        console.log('Reading signup form inputs');
-        const email = document.getElementById('signup-email').value.trim();
-        const password = document.getElementById('signup-password').value;
-        const confirmPassword = document.getElementById('signup-confirm-password').value;
-        const currency = document.getElementById('signup-currency').value;
-        const familyCodeInput = document.getElementById('signup-family-code').value.trim();
-        const accountType = document.getElementById('signup-account-type').value;
-
-        console.log('Validating inputs:', {
-          email,
-          password: password ? '[redacted]' : 'missing',
-          confirmPassword: confirmPassword ? '[redacted]' : 'missing',
-          currency,
-          familyCodeInput,
-          accountType
-        });
-
-        // Enhanced input validation
-        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          showError('signup-email', 'Valid email is required');
-          return;
-        }
-        if (!password || password.length < 6) {
-          showError('signup-password', 'Password must be at least 6 characters');
-          return;
-        }
-        if (password !== confirmPassword) {
-          showError('signup-confirm-password', 'Passwords do not match');
-          return;
-        }
-        if (!familyCodeInput) {
-          showError('signup-family-code', 'Family code is required');
-          return;
-        }
-        if (!currency || !['INR', 'USD'].includes(currency)) {
-          showError('signup-currency', 'Valid currency is required');
-          return;
-        }
-        if (!accountType || !['admin', 'child'].includes(accountType)) {
-          showError('signup-account-type', 'Valid account type is required');
-          return;
-        }
-
-        if (email && password && password === confirmPassword && familyCodeInput && auth && db) {
-          console.log('Attempting to create user with email:', email);
-          signupButton.disabled = true;
-          signupButton.textContent = 'Signing up...';
-          try {
-            auth.createUserWithEmailAndPassword(email, password)
-              .then(credential => {
-                console.log('Authentication response:', {
-                  credential: credential ? 'received' : 'null',
-                  user: credential && credential.user ? credential.user.uid : 'null'
-                });
-                if (!credential || !credential.user) {
-                  throw new Error('No user credential returned from authentication');
-                }
-                console.log('User created successfully:', credential.user.uid);
-                console.log('Writing user data to Firestore:', {
-                  uid: credential.user.uid,
-                  currency,
-                  familyCode: familyCodeInput,
-                  accountType
-                });
-                return db.collection('users').doc(credential.user.uid).set({
-                  currency,
-                  familyCode: familyCodeInput,
-                  accountType,
-                  createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-              })
-              .then(() => {
-                console.log('User data written to Firestore successfully');
-                signupButton.disabled = false;
-                signupButton.textContent = 'Sign Up';
-                // Clear form
-                document.getElementById('signup-email').value = '';
-                document.getElementById('signup-password').value = '';
-                document.getElementById('signup-confirm-password').value = '';
-                document.getElementById('signup-family-code').value = '';
-                document.getElementById('signup-currency').value = 'INR';
-                document.getElementById('signup-account-type').value = 'admin';
-              })
-              .catch(error => {
-                console.error('Signup error:', {
-                  code: error.code,
-                  message: error.message,
-                  email,
-                  familyCode: familyCodeInput,
-                  currency,
-                  accountType,
-                  network: navigator.onLine
-                });
-                signupButton.disabled = false;
-                signupButton.textContent = 'Sign Up';
-                let errorMessage = error.message || 'Failed to sign up. Please check your network or configuration.';
-                if (error.code === 'auth/email-already-in-use') {
-                  errorMessage = 'This email is already registered. Please log in or use a different email.';
-                } else if (error.code === 'auth/invalid-email') {
-                  errorMessage = 'Invalid email format.';
-                } else if (error.code === 'auth/weak-password') {
-                  errorMessage = 'Password is too weak. Please use a stronger password.';
-                }
-                showError('signup-email', errorMessage);
-              });
-          } catch (error) {
-            console.error('Unexpected error during signup:', {
-              message: error.message,
-              stack: error.stack,
-              email,
-              familyCode: familyCodeInput
-            });
-            signupButton.disabled = false;
-            signupButton.textContent = 'Sign Up';
-            showError('signup-email', 'An unexpected error occurred. Please try again.');
-          }
-        } else {
-          console.error('Auth or Firestore service not available or invalid inputs', {
-            authAvailable: !!auth,
-            dbAvailable: !!db
-          });
-          showError('signup-email', auth && db ? 'Invalid input data' : 'Authentication or database service not available. Please check your network or configuration.');
         }
       });
     }
@@ -1035,7 +1064,7 @@ document.addEventListener('DOMContentLoaded', () => {
               const categoryName = categoryDoc.exists ? categoryDoc.data().name : 'Unknown';
               tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, userCurrency)}</td>
+                < TD class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, userCurrency)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm">
