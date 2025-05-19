@@ -14,6 +14,7 @@ let auth = null;
 let db = null;
 let initAttempts = 0;
 const maxAttempts = 3;
+const retryDelay = 2000; // 2 seconds
 
 function initializeFirebase() {
   if (initAttempts >= maxAttempts) {
@@ -24,6 +25,10 @@ function initializeFirebase() {
   initAttempts++;
   console.log(`Initialization attempt ${initAttempts}/${maxAttempts}`);
   try {
+    // Check network status
+    if (!navigator.onLine) {
+      throw new Error('No internet connection');
+    }
     // Check if Firebase SDK is loaded
     if (typeof firebase === 'undefined' || !firebase.initializeApp) {
       throw new Error('Firebase SDK not loaded or incomplete');
@@ -58,11 +63,12 @@ function initializeFirebase() {
         authDomain: firebaseConfig.authDomain,
         projectId: firebaseConfig.projectId
       },
-      attempt: initAttempts
+      attempt: initAttempts,
+      online: navigator.onLine
     });
     if (initAttempts < maxAttempts) {
-      console.log(`Retrying initialization in 1 second...`);
-      setTimeout(initializeFirebase, 1000);
+      console.log(`Retrying initialization in ${retryDelay/1000} seconds...`);
+      setTimeout(initializeFirebase, retryDelay);
     } else {
       console.warn('Continuing with limited functionality (UI only)');
     }
@@ -431,7 +437,7 @@ saveCategory.addEventListener('click', () => {
 
 cancelCategory.addEventListener('click', () => {
   console.log('Cancel Category clicked');
-  addCategoryModal.classList.add('hidden');
+  addCategoryModal.classList.remove('hidden');
   document.getElementById('new-category-name').value = '';
   document.getElementById('new-category-type').value = 'income';
   document.getElementById('new-category-budget').value = 'none';
@@ -597,7 +603,7 @@ saveBudget.addEventListener('click', () => {
       familyCode,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     }).then(() => {
-      addBudgetModal.classList.add('hidden');
+      addBudgetModal.classList.remove('hidden');
       document.getElementById('new-budget-name').value = '';
       document.getElementById('new-budget-amount').value = '';
       loadBudgets();
