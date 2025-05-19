@@ -8,48 +8,67 @@ const firebaseConfig = {
   appId: "1:113253470716:web:f9030918df878a9adee279"
 };
 
-// Initialize Firebase
+// Initialize Firebase with Retry
 console.log('Attempting to initialize Firebase');
 let auth = null;
 let db = null;
-try {
-  // Check if Firebase SDK is loaded
-  if (typeof firebase === 'undefined' || !firebase.initializeApp) {
-    throw new Error('Firebase SDK not loaded or incomplete');
+let initAttempts = 0;
+const maxAttempts = 3;
+
+function initializeFirebase() {
+  if (initAttempts >= maxAttempts) {
+    console.error('Max Firebase initialization attempts reached');
+    console.warn('Continuing with limited functionality (UI only)');
+    return;
   }
-  // Validate firebaseConfig fields
-  console.log('Validating firebaseConfig:', {
-    apiKey: firebaseConfig.apiKey ? '<redacted>' : 'missing',
-    authDomain: firebaseConfig.authDomain,
-    projectId: firebaseConfig.projectId,
-    storageBucket: firebaseConfig.storageBucket,
-    messagingSenderId: firebaseConfig.messagingSenderId,
-    appId: firebaseConfig.appId
-  });
-  const requiredFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
-  for (const field of requiredFields) {
-    if (!firebaseConfig[field] || firebaseConfig[field].trim() === '') {
-      throw new Error(`Invalid Firebase configuration: ${field} is missing or empty`);
+  initAttempts++;
+  console.log(`Initialization attempt ${initAttempts}/${maxAttempts}`);
+  try {
+    // Check if Firebase SDK is loaded
+    if (typeof firebase === 'undefined' || !firebase.initializeApp) {
+      throw new Error('Firebase SDK not loaded or incomplete');
     }
-  }
-  firebase.initializeApp(firebaseConfig);
-  console.log('Firebase initialized successfully');
-  auth = firebase.auth();
-  db = firebase.firestore();
-  console.log('Firebase services initialized:', { auth: !!auth, db: !!db });
-} catch (error) {
-  console.error('Firebase initialization failed:', {
-    message: error.message,
-    code: error.code,
-    stack: error.stack,
-    config: {
+    // Validate firebaseConfig fields
+    console.log('Validating firebaseConfig:', {
       apiKey: firebaseConfig.apiKey ? '<redacted>' : 'missing',
       authDomain: firebaseConfig.authDomain,
-      projectId: firebaseConfig.projectId
+      projectId: firebaseConfig.projectId,
+      storageBucket: firebaseConfig.storageBucket,
+      messagingSenderId: firebaseConfig.messagingSenderId,
+      appId: firebaseConfig.appId
+    });
+    const requiredFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+    for (const field of requiredFields) {
+      if (!firebaseConfig[field] || firebaseConfig[field].trim() === '') {
+        throw new Error(`Invalid Firebase configuration: ${field} is missing or empty`);
+      }
     }
-  });
-  console.warn('Continuing with limited functionality (UI only)');
+    firebase.initializeApp(firebaseConfig);
+    console.log('Firebase initialized successfully');
+    auth = firebase.auth();
+    db = firebase.firestore();
+    console.log('Firebase services initialized:', { auth: !!auth, db: !!db });
+  } catch (error) {
+    console.error('Firebase initialization failed:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack,
+      config: {
+        apiKey: firebaseConfig.apiKey ? '<redacted>' : 'missing',
+        authDomain: firebaseConfig.authDomain,
+        projectId: firebaseConfig.projectId
+      },
+      attempt: initAttempts
+    });
+    if (initAttempts < maxAttempts) {
+      console.log(`Retrying initialization in 1 second...`);
+      setTimeout(initializeFirebase, 1000);
+    } else {
+      console.warn('Continuing with limited functionality (UI only)');
+    }
+  }
 }
+initializeFirebase();
 
 // DOM Elements
 console.log('Querying DOM elements');
@@ -171,11 +190,11 @@ loginButton.addEventListener('click', () => {
         loginButton.disabled = false;
         loginButton.textContent = 'Login';
         console.error('Login error:', error.code, error.message);
-        showError('login-password', error.message || 'Failed to log in');
+        showError('login-password', error.message || 'Failed to log in. Please check your network or configuration.');
       });
   } else {
     console.error('Auth service not available or invalid inputs');
-    showError('login-email', auth ? 'Invalid input data' : 'Authentication service not available. Please try again later.');
+    showError('login-email', auth ? 'Invalid input data' : 'Authentication service not available. Please check your network or configuration.');
   }
 });
 
