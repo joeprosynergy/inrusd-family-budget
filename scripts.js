@@ -749,6 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('category-name').value = '';
             document.getElementById('category-type').value = 'income';
             document.getElementById('category-budget').value = 'none';
+            addCategory.innerHTML = 'Add Category';
             loadCategories();
           }).catch(error => {
             console.error('Error adding category:', error.code, error.message);
@@ -826,11 +827,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('category-type').value = doc.data().type;
                 document.getElementById('category-budget').value = doc.data().budgetId || 'none';
                 addCategory.innerHTML = 'Update Category';
-                addCategory.onclick = () => {
+                // Use single-use event listener
+                const updateHandler = () => {
                   const name = document.getElementById('category-name').value.trim();
                   const type = document.getElementById('category-type').value;
                   const budgetId = document.getElementById('category-budget').value === 'none' ? null : document.getElementById('category-budget').value;
-                  if (!name) showError('category-name', 'Name is required');
+                  if (!name) {
+                    showError('category-name', 'Name is required');
+                    return;
+                  }
                   if (name) {
                     db.collection('categories').doc(id).update({
                       name,
@@ -842,7 +847,6 @@ document.addEventListener('DOMContentLoaded', () => {
                       document.getElementById('category-type').value = 'income';
                       document.getElementById('category-budget').value = 'none';
                       addCategory.innerHTML = 'Add Category';
-                      addCategory.onclick = null;
                       loadCategories();
                     }).catch(error => {
                       console.error('Error updating category:', error.code, error.message);
@@ -850,6 +854,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                   }
                 };
+                addCategory.addEventListener('click', updateHandler, { once: true });
               }
             }).catch(error => {
               console.error('Error fetching category:', error.code, error.message);
@@ -896,16 +901,17 @@ document.addEventListener('DOMContentLoaded', () => {
           let totalRemainingAmount = 0;
           snapshot.forEach(doc => {
             const budget = doc.data();
+            const spent = budget.spent || 0;
             totalBudgetAmount += budget.amount;
-            totalRemainingAmount += budget.amount - (budget.spent || 0);
+            totalRemainingAmount += budget.amount - spent;
             // Budget Table
             const tr = document.createElement('tr');
             tr.classList.add('table-row');
             tr.innerHTML = `
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, userCurrency)}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.spent || 0, userCurrency)}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - (budget.spent || 0), userCurrency)}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, userCurrency)}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, userCurrency)}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm">
                 <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
                 <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
@@ -915,7 +921,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Budget Tiles
             const tile = document.createElement('div');
             tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
-            const spent = budget.spent || 0;
             const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
             tile.innerHTML = `
               <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
@@ -928,10 +933,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
               </div>
             `;
+            console.log('Budget tile added:', {
+              id: doc.id,
+              name: budget.name,
+              amount: formatCurrency(budget.amount, userCurrency),
+              spent: formatCurrency(spent, userCurrency)
+            });
             budgetTiles.appendChild(tile);
           });
           totalBudget.textContent = formatCurrency(totalBudgetAmount, userCurrency);
           totalRemaining.textContent = formatCurrency(totalRemainingAmount, userCurrency);
+          console.log('Total budget and remaining updated:', {
+            totalBudget: formatCurrency(totalBudgetAmount, userCurrency),
+            totalRemaining: formatCurrency(totalRemainingAmount, userCurrency)
+          });
         })
         .catch(error => {
           console.error('Error loading budgets:', error.code, error.message);
@@ -965,6 +980,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Budget added successfully:', { name, amount });
             document.getElementById('budget-name').value = '';
             document.getElementById('budget-amount').value = '';
+            addBudget.innerHTML = 'Add Budget';
             loadBudgets();
             loadCategories();
           }).catch(error => {
@@ -1041,11 +1057,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('budget-name').value = doc.data().name;
                 document.getElementById('budget-amount').value = doc.data().amount;
                 addBudget.innerHTML = 'Update Budget';
-                addBudget.onclick = () => {
+                // Use single-use event listener
+                const updateHandler = () => {
                   const name = document.getElementById('budget-name').value.trim();
                   const amount = parseFloat(document.getElementById('budget-amount').value);
-                  if (!name) showError('budget-name', 'Name is required');
-                  if (!amount || amount <= 0) showError('budget-amount', 'Valid amount is required');
+                  if (!name) {
+                    showError('budget-name', 'Name is required');
+                    return;
+                  }
+                  if (!amount || amount <= 0) {
+                    showError('budget-amount', 'Valid amount is required');
+                    return;
+                  }
                   if (name && amount > 0) {
                     db.collection('budgets').doc(id).update({
                       name,
@@ -1055,7 +1078,6 @@ document.addEventListener('DOMContentLoaded', () => {
                       document.getElementById('budget-name').value = '';
                       document.getElementById('budget-amount').value = '';
                       addBudget.innerHTML = 'Add Budget';
-                      addBudget.onclick = null;
                       loadBudgets();
                       loadCategories();
                     }).catch(error => {
@@ -1064,6 +1086,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                   }
                 };
+                addBudget.addEventListener('click', updateHandler, { once: true });
               }
             }).catch(error => {
               console.error('Error fetching budget:', error.code, error.message);
@@ -1165,12 +1188,32 @@ document.addEventListener('DOMContentLoaded', () => {
             description,
             familyCode,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          }).then(() => {
-            console.log('Transaction added successfully:', { type, amount, categoryId });
+          }).then(docRef => {
+            console.log('Transaction added successfully:', { id: docRef.id, type, amount, categoryId });
+            // Update budget spent if debit transaction
+            if (type === 'debit') {
+              db.collection('categories').doc(categoryId).get().then(categoryDoc => {
+                if (categoryDoc.exists && categoryDoc.data().budgetId) {
+                  const budgetId = categoryDoc.data().budgetId;
+                  console.log('Updating budget spent for budgetId:', budgetId, 'with amount:', amount);
+                  db.collection('budgets').doc(budgetId).update({
+                    spent: firebase.firestore.FieldValue.increment(amount)
+                  }).then(() => {
+                    console.log('Budget spent updated successfully:', { budgetId, amount });
+                    loadBudgets();
+                  }).catch(error => {
+                    console.error('Error updating budget spent:', error.code, error.message);
+                  });
+                }
+              }).catch(error => {
+                console.error('Error fetching category for budget update:', error.code, error.message);
+              });
+            }
             document.getElementById('type').value = 'debit';
             document.getElementById('amount').value = '';
             document.getElementById('category').value = '';
             document.getElementById('description').value = '';
+            addTransaction.innerHTML = 'Add Transaction';
             loadTransactions();
             updateDashboard();
           }).catch(error => {
@@ -1197,13 +1240,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('category').value = doc.data().categoryId;
                 document.getElementById('description').value = doc.data().description;
                 addTransaction.innerHTML = 'Update Transaction';
-                addTransaction.onclick = () => {
+                // Use single-use event listener
+                const updateHandler = () => {
                   const type = document.getElementById('type').value;
                   const amount = parseFloat(document.getElementById('amount').value);
                   const categoryId = document.getElementById('category').value;
                   const description = document.getElementById('description').value.trim();
-                  if (!amount || amount <= 0) showError('amount', 'Valid amount is required');
-                  if (!categoryId) showError('category', 'Category is required');
+                  if (!amount || amount <= 0) {
+                    showError('amount', 'Valid amount is required');
+                    return;
+                  }
+                  if (!categoryId) {
+                    showError('category', 'Category is required');
+                    return;
+                  }
                   if (amount > 0 && categoryId) {
                     db.collection('transactions').doc(id).update({
                       type,
@@ -1217,7 +1267,6 @@ document.addEventListener('DOMContentLoaded', () => {
                       document.getElementById('category').value = '';
                       document.getElementById('description').value = '';
                       addTransaction.innerHTML = 'Add Transaction';
-                      addTransaction.onclick = null;
                       loadTransactions();
                       updateDashboard();
                     }).catch(error => {
@@ -1226,6 +1275,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                   }
                 };
+                addTransaction.addEventListener('click', updateHandler, { once: true });
               }
             }).catch(error => {
               console.error('Error fetching transaction:', error.code, error.message);
@@ -1276,6 +1326,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           });
           balance.textContent = formatCurrency(totalBalance, userCurrency);
+          console.log('Dashboard balance updated:', { totalBalance: formatCurrency(totalBalance, userCurrency) });
         })
         .catch(error => {
           console.error('Error updating dashboard:', error.code, error.message);
