@@ -3,389 +3,254 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Budget Dashboard</title>
-  <!-- Tailwind CSS CDN -->
+  <title>InRUSD: Family Budget</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
+  <script>
+    window.addEventListener('load', () => {
+      console.log('Checking Firebase SDK load status');
+      if (typeof firebase !== 'undefined' && firebase.initializeApp) {
+        console.log('Firebase SDK loaded successfully');
+      } else {
+        console.error('Firebase SDK failed to load');
+      }
+    });
+  </script>
+  <script src="scripts.js" defer></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .budget-tile {
-      transition: transform 0.2s ease-in-out;
-    }
-    .budget-tile:hover {
-      transform: scale(1.05);
-    }
-    .progress-bar {
-      height: 8px;
-      border-radius: 4px;
-    }
-    .nav-link {
-      transition: background-color 0.2s ease-in-out;
-    }
-    .nav-link:hover {
-      background-color: rgba(255, 255, 255, 0.1);
-    }
-    .table-row {
-      transition: background-color 0.2s ease-in-out;
-    }
-    .table-row:hover {
-      background-color: #f9fafb;
-    }
-    .modal {
-      transition: opacity 0.3s ease-in-out;
-    }
+    .table-row:nth-child(even) { background-color: #f9fafb; }
+    .table-row:hover { background-color: #f3f4f6; }
+    .progress-bar { height: 8px; border-radius: 9999px; }
+    .budget-tile { transition: transform 0.2s; }
+    .budget-tile:hover { transform: translateY(-2px); }
   </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
-  <!-- Authentication Section -->
-  <section id="auth-section" class="flex items-center justify-center flex-grow">
-    <!-- Login Modal -->
-    <div id="login-modal" class="bg-white rounded-lg p-6 w-full max-w-md shadow-md">
-      <h2 class="text-xl font-semibold text-gray-700 mb-4">Login</h2>
-      <div class="grid grid-cols-1 gap-4">
-        <div>
-          <label for="login-email" class="block text-sm font-medium text-gray-700">Email</label>
-          <input type="email" id="login-email" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter email">
-        </div>
-        <div>
-          <label for="login-password" class="block text-sm font-medium text-gray-700">Password</label>
-          <input type="password" id="login-password" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter password">
+<body class="bg-gray-100 font-sans">
+  <div id="auth-section" class="min-h-screen flex items-center justify-center bg-gray-100">
+    <div id="login-modal" class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+      <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Login</h2>
+      <div class="space-y-4">
+        <input id="login-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <input id="login-password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <button id="login-button" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Login</button>
+        <div class="text-center space-x-4">
+          <button id="show-signup" onclick="document.getElementById('signup-modal').classList.remove('hidden'); document.getElementById('login-modal').classList.add('hidden');" class="text-blue-600 hover:underline">Sign Up</button>
+          <button id="show-reset" onclick="document.getElementById('reset-modal').classList.remove('hidden'); document.getElementById('login-modal').classList.add('hidden');" class="text-blue-600 hover:underline">Forgot Password?</button>
         </div>
       </div>
-      <button id="login-button" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 w-full">Login</button>
-      <p class="mt-2 text-sm text-gray-600 text-center">
-        Don't have an account? <button id="show-signup" class="text-blue-600 hover:underline" onclick="console.log('Sign Up clicked'); document.getElementById('signup-modal').classList.remove('hidden'); document.getElementById('login-modal').classList.add('hidden'); document.getElementById('reset-modal').classList.add('hidden');">Sign Up</button>
-      </p>
-      <p class="mt-1 text-sm text-gray-600 text-center">
-        <button id="show-reset" class="text-blue-600 hover:underline" onclick="console.log('Forgot Password clicked'); document.getElementById('reset-modal').classList.remove('hidden'); document.getElementById('login-modal').classList.add('hidden'); document.getElementById('signup-modal').classList.add('hidden');">Forgot Password?</button>
-      </p>
     </div>
-
-    <!-- Signup Modal -->
-    <div id="signup-modal" class="bg-white rounded-lg p-6 w-full max-w-md shadow-md hidden">
-      <h2 class="text-xl font-semibold text-gray-700 mb-4">Sign Up</h2>
-      <div class="grid grid-cols-1 gap-4">
-        <div>
-          <label for="signup-email" class="block text-sm font-medium text-gray-700">Email</label>
-          <input type="email" id="signup-email" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter email">
-        </div>
-        <div>
-          <label for="signup-password" class="block text-sm font-medium text-gray-700">Password</label>
-          <input type="password" id="signup-password" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter password">
-        </div>
-        <div>
-          <label for="signup-confirm-password" class="block text-sm font-medium text-gray-700">Confirm Password</label>
-          <input type="password" id="signup-confirm-password" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Confirm password">
-        </div>
-        <div>
-          <label for="signup-currency" class="block text-sm font-medium text-gray-700">Account Currency</label>
-          <select id="signup-currency" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-            <option value="INR">INR (₹)</option>
-            <option value="USD">USD ($)</option>
-          </select>
-        </div>
-        <div>
-          <label for="signup-family-code" class="block text-sm font-medium text-gray-700">Family Code</label>
-          <input type="text" id="signup-family-code" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter family code">
-        </div>
-        <div>
-          <label for="signup-account-type" class="block text-sm font-medium text-gray-700">Account Type</label>
-          <select id="signup-account-type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-            <option value="admin">Admin</option>
-            <option value="child">Child</option>
-          </select>
+    <div id="signup-modal" class="hidden bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+      <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Sign Up</h2>
+      <div class="space-y-4">
+        <input id="signup-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <input id="signup-password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <input id="signup-confirm-password" type="password" placeholder="Confirm Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <input id="signup-family-code" type="text" placeholder="Family Code" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <select id="signup-currency" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          <option value="INR">INR</option>
+          <option value="USD">USD</option>
+        </select>
+        <select id="signup-account-type" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          <option value="admin">Admin</option>
+          <option value="child">Child</option>
+        </select>
+        <button id="signup-button" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Sign Up</button>
+        <div class="text-center">
+          <button id="show-login-from-signup" onclick="document.getElementById('login-modal').classList.remove('hidden'); document.getElementById('signup-modal').classList.add('hidden');" class="text-blue-600 hover:underline">Login</button>
         </div>
       </div>
-      <button id="signup-button" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 w-full">Sign Up</button>
-      <p class="mt-2 text-sm text-gray-600 text-center">
-        Already have an account? <button id="show-login-from-signup" class="text-blue-600 hover:underline" onclick="console.log('Back to Login clicked from signup'); document.getElementById('login-modal').classList.remove('hidden'); document.getElementById('signup-modal').classList.add('hidden'); document.getElementById('reset-modal').classList.add('hidden');">Login</button>
-      </p>
     </div>
-
-    <!-- Password Reset Modal -->
-    <div id="reset-modal" class="bg-white rounded-lg p-6 w-full max-w-md shadow-md hidden">
-      <h2 class="text-xl font-semibold text-gray-700 mb-4">Reset Password</h2>
-      <div class="grid grid-cols-1 gap-4">
-        <div>
-          <label for="reset-email" class="block text-sm font-medium text-gray-700">Email</label>
-          <input type="email" id="reset-email" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter email">
+    <div id="reset-modal" class="hidden bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+      <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Reset Password</h2>
+      <div class="space-y-4">
+        <input id="reset-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <button id="reset-button" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Send Reset Link</button>
+        <div class="text-center">
+          <button id="show-login-from-reset" onclick="document.getElementById('login-modal').classList.remove('hidden'); document.getElementById('reset-modal').classList.add('hidden');" class="text-blue-600 hover:underline">Login</button>
         </div>
       </div>
-      <button id="reset-button" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 w-full">Send Reset Link</button>
-      <p class="mt-2 text-sm text-gray-600 text-center">
-        Back to <button id="show-login-from-reset" class="text-blue-600 hover:underline" onclick="console.log('Back to Login clicked from reset'); document.getElementById('login-modal').classList.remove('hidden'); document.getElementById('signup-modal').classList.add('hidden'); document.getElementById('reset-modal').classList.add('hidden');">Login</button>
-      </p>
     </div>
-  </section>
+  </div>
 
-  <!-- Main App Section (Hidden until login) -->
-  <section id="app-section" class="hidden flex flex-col min-h-screen">
-    <!-- Navigation -->
-    <nav class="bg-blue-700 text-white shadow-md">
-      <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-        <ul class="flex space-x-4">
-          <li>
-            <button id="dashboard-tab" class="nav-link px-3 py-2 rounded-md font-semibold bg-blue-800">Dashboard</button>
-          </li>
-          <li>
-            <button id="transactions-tab" class="nav-link px-3 py-2 rounded-md font-semibold hover:bg-blue-800">Transactions</button>
-          </li>
-          <li>
-            <button id="budgets-tab" class="nav-link px-3 py-2 rounded-md font-semibold hover:bg-blue-800">Budgets</button>
-          </li>
-          <li>
-            <button id="categories-tab" class="nav-link px-3 py-2 rounded-md font-semibold hover:bg-blue-800">Categories</button>
-          </li>
-        </ul>
-        <button id="logout-button" class="bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700">Logout</button>
+  <div id="app-section" class="hidden min-h-screen bg-gray-100">
+    <header class="bg-blue-600 text-white p-4 flex justify-between items-center">
+      <h1 id="page-title" class="text-2xl font-bold">Budget Dashboard</h1>
+      <button id="logout-button" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition">Logout</button>
+    </header>
+    <nav class="bg-gray-800 text-white p-4">
+      <div class="nav flex space-x-4">
+        <button id="dashboard-tab" class="px-4 py-2 rounded-lg bg-blue-800 hover:bg-blue-900 transition">Dashboard</button>
+        <button id="transactions-tab" class="px-4 py-2 rounded-lg hover:bg-blue-900 transition">Transactions</button>
+        <button id="budgets-tab" class="px-4 py-2 rounded-lg hover:bg-blue-900 transition">Budgets</button>
+        <button id="categories-tab" class="px-4 py-2 rounded-lg hover:bg-blue-900 transition">Categories</button>
+        <button id="profile-tab" class="px-4 py-2 rounded-lg hover:bg-blue-900 transition">Profile</button>
       </div>
     </nav>
-
-    <!-- Header -->
-    <header class="bg-blue-600 text-white p-4 shadow-md">
-      <h1 class="text-2xl font-bold text-center" id="page-title">Budget Dashboard</h1>
-    </header>
-
-    <!-- Main Content -->
-    <main class="container mx-auto p-6 flex-grow">
-      <!-- Dashboard Section -->
-      <section id="dashboard-section" class="block">
-        <!-- Summary Section -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <!-- Balance Tile -->
-          <div class="bg-white rounded-lg shadow-md p-6 budget-tile">
-            <h2 class="text-lg font-semibold text-gray-700">Balance</h2>
-            <p class="text-3xl font-bold text-green-600" id="balance">₹5,00,000</p>
-            <p class="text-sm text-gray-500 mt-2">Available funds</p>
+    <main class="p-6">
+      <div id="dashboard-section" class="space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="bg-white p-6 rounded-lg shadow-md">
+            <h3 class="text-lg font-semibold text-gray-700">Balance</h3>
+            <p id="balance" class="text-2xl font-bold text-gray-900">₹0</p>
           </div>
-          <!-- Total Budget Tile -->
-          <div class="bg-white rounded-lg shadow-md p-6 budget-tile">
-            <h2 class="text-lg font-semibold text-gray-700">Total Budget</h2>
-            <p class="text-3xl font-bold text-blue-600" id="total-budget">₹10,00,000</p>
-            <p class="text-sm text-gray-500 mt-2">Total allocated budget</p>
+          <div class="bg-white p-6 rounded-lg shadow-md">
+            <h3 class="text-lg font-semibold text-gray-700">Total Budget</h3>
+            <p id="total-budget" class="text-2xl font-bold text-gray-900">₹0</p>
+          </div>
+          <div class="bg-white p-6 rounded-lg shadow-md">
+            <h3 class="text-lg font-semibold text-gray-700">Total Remaining</h3>
+            <p id="total-remaining" class="text-2xl font-bold text-gray-900">₹0</p>
           </div>
         </div>
-
-        <!-- Budgets Section -->
-        <div class="mb-8">
-          <h2 class="text-xl font-semibold text-gray-700 mb-4">My Budgets</h2>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" id="budget-tiles">
-            <!-- Budget Tile Example 1 -->
-            <div class="bg-white rounded-lg shadow-md p-6 budget-tile">
-              <h3 class="text-lg font-semibold text-gray-700">Groceries</h3>
-              <p class="text-sm text-gray-500">Budget: <span id="groceries-budget">₹50,000</span></p>
-              <p class="text-sm text-gray-500">Spent: <span id="groceries-spent">₹35,000</span></p>
-              <p class="text-sm font-semibold text-gray-700 mt-2">
-                Remaining: <span id="groceries-remaining">₹15,000</span>
-              </p>
-              <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
-                <div class="bg-green-600 progress-bar" style="width: 70%"></div>
-              </div>
-            </div>
-            <!-- Budget Tile Example 2 -->
-            <div class="bg-white rounded-lg shadow-md p-6 budget-tile">
-              <h3 class="text-lg font-semibold text-gray-700">Entertainment</h3>
-              <p class="text-sm text-gray-500">Budget: <span id="entertainment-budget">₹30,000</span></p>
-              <p class="text-sm text-gray-500">Spent: <span id="entertainment-spent">₹20,000</span></p>
-              <p class="text-sm font-semibold text-gray-700 mt-2">
-                Remaining: <span id="entertainment-remaining">₹10,000</span>
-              </p>
-              <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
-                <div class="bg-green-600 progress-bar" style="width: 66.67%"></div>
-              </div>
-            </div>
-            <!-- Budget Tile Example 3 -->
-            <div class="bg-white rounded-lg shadow-md p-6 budget-tile">
-              <h3 class="text-lg font-semibold text-gray-700">Travel</h3>
-              <p class="text-sm text-gray-500">Budget: <span id="travel-budget">₹1,00,000</span></p>
-              <p class="text-sm text-gray-500">Spent: <span id="travel-spent">₹40,000</span></p>
-              <p class="text-sm font-semibold text-gray-700 mt-2">
-                Remaining: <span id="travel-remaining">₹60,000</span>
-              </p>
-              <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
-                <div class="bg-green-600 progress-bar" style="width: 40%"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Total Remaining Budget -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-          <h2 class="text-lg font-semibold text-gray-700">Total Remaining Budget</h2>
-          <p class="text-3xl font-bold text-purple-600" id="total-remaining">₹85,000</p>
-          <p class="text-sm text-gray-500 mt-2">Sum of all remaining budgets</p>
-        </div>
-      </section>
-
-      <!-- Transactions Section -->
-      <section id="transactions-section" class="hidden">
-        <!-- Add Transaction Form -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 class="text-xl font-semibold text-gray-700 mb-4">Add Transaction</h2>
+        <div id="budget-tiles" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+      </div>
+      <div id="transactions-section" class="hidden space-y-6">
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <h3 class="text-lg font-semibold text-gray-700 mb-4">Add Transaction</h3>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label for="type" class="block text-sm font-medium text-gray-700">Type</label>
-              <select id="type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                <option value="debit">Debit</option>
-                <option value="credit">Credit</option>
-              </select>
-            </div>
-            <div>
-              <label for="amount" class="block text-sm font-medium text-gray-700">Amount</label>
-              <input type="number" id="amount" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter amount">
-            </div>
-            <div>
-              <label for="category" class="block text-sm font-medium text-gray-700">Category</label>
-              <select id="category" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                <option value="">Select Category</option>
-                <option value="add-new">Add New</option>
-              </select>
-            </div>
-            <div>
-              <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
-              <input type="text" id="description" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter description">
-            </div>
+            <select id="type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="debit">Debit</option>
+              <option value="credit">Credit</option>
+            </select>
+            <input id="amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <select id="category" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="">Select Category</option>
+              <option value="add-new">Add New</option>
+            </select>
+            <input id="description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
           </div>
-          <button id="add-transaction" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Add Transaction</button>
+          <button id="add-transaction" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Add Transaction</button>
         </div>
-
-        <!-- Transactions Table -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-          <h2 class="text-xl font-semibold text-gray-700 mb-4">Transaction History</h2>
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="transaction-table" class="bg-white divide-y divide-gray-200">
-                <!-- Populated by JavaScript -->
-              </tbody>
-            </table>
-          </div>
+        <div class="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-gray-200">
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Amount</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Category</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="transaction-table"></tbody>
+          </table>
         </div>
-      </section>
-
-      <!-- Budgets Section -->
-      <section id="budgets-section" class="hidden">
-        <!-- Add Budget Form -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 class="text-xl font-semibold text-gray-700 mb-4">Add Budget</h2>
+      </div>
+      <div id="budgets-section" class="hidden space-y-6">
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <h3 class="text-lg font-semibold text-gray-700 mb-4">Add Budget</h3>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input id="budget-name" type="text" placeholder="Budget Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <input id="budget-amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          </div>
+          <button id="add-budget" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Add Budget</button>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-gray-200">
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Amount</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Spent</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Remaining</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="budget-table"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="categories-section" class="hidden space-y-6">
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <h3 class="text-lg font-semibold text-gray-700 mb-4">Add Category</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input id="category-name" type="text" placeholder="Category Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <select id="category-type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+            </select>
+            <select id="category-budget" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="none">None</option>
+              <option value="add-new">Add New</option>
+            </select>
+          </div>
+          <button id="add-category" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Add Category</button>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-gray-200">
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Budget</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="category-table"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="profile-section" class="hidden space-y-6">
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <h3 class="text-lg font-semibold text-gray-700 mb-4">User Profile</h3>
+          <div class="space-y-4">
             <div>
-              <label for="budget-name" class="block text-sm font-medium text-gray-700">Budget Name</label>
-              <input type="text" id="budget-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter budget name">
+              <label class="block text-sm font-medium text-gray-700">Email</label>
+              <p id="profile-email" class="mt-1 text-gray-900">--</p>
             </div>
             <div>
-              <label for="budget-amount" class="block text-sm font-medium text-gray-700">Amount</label>
-              <input type="number" id="budget-amount" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter amount">
+              <label class="block text-sm font-medium text-gray-700">Currency</label>
+              <p id="profile-currency" class="mt-1 text-gray-900">--</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Family Code</label>
+              <p id="profile-family-code" class="mt-1 text-gray-900">--</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Account Type</label>
+              <p id="profile-account-type" class="mt-1 text-gray-900">--</p>
             </div>
           </div>
-          <button id="add-budget" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Add Budget</button>
         </div>
-
-        <!-- Budgets Table -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-          <h2 class="text-xl font-semibold text-gray-700 mb-4">Budget List</h2>
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Spent</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remaining</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="budget-table" class="bg-white divide-y divide-gray-200">
-                <!-- Populated by JavaScript -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- Categories Section -->
-      <section id="categories-section" class="hidden">
-        <!-- Add Category Form -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 class="text-xl font-semibold text-gray-700 mb-4">Add Category</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label for="category-name" class="block text-sm font-medium text-gray-700">Category Name</label>
-              <input type="text" id="category-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Enter category name">
-            </div>
-            <div>
-              <label for="category-type" class="block text-sm font-medium text-gray-700">Type</label>
-              <select id="category-type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                <option value="income">Income</option>
-                <option value="expense">Expense</option>
-              </select>
-            </div>
-            <div>
-              <label for="category-budget" class="block text-sm font-medium text-gray-700">Associated Budget</label>
-              <select id="category-budget" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                <option value="none">None</option>
-                <option value="add-new">Add New</option>
-              </select>
-            </div>
-          </div>
-          <button id="add-category" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Add Category</button>
-        </div>
-
-        <!-- Categories Table -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-          <h2 class="text-xl font-semibold text-gray-700 mb-4">Category List</h2>
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium -comedy">Associated Budget</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="category-table" class="bg-white divide-y divide-gray-200">
-                <!-- Populated by JavaScript -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+      </div>
     </main>
+  </div>
 
-    <!-- Footer -->
-    <footer class="bg-gray-800 text-white p-4 text-center">
-      <p>© 2025 Budget Dashboard. All rights reserved.</p>
-    </footer>
+  <div id="add-category-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+      <h3 class="text-lg font-semibold text-gray-700 mb-4">Add New Category</h3>
+      <div class="space-y-4">
+        <input id="new-category-name" type="text" placeholder="Category Name" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <select id="new-category-type" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+        </select>
+        <select id="new-category-budget" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          <option value="none">None</option>
+          <option value="add-new">Add New</option>
+        </select>
+        <div class="flex justify-end space-x-4">
+          <button id="save-category" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Save</button>
+          <button id="cancel-category" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    <!-- Firebase SDK Scripts (Version 9) -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
-    <!-- SDK Load Detection -->
-    <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        console.log('Checking Firebase SDK load status');
-        setTimeout(() => {
-          if (typeof window.firebase === 'undefined' || !window.firebase.initializeApp) {
-            console.error('Firebase SDK failed to load. Check network, browser restrictions, or script URLs.', {
-              online: navigator.onLine,
-              browser: navigator.userAgent,
-              timestamp: new Date().toISOString()
-            });
-          } else {
-            console.log('Firebase SDK loaded successfully');
-          }
-        }, 5000);
-      });
-    </script>
-    <!-- Custom Script -->
-    <script src="scripts.js" defer></script>
+  <div id="add-budget-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+      <h3 class="text-lg font-semibold text-gray-700 mb-4">Add New Budget</h3>
+      <div class="space-y-4">
+        <input id="new-budget-name" type="text" placeholder="Budget Name" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <input id="new-budget-amount" type="number" placeholder="Amount" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <div class="flex justify-end space-x-4">
+          <button id="save-budget" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Save</button>
+          <button id="cancel-budget" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
