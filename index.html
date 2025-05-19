@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Budget Dashboard</title>
-  <!-- Tailwind CSS (based on class names in your HTML) -->
+  <!-- Tailwind CSS CDN -->
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100 font-sans">
@@ -53,7 +53,7 @@
         <label for="signup-family-code" class="block text-sm font-medium text-gray-700">Family Code</label>
         <input type="text" id="signup-family-code" class="mt-1 p-2 w-full border rounded-md">
       </div>
-      <div class="mb-4-4">
+      <div class="mb-4">
         <label for="signup-account-type" class="block text-sm font-medium text-gray-700">Account Type</label>
         <select id="signup-account-type" class="mt-1 p-2 w-full border rounded-md">
           <option value="admin">Admin</option>
@@ -94,12 +94,12 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div class="bg-white rounded-lg shadow-md p-6">
           <h3 class="text-lg font-semibold text-gray-700">Balance</h3>
-          <p class="text-2xl font-bold text-gray-900">₹5,00,000</p>
+          <p id="balance" class="text-2xl font-bold text-gray-900">₹5,00,000</p>
           <p class="text-sm text-gray-500">Available funds</p>
         </div>
         <div class="bg-white rounded-lg shadow-md p-6">
           <h3 class="text-lg font-semibold text-gray-700">Total Budget</h3>
-          <p class="text-2xl font-bold text-gray-900">₹10,00,000</p>
+          <p id="total-budget" class="text-2xl font-bold text-gray-900">₹10,00,000</p>
           <p class="text-sm text-gray-500">Total allocated budget</p>
         </div>
       </div>
@@ -311,11 +311,26 @@
     </footer>
   </div>
 
-  <!-- Firebase SDK Scripts -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
-  <!-- Your custom script -->
-  <script src="scripts.js"></script>
+  <!-- Firebase SDK Scripts with Fallback -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js" defer></script>
+  <script>
+    if (!window.firebase) {
+      document.write('<script src="/firebase-app.js"><\/script>');
+    }
+  </script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js" defer></script>
+  <script>
+    if (!window.firebase.auth) {
+      document.write('<script src="/firebase-auth.js"><\/script>');
+    }
+  </script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js" defer></script>
+  <script>
+    if (!window.firebase.firestore) {
+      document.write('<script src="/firebase-firestore.js"><\/script>');
+    }
+  </script>
+  <!-- Custom Script -->
+  <script src="scripts.js" defer></script>
 </body>
 </html>
