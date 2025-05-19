@@ -417,50 +417,26 @@
       <p>© 2025 Budget Dashboard. All rights reserved.</p>
     </footer>
 
-    <!-- Firebase SDK Scripts with Fallback -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js" defer></script>
+    <!-- Firebase SDK Scripts (Version 9) with Fallback -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
     <script>
-      if (!window.firebase) {
-        document.write('<script src="/firebase-app.js"><\/script>');
-      }
-    </script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js" defer></script>
-    <script>
-      if (!window.firebase.auth) {
-        document.write('<script src="/firebase-auth.js"><\/script>');
-      }
-    </script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js" defer></script>
-    <script>
-      if (!window.firebase.firestore) {
-        document.write('<script src="/firebase-firestore.js"><\/script>');
-      }
-    </script>
-    <!-- SDK Load Detection -->
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
+      document.addEventListener('DOMContentLoaded', () => {
         console.log('Checking Firebase SDK load status');
-        try {
-          setTimeout(function() {
-            if (typeof window.firebase === 'undefined' || !window.firebase.initializeApp) {
-              console.error('Firebase SDK failed to load after 5s timeout. Check network, browser restrictions, or script URLs.', {
-                online: navigator.onLine,
-                browser: navigator.userAgent,
-                timestamp: new Date().toISOString()
-              });
-            } else {
-              console.log('Firebase SDK loaded successfully');
-            }
-          }, 5000);
-        } catch (error) {
-          console.error('Error in SDK detection:', {
-            message: error.message,
-            stack: error.stack,
-            timestamp: new Date().toISOString()
-          });
-        }
+        setTimeout(() => {
+          if (typeof window.firebase === 'undefined' || !window.firebase.initializeApp) {
+            console.error('Firebase SDK failed to load. Check network, browser restrictions, or script URLs.', {
+              online: navigator.onLine,
+              browser: navigator.userAgent,
+              timestamp: new Date().toISOString()
+            });
+          } else {
+            console.log('Firebase SDK loaded successfully');
+          }
+        }, 5000);
       });
     </script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
     <!-- Custom Script -->
     <script src="scripts.js" defer></script>
 </body>
