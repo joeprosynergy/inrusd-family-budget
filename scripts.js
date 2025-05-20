@@ -1534,16 +1534,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   
-  // Load Categories
+ // Load Categories
   async function loadCategories() {
     try {
       console.log('Loading categories', { familyCode });
-      if (!db || !familyCode) {
-        console.error('Firestore or familyCode not available');
-        categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No family data</td></tr>';
+      if (!currentUser || !db || !familyCode) {
+        console.error('Cannot load categories: missing user, Firestore, or familyCode');
+        showError('category-name', 'Unable to load categories.');
         return;
       }
       categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
+      categorySelect.innerHTML = '<option value="">Select a Category</option>';
       await retryFirestoreOperation(() => 
         db.collection('categories')
           .where('familyCode', '==', familyCode)
@@ -1568,6 +1569,10 @@ document.addEventListener('DOMContentLoaded', () => {
                   </td>
                 `;
                 categoryTable.appendChild(tr);
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = category.name;
+                categorySelect.appendChild(option);
               });
             }
           })
@@ -1615,7 +1620,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       addCategory.disabled = false;
                       isEditing.category = false;
                       console.log('Exited edit mode for category:', { id });
-                      loadCategories();
+                      await loadCategories();
                     } catch (error) {
                       console.error('Error updating category:', { code: error.code, message: error.message, id });
                       showError('category-name', 'Failed to update category.');
@@ -1650,7 +1655,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   db.collection('categories').doc(id).delete()
                 );
                 console.log('Category deleted successfully:', { id });
-                loadCategories();
+                await loadCategories();
                 deleteConfirmModal.classList.add('hidden');
               } catch (error) {
                 console.error('Error deleting category:', { code: error.code, message: error.message, id });
@@ -1675,23 +1680,49 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       });
 
-      // Populate category dropdown for transactions
-      if (transactionCategoryId) {
-        transactionCategoryId.innerHTML = '<option value="">Select a Category</option>';
-        await retryFirestoreOperation(() => 
-          db.collection('categories')
-            .where('familyCode', '==', familyCode)
-            .get()
-            .then(snapshot => {
-              snapshot.forEach(doc => {
-                const data = doc.data();
-                const option = document.createElement('option');
-                option.value = doc.id;
-                option.textContent = data.name;
-                transactionCategoryId.appendChild(option);
-              });
-            })
-        );
+      if (addCategory) {
+        addCategory.addEventListener('click', async () => {
+          console.log('Add Category clicked', { isEditing: isEditing.category });
+          if (isEditing.category) return;
+          clearErrors();
+          const name = categoryName.value.trim();
+          const type = categoryType.value;
+          const budgetId = categoryBudgetId.value.trim() || null;
+          if (!name) {
+            showError('category-name', 'Category name is required');
+            return;
+          }
+          if (currentUser && db) {
+            addCategory.disabled = true;
+            addCategory.textContent = 'Adding...';
+            try {
+              await retryFirestoreOperation(() => 
+                db.collection('categories').add({
+                  name,
+                  type,
+                  budgetId,
+                  familyCode,
+                  createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                })
+              );
+              console.log('Category added successfully:', { name, type, budgetId });
+              categoryName.value = '';
+              categoryType.value = 'expense';
+              categoryBudgetId.value = '';
+              addCategory.innerHTML = 'Add Category';
+              addCategory.disabled = false;
+              await loadCategories();
+            } catch (error) {
+              console.error('Error adding category:', { code: error.code, message: error.message });
+              showError('category-name', 'Failed to add category.');
+              addCategory.disabled = false;
+              addCategory.innerHTML = 'Add Category';
+            }
+          } else {
+            console.error('Firestore or user not available');
+            showError('category-name', db ? 'Invalid input data' : 'Database service not available');
+          }
+        });
       }
     } catch (error) {
       console.error('Error loading categories:', {
@@ -1708,9 +1739,9 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadBudgets() {
     try {
       console.log('Loading budgets', { familyCode });
-      if (!db || !familyCode) {
-        console.error('Firestore or familyCode not available');
-        budgetTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No family data</td></tr>';
+      if (!currentUser || !db || !familyCode) {
+        console.error('Cannot load budgets: missing user, Firestore, or familyCode');
+        showError('budget-name', 'Unable to load budgets.');
         return;
       }
       budgetTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
@@ -1785,7 +1816,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       addBudget.disabled = false;
                       isEditing.budget = false;
                       console.log('Exited edit mode for budget:', { id });
-                      loadBudgets();
+                      await loadBudgets();
                     } catch (error) {
                       console.error('Error updating budget:', { code: error.code, message: error.message, id });
                       showError('budget-name', 'Failed to update budget.');
@@ -1820,7 +1851,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   db.collection('budgets').doc(id).delete()
                 );
                 console.log('Budget deleted successfully:', { id });
-                loadBudgets();
+                await loadBudgets();
                 deleteConfirmModal.classList.add('hidden');
               } catch (error) {
                 console.error('Error deleting budget:', { code: error.code, message: error.message, id });
@@ -1845,23 +1876,51 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       });
 
-      // Populate budget dropdown for categories
-      if (categoryBudgetId) {
-        categoryBudgetId.innerHTML = '<option value="">Select a Budget</option>';
-        await retryFirestoreOperation(() => 
-          db.collection('budgets')
-            .where('familyCode', '==', familyCode)
-            .get()
-            .then(snapshot => {
-              snapshot.forEach(doc => {
-                const data = doc.data();
-                const option = document.createElement('option');
-                option.value = doc.id;
-                option.textContent = data.name;
-                categoryBudgetId.appendChild(option);
-              });
-            })
-        );
+      if (addBudget) {
+        addBudget.addEventListener('click', async () => {
+          console.log('Add Budget clicked', { isEditing: isEditing.budget });
+          if (isEditing.budget) return;
+          clearErrors();
+          const name = budgetName.value.trim();
+          const amount = parseFloat(budgetAmount.value);
+          if (!name) {
+            showError('budget-name', 'Budget name is required');
+            return;
+          }
+          if (!amount || amount <= 0) {
+            showError('budget-amount', 'Valid amount is required');
+            return;
+          }
+          if (currentUser && db) {
+            addBudget.disabled = true;
+            addBudget.textContent = 'Adding...';
+            try {
+              await retryFirestoreOperation(() => 
+                db.collection('budgets').add({
+                  name,
+                  amount,
+                  spent: 0,
+                  familyCode,
+                  createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                })
+              );
+              console.log('Budget added successfully:', { name, amount });
+              budgetName.value = '';
+              budgetAmount.value = '';
+              addBudget.innerHTML = 'Add Budget';
+              addBudget.disabled = false;
+              await loadBudgets();
+            } catch (error) {
+              console.error('Error adding budget:', { code: error.code, message: error.message });
+              showError('budget-name', 'Failed to add budget.');
+              addBudget.disabled = false;
+              addBudget.innerHTML = 'Add Budget';
+            }
+          } else {
+            console.error('Firestore or user not available');
+            showError('budget-name', db ? 'Invalid input data' : 'Database service not available');
+          }
+        });
       }
     } catch (error) {
       console.error('Error loading budgets:', {
@@ -1878,9 +1937,9 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadTransactions() {
     try {
       console.log('Loading transactions', { familyCode });
-      if (!db || !familyCode) {
-        console.error('Firestore or familyCode not available');
-        transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No family data</td></tr>';
+      if (!currentUser || !db || !familyCode) {
+        console.error('Cannot load transactions: missing user, Firestore, or familyCode');
+        transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Error loading transactions</td></tr>';
         return;
       }
       transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
@@ -1901,7 +1960,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tr.innerHTML = `
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.categoryId || '--'}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.categoryId}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm">
                     <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
@@ -1926,7 +1985,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   const data = doc.data();
                   transactionType.value = data.type;
                   transactionAmount.value = data.amount;
-                  transactionCategoryId.value = data.categoryId || '';
+                  transactionCategoryId.value = data.categoryId;
                   transactionDescription.value = data.description;
                   addTransaction.innerHTML = 'Update Transaction';
                   isEditing.transaction = true;
@@ -1934,7 +1993,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   const updateHandler = async () => {
                     const type = transactionType.value;
                     const amount = parseFloat(transactionAmount.value);
-                    const categoryId = transactionCategoryId.value.trim() || null;
+                    const categoryId = transactionCategoryId.value;
                     const description = transactionDescription.value.trim();
                     if (!amount || amount <= 0) {
                       showError('transaction-amount', 'Valid amount is required');
@@ -1964,8 +2023,8 @@ document.addEventListener('DOMContentLoaded', () => {
                       addTransaction.disabled = false;
                       isEditing.transaction = false;
                       console.log('Exited edit mode for transaction:', { id });
-                      loadTransactions();
-                      updateDashboard();
+                      await loadTransactions();
+                      await updateDashboard();
                     } catch (error) {
                       console.error('Error updating transaction:', { code: error.code, message: error.message, id });
                       showError('transaction-description', 'Failed to update transaction.');
@@ -2000,8 +2059,8 @@ document.addEventListener('DOMContentLoaded', () => {
                   db.collection('transactions').doc(id).delete()
                 );
                 console.log('Transaction deleted successfully:', { id });
-                loadTransactions();
-                updateDashboard();
+                await loadTransactions();
+                await updateDashboard();
                 deleteConfirmModal.classList.add('hidden');
               } catch (error) {
                 console.error('Error deleting transaction:', { code: error.code, message: error.message, id });
@@ -2025,6 +2084,59 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       });
+
+      if (addTransaction) {
+        addTransaction.addEventListener('click', async () => {
+          console.log('Add Transaction clicked', { isEditing: isEditing.transaction });
+          if (isEditing.transaction) return;
+          clearErrors();
+          const type = transactionType.value;
+          const amount = parseFloat(transactionAmount.value);
+          const categoryId = transactionCategoryId.value;
+          const description = transactionDescription.value.trim();
+          if (!amount || amount <= 0) {
+            showError('transaction-amount', 'Valid amount is required');
+            return;
+          }
+          if (!categoryId) {
+            showError('transaction-category-id', 'Category is required');
+            return;
+          }
+          if (currentUser && db) {
+            addTransaction.disabled = true;
+            addTransaction.textContent = 'Adding...';
+            try {
+              await retryFirestoreOperation(() => 
+                db.collection('transactions').add({
+                  type,
+                  amount,
+                  categoryId,
+                  description,
+                  familyCode,
+                  createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                })
+              );
+              console.log('Transaction added successfully:', { type, amount, categoryId });
+              transactionType.value = 'debit';
+              transactionAmount.value = '';
+              transactionCategoryId.value = '';
+              transactionDescription.value = '';
+              addTransaction.innerHTML = 'Add Transaction';
+              addTransaction.disabled = false;
+              await loadTransactions();
+              await updateDashboard();
+            } catch (error) {
+              console.error('Error adding transaction:', { code: error.code, message: error.message });
+              showError('transaction-description', 'Failed to add transaction.');
+              addTransaction.disabled = false;
+              addTransaction.innerHTML = 'Add Transaction';
+            }
+          } else {
+            console.error('Firestore or user not available');
+            showError('transaction-description', db ? 'Invalid input data' : 'Database service not available');
+          }
+        });
+      }
     } catch (error) {
       console.error('Error loading transactions:', {
         message: error.message,
@@ -2036,89 +2148,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Fetch Exchange Rate
-  async function fetchExchangeRate() {
-    try {
-      console.log('Fetching exchange rate');
-      if (exchangeRateCache.expires > Date.now()) {
-        console.log('Using cached exchange rate:', exchangeRateCache.rate);
-        return exchangeRateCache.rate;
-      }
-      const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-      const data = await response.json();
-      const rate = data.rates.INR;
-      exchangeRateCache.rate = rate;
-      exchangeRateCache.expires = Date.now() + 24 * 60 * 60 * 1000; // Cache for 24 hours
-      console.log('Exchange rate fetched:', { rate });
-      return rate;
-    } catch (error) {
-      console.error('Error fetching exchange rate:', {
-        message: error.message,
-        stack: error.stack
-      });
-      return exchangeRateCache.rate || 80; // Fallback rate
-    }
-  }
-
   // Update Dashboard
   async function updateDashboard() {
     try {
-      console.log('Updating dashboard', { familyCode, filter: dashboardFilter?.value });
-      if (!db || !familyCode || !dashboardFilter) {
-        console.error('Firestore, familyCode, or dashboardFilter not available');
-        dashboardSummary.innerHTML = '<p class="text-center py-4">No data available</p>';
+      console.log('Updating dashboard');
+      if (!currentUser || !db || !familyCode) {
+        console.error('Cannot update dashboard: missing user, Firestore, or familyCode');
         return;
       }
-      dashboardSummary.innerHTML = '<p class="text-center py-4">Loading...</p>';
-      const { start, end } = getDateRange(dashboardFilter.value);
+      const filter = dashboardFilter.value;
+      const { start, end } = getDateRange(filter);
+      console.log('Dashboard date range:', { filter, start, end });
       let totalIncome = 0;
       let totalExpenses = 0;
-
       await retryFirestoreOperation(() => 
         db.collection('transactions')
           .where('familyCode', '==', familyCode)
+          .where('createdAt', '>=', start)
+          .where('createdAt', '<=', end)
           .get()
           .then(snapshot => {
             console.log('Dashboard transactions fetched:', { count: snapshot.size, familyCode });
             snapshot.forEach(doc => {
               const transaction = doc.data();
-              const createdAt = transaction.createdAt?.toDate();
-              if (createdAt && createdAt >= start && createdAt <= end) {
-                if (transaction.type === 'credit') {
-                  totalIncome += transaction.amount;
-                } else {
-                  totalExpenses += transaction.amount;
-                }
+              if (transaction.type === 'credit') {
+                totalIncome += transaction.amount;
+              } else {
+                totalExpenses += transaction.amount;
               }
             });
           })
       );
-
       const balance = totalIncome - totalExpenses;
-      dashboardSummary.innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div class="bg-white rounded-lg shadow-md p-6">
-            <h3 class="text-lg font-semibold text-gray-700">Total Income</h3>
-            <p class="text-2xl font-bold text-green-600">${formatCurrency(totalIncome, 'INR')}</p>
-          </div>
-          <div class="bg-white rounded-lg shadow-md p-6">
-            <h3 class="text-lg font-semibold text-gray-700">Total Expenses</h3>
-            <p class="text-2xl font-bold text-red-600">${formatCurrency(totalExpenses, 'INR')}</p>
-          </div>
-          <div class="bg-white rounded-lg shadow-md p-6">
-            <h3 class="text-lg font-semibold text-gray-700">Balance</h3>
-            <p class="text-2xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}">${formatCurrency(balance, 'INR')}</p>
-          </div>
-        </div>
-      `;
-      console.log('Dashboard updated:', { totalIncome, totalExpenses, balance: formatCurrency(balance, 'INR') });
+      console.log('Dashboard calculated:', { totalIncome, totalExpenses, balance });
+      dashboardIncome.textContent = formatCurrency(totalIncome, 'INR');
+      dashboardExpenses.textContent = formatCurrency(totalExpenses, 'INR');
+      dashboardBalance.textContent = formatCurrency(balance, 'INR');
+      await loadChildTiles();
     } catch (error) {
       console.error('Error updating dashboard:', {
         message: error.message,
-        stack: error.stack,
-        familyCode
+        stack: error.stack
       });
-      showError('dashboard-filter', 'Failed to update dashboard.');
-      dashboardSummary.innerHTML = '<p class="text-center py-4 text-red-600">Error loading dashboard</p>';
+      dashboardIncome.textContent = '--';
+      dashboardExpenses.textContent = '--';
+      dashboardBalance.textContent = '--';
     }
   }
