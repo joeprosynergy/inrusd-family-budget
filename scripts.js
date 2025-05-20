@@ -637,6 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
  
 
+
   // User State
   let currentUser = null;
   let userCurrency = 'INR';
@@ -1386,38 +1387,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Bind Add Child Transaction Listener (robust singleton to prevent duplicates)
   if (addChildTransaction) {
-    // Remove all existing click listeners to ensure single binding
+    // Track listeners using WeakMap
+    const listenerMap = new WeakMap();
     const button = addChildTransaction;
-    const newListenerId = `add-child-transaction-${Date.now()}`;
-    if (button.dataset.listenerId) {
-      console.log('Removing previous addChildTransaction listener:', { oldListenerId: button.dataset.listenerId });
-      // Clone the button to remove all existing listeners
+    const listenerId = `add-child-transaction-${Date.now()}`;
+
+    // Remove all existing click listeners
+    const removeAllListeners = () => {
       const newButton = button.cloneNode(true);
       button.parentNode.replaceChild(newButton, button);
-      addChildTransaction = newButton;
-    }
-    button.dataset.listenerId = newListenerId;
+      return newButton;
+    };
+    addChildTransaction = removeAllListeners();
     
     // Debouncing and lock variables
     let lastAddClickTime = 0;
     let isProcessing = false;
-    const DEBOUNCE_MS = 1000; // 1 second debounce
+    const DEBOUNCE_MS = 2000; // 2 second debounce
 
     const addChildTransactionHandler = async (event) => {
       const now = Date.now();
       if (now - lastAddClickTime < DEBOUNCE_MS || isProcessing) {
         console.log('Add Child Transaction ignored:', { 
+          listenerId,
           timeSinceLastClick: now - lastAddClickTime, 
-          isProcessing 
+          isProcessing,
+          stack: new Error().stack 
         });
         return;
       }
       lastAddClickTime = now;
       isProcessing = true;
       console.log('Add Child Transaction executing:', { 
-        listenerId: newListenerId, 
+        listenerId, 
         currentChildUserId, 
-        accountType: currentAccountType 
+        accountType: currentAccountType,
+        stack: new Error().stack 
       });
 
       try {
@@ -1479,8 +1484,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     };
 
+    // Store and bind listener
+    listenerMap.set(addChildTransaction, addChildTransactionHandler);
     addChildTransaction.addEventListener('click', addChildTransactionHandler);
-    console.log('Add Child Transaction listener bound:', { listenerId: newListenerId });
+    console.log('Add Child Transaction listener bound:', { listenerId });
   }
 
 
@@ -1488,6 +1495,8 @@ document.addEventListener('DOMContentLoaded', () => {
   
 
 
+
+  
 
 
 
