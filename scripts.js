@@ -630,6 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+
   // User State
   let currentUser = null;
   let userCurrency = 'INR';
@@ -1109,7 +1110,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   option.textContent = displayName;
                   childUserId.appendChild(option);
                   if (!data.email || data.email.trim() === '') {
-                    console.warn('Child account with missing or empty email; using fallback:', { id: doc.id, displayName });
+                    console.warn('Child account with missing or empty email; using fallback:', { id: doc.id, displayName, email: data.email });
                   }
                 });
               }
@@ -1181,59 +1182,7 @@ document.addEventListener('DOMContentLoaded', () => {
           })
       );
 
-      // Bind event listeners for add, edit, and delete
-      if (addChildTransaction) {
-        addChildTransaction.addEventListener('click', async () => {
-          console.log('Add Child Transaction clicked', { isEditing: isEditing.childTransaction, currentChildUserId, accountType: currentAccountType });
-          if (isEditing.childTransaction) return;
-          clearErrors();
-          const type = childTransactionType.value;
-          const amount = parseFloat(childTransactionAmount.value);
-          const description = childTransactionDescription.value.trim();
-          if (!amount || amount <= 0) {
-            showError('child-transaction-amount', 'Valid amount is required');
-            return;
-          }
-          if (currentAccountType === 'admin' && !currentChildUserId) {
-            showError('child-user-id', 'Please select a child account');
-            return;
-          }
-          if (currentUser && db) {
-            addChildTransaction.disabled = true;
-            addChildTransaction.textContent = 'Adding...';
-            const transactionUserId = currentAccountType === 'admin' ? currentChildUserId : currentUser.uid;
-            try {
-              await retryFirestoreOperation(() => 
-                db.collection('childTransactions').add({
-                  type,
-                  amount,
-                  description,
-                  userId: transactionUserId,
-                  familyCode,
-                  createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                })
-              );
-              console.log('Child transaction added successfully:', { type, amount, userId: transactionUserId, familyCode });
-              childTransactionType.value = 'debit';
-              childTransactionAmount.value = '';
-              childTransactionDescription.value = '';
-              addChildTransaction.innerHTML = 'Add Transaction';
-              addChildTransaction.disabled = false;
-              await loadChildTransactions();
-              await loadChildTiles();
-            } catch (error) {
-              console.error('Error adding child transaction:', { code: error.code, message: error.message, userId: transactionUserId });
-              showError('child-transaction-description', 'Failed to add transaction.');
-              addChildTransaction.disabled = false;
-              addChildTransaction.innerHTML = 'Add Transaction';
-            }
-          } else {
-            console.error('Firestore or user not available');
-            showError('child-transaction-description', db ? 'Invalid input data' : 'Database service not available');
-          }
-        });
-      }
-
+      // Bind event listeners for edit and delete
       childTransactionTable.querySelectorAll('.edit-child-transaction').forEach(button => {
         button.addEventListener('click', () => {
           const id = button.dataset.id;
@@ -1319,6 +1268,7 @@ document.addEventListener('DOMContentLoaded', () => {
               } catch (error) {
                 console.error('Error deleting child transaction:', { code: error.code, message: error.message, id, userId });
                 showError('child-transaction-description', 'Failed to delete transaction.');
+                deleteConfirmModal.classList.add('hidden');
               }
               confirmDelete.removeEventListener('click', confirmHandler);
             };
@@ -1377,6 +1327,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const promises = snapshot.docs.map(doc => {
               const userId = doc.id;
               const email = doc.data().email && doc.data().email.trim() !== '' ? doc.data().email : `Child Account ${userId.substring(0, 8)}`;
+              if (!doc.data().email || doc.data().email.trim() === '') {
+                console.warn('Child account with missing or empty email in tiles:', { id: userId, email: doc.data().email });
+              }
               return retryFirestoreOperation(() => 
                 db.collection('childTransactions')
                   .where('userId', '==', userId)
@@ -1423,6 +1376,59 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       childTiles.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
     }
+  }
+
+  // Bind Add Child Transaction Listener (outside loadChildTransactions to prevent duplicates)
+  if (addChildTransaction) {
+    addChildTransaction.addEventListener('click', async () => {
+      console.log('Add Child Transaction clicked', { isEditing: isEditing.childTransaction, currentChildUserId, accountType: currentAccountType });
+      if (isEditing.childTransaction) return;
+      clearErrors();
+      const type = childTransactionType.value;
+      const amount = parseFloat(childTransactionAmount.value);
+      const description = childTransactionDescription.value.trim();
+      if (!amount || amount <= 0) {
+        showError('child-transaction-amount', 'Valid amount is required');
+        return;
+      }
+      if (currentAccountType === 'admin' && !currentChildUserId) {
+        showError('child-user-id', 'Please select a child account');
+        return;
+      }
+      if (currentUser && db) {
+        addChildTransaction.disabled = true;
+        addChildTransaction.textContent = 'Adding...';
+        const transactionUserId = currentAccountType === 'admin' ? currentChildUserId : currentUser.uid;
+        try {
+          await retryFirestoreOperation(() => 
+            db.collection('childTransactions').add({
+              type,
+              amount,
+              description,
+              userId: transactionUserId,
+              familyCode,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            })
+          );
+          console.log('Child transaction added successfully:', { type, amount, userId: transactionUserId, familyCode });
+          childTransactionType.value = 'debit';
+          childTransactionAmount.value = '';
+          childTransactionDescription.value = '';
+          addChildTransaction.innerHTML = 'Add Transaction';
+          addChildTransaction.disabled = false;
+          await loadChildTransactions();
+          await loadChildTiles();
+        } catch (error) {
+          console.error('Error adding child transaction:', { code: error.code, message: error.message, userId: transactionUserId });
+          showError('child-transaction-description', 'Failed to add transaction.');
+          addChildTransaction.disabled = false;
+          addChildTransaction.innerHTML = 'Add Transaction';
+        }
+      } else {
+        console.error('Firestore or user not available');
+        showError('child-transaction-description', db ? 'Invalid input data' : 'Database service not available');
+      }
+    });
   }
 
 
