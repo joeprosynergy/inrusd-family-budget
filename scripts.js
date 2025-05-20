@@ -1054,12 +1054,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-
-
-
-  
-
-
   // Load Child Transactions
   async function loadChildTransactions() {
     try {
