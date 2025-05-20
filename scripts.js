@@ -639,6 +639,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+
   // User State
   let currentUser = null;
   let userCurrency = 'INR';
@@ -1394,7 +1395,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let executionCount = 0;
     let lastAddClickTime = 0;
     let isProcessing = false;
-    const DEBOUNCE_MS = 3000; // 3 second debounce
+    const DEBOUNCE_MS = 5000; // 5 second debounce
     const listenerId = `add-child-transaction-${Date.now()}`;
 
     // Remove all existing click listeners
@@ -1405,12 +1406,17 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     addChildTransaction = removeAllListeners();
 
-    const addChildTransactionHandler = async (event) => {
+    const addChildTransactionHandler = (event) => {
       event.preventDefault(); // Block default behavior
       event.stopPropagation(); // Prevent event bubbling
       executionCount++;
       const now = Date.now();
-      const txId = `${listenerId}-${now}`; // Unique transaction ID
+      // Deterministic txId based on transaction data
+      const type = childTransactionType.value;
+      const amount = parseFloat(childTransactionAmount.value);
+      const description = childTransactionDescription.value.trim();
+      const transactionUserId = currentAccountType === 'admin' ? currentChildUserId : currentUser.uid;
+      const txId = `tx-${transactionUserId}-${type}-${amount}-${description}-${now}`.replace(/[^a-zA-Z0-9-]/g, '-');
       if (now - lastAddClickTime < DEBOUNCE_MS || isProcessing) {
         console.log('Add Child Transaction ignored:', { 
           listenerId,
@@ -1418,6 +1424,8 @@ document.addEventListener('DOMContentLoaded', () => {
           executionCount,
           timeSinceLastClick: now - lastAddClickTime, 
           isProcessing,
+          eventType: event.type,
+          eventTarget: event.target.tagName,
           stack: new Error().stack 
         });
         return;
@@ -1430,15 +1438,14 @@ document.addEventListener('DOMContentLoaded', () => {
         executionCount,
         currentChildUserId, 
         accountType: currentAccountType,
+        eventType: event.type,
+        eventTarget: event.target.tagName,
         stack: new Error().stack 
       });
 
       try {
         if (isEditing.childTransaction) return;
         clearErrors();
-        const type = childTransactionType.value;
-        const amount = parseFloat(childTransactionAmount.value);
-        const description = childTransactionDescription.value.trim();
         if (!amount || amount <= 0) {
           showError('child-transaction-amount', 'Valid amount is required');
           return;
@@ -1450,10 +1457,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentUser && db) {
           addChildTransaction.disabled = true;
           addChildTransaction.textContent = 'Adding...';
-          const transactionUserId = currentAccountType === 'admin' ? currentChildUserId : currentUser.uid;
-          // Use txId to ensure idempotency
+          // Use deterministic txId for idempotency
           const txRef = db.collection('childTransactions').doc(txId);
-          await retryFirestoreOperation(() => 
+          retryFirestoreOperation(() => 
             txRef.set({
               type,
               amount,
@@ -1463,36 +1469,49 @@ document.addEventListener('DOMContentLoaded', () => {
               txId, // Store txId for uniqueness
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             })
-          );
-          console.log('Child transaction added successfully:', { 
-            type, 
-            amount, 
-            userId: transactionUserId, 
-            familyCode,
-            txId,
-            executionCount 
+          ).then(() => {
+            console.log('Child transaction added successfully:', { 
+              type, 
+              amount, 
+              userId: transactionUserId, 
+              familyCode,
+              txId,
+              executionCount 
+            });
+            childTransactionType.value = 'debit';
+            childTransactionAmount.value = '';
+            childTransactionDescription.value = '';
+            addChildTransaction.innerHTML = 'Add Transaction';
+            addChildTransaction.disabled = false;
+            isProcessing = false;
+          }).catch(error => {
+            console.error('Error adding child transaction:', { 
+              code: error.code, 
+              message: error.message, 
+              userId: transactionUserId,
+              txId,
+              executionCount 
+            });
+            showError('child-transaction-description', 'Failed to add transaction.');
+            addChildTransaction.disabled = false;
+            addChildTransaction.innerHTML = 'Add Transaction';
+            isProcessing = false;
           });
-          childTransactionType.value = 'debit';
-          childTransactionAmount.value = '';
-          childTransactionDescription.value = '';
-          addChildTransaction.innerHTML = 'Add Transaction';
-          addChildTransaction.disabled = false;
         } else {
           console.error('Firestore or user not available', { txId, executionCount });
           showError('child-transaction-description', db ? 'Invalid input data' : 'Database service not available');
+          isProcessing = false;
         }
       } catch (error) {
-        console.error('Error adding child transaction:', { 
+        console.error('Error in addChildTransactionHandler:', { 
           code: error.code, 
           message: error.message, 
-          userId: transactionUserId,
           txId,
           executionCount 
         });
         showError('child-transaction-description', 'Failed to add transaction.');
         addChildTransaction.disabled = false;
         addChildTransaction.innerHTML = 'Add Transaction';
-      } finally {
         isProcessing = false;
       }
     };
