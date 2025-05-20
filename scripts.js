@@ -638,6 +638,7 @@ document.addEventListener('DOMContentLoaded', () => {
  
 
 
+
   // User State
   let currentUser = null;
   let userCurrency = 'INR';
@@ -1385,31 +1386,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Bind Add Child Transaction Listener (robust singleton to prevent duplicates)
-  if (addChildTransaction) {
-    // Track listeners using WeakMap
-    const listenerMap = new WeakMap();
-    const button = addChildTransaction;
+  // Bind Add Child Transaction Listener (global singleton to prevent duplicates)
+  // Global singleton to ensure single listener
+  const ADD_CHILD_TRANSACTION_SYMBOL = Symbol('addChildTransactionHandler');
+  if (addChildTransaction && !window[ADD_CHILD_TRANSACTION_SYMBOL]) {
+    // Execution tracking
+    let executionCount = 0;
+    let lastAddClickTime = 0;
+    let isProcessing = false;
+    const DEBOUNCE_MS = 3000; // 3 second debounce
     const listenerId = `add-child-transaction-${Date.now()}`;
 
     // Remove all existing click listeners
     const removeAllListeners = () => {
-      const newButton = button.cloneNode(true);
-      button.parentNode.replaceChild(newButton, button);
+      const newButton = addChildTransaction.cloneNode(true);
+      addChildTransaction.parentNode.replaceChild(newButton, addChildTransaction);
       return newButton;
     };
     addChildTransaction = removeAllListeners();
-    
-    // Debouncing and lock variables
-    let lastAddClickTime = 0;
-    let isProcessing = false;
-    const DEBOUNCE_MS = 2000; // 2 second debounce
 
     const addChildTransactionHandler = async (event) => {
+      event.stopPropagation(); // Prevent event bubbling
+      executionCount++;
       const now = Date.now();
       if (now - lastAddClickTime < DEBOUNCE_MS || isProcessing) {
         console.log('Add Child Transaction ignored:', { 
           listenerId,
+          executionCount,
           timeSinceLastClick: now - lastAddClickTime, 
           isProcessing,
           stack: new Error().stack 
@@ -1420,6 +1423,7 @@ document.addEventListener('DOMContentLoaded', () => {
       isProcessing = true;
       console.log('Add Child Transaction executing:', { 
         listenerId, 
+        executionCount,
         currentChildUserId, 
         accountType: currentAccountType,
         stack: new Error().stack 
@@ -1457,7 +1461,8 @@ document.addEventListener('DOMContentLoaded', () => {
             type, 
             amount, 
             userId: transactionUserId, 
-            familyCode 
+            familyCode,
+            executionCount 
           });
           childTransactionType.value = 'debit';
           childTransactionAmount.value = '';
@@ -1465,7 +1470,6 @@ document.addEventListener('DOMContentLoaded', () => {
           addChildTransaction.innerHTML = 'Add Transaction';
           addChildTransaction.disabled = false;
           await loadChildTransactions();
-          await loadChildTiles();
         } else {
           console.error('Firestore or user not available');
           showError('child-transaction-description', db ? 'Invalid input data' : 'Database service not available');
@@ -1474,7 +1478,8 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Error adding child transaction:', { 
           code: error.code, 
           message: error.message, 
-          userId: transactionUserId 
+          userId: transactionUserId,
+          executionCount 
         });
         showError('child-transaction-description', 'Failed to add transaction.');
         addChildTransaction.disabled = false;
@@ -1484,10 +1489,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     };
 
-    // Store and bind listener
-    listenerMap.set(addChildTransaction, addChildTransactionHandler);
     addChildTransaction.addEventListener('click', addChildTransactionHandler);
-    console.log('Add Child Transaction listener bound:', { listenerId });
+    window[ADD_CHILD_TRANSACTION_SYMBOL] = addChildTransactionHandler;
+    console.log('Add Child Transaction listener bound:', { listenerId, stack: new Error().stack });
+  } else if (window[ADD_CHILD_TRANSACTION_SYMBOL]) {
+    console.log('Add Child Transaction listener already bound; skipping:', { listenerId: 'existing' });
   }
 
 
