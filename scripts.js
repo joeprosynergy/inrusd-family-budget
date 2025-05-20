@@ -980,14 +980,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (currencyToggle) {
         currencyToggle.value = userCurrency;
       }
-      await Promise.all([
-        loadCategories(),
-        loadBudgets(),
-        loadTransactions(),
-        loadChildAccounts(),
-        loadProfileData(),
-        updateDashboard()
-      ]);
+      // Wrap each Promise in a try/catch to prevent Promise.all rejection
+      const tasks = [
+        async () => { try { await loadCategories(); } catch (e) { console.error('loadCategories failed:', e); } },
+        async () => { try { await loadBudgets(); } catch (e) { console.error('loadBudgets failed:', e); } },
+        async () => { try { await loadTransactions(); } catch (e) { console.error('loadTransactions failed:', e); } },
+        async () => { try { await loadChildAccounts(); } catch (e) { console.error('loadChildAccounts failed:', e); } },
+        async () => { try { await loadProfileData(); } catch (e) { console.error('loadProfileData failed:', e); } },
+        async () => { try { await updateDashboard(); } catch (e) { console.error('updateDashboard failed:', e); } }
+      ];
+      await Promise.all(tasks.map(task => task()));
       console.log('App data loaded successfully');
     } catch (error) {
       console.error('Error loading app data:', {
@@ -1001,47 +1003,63 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadChildAccounts() {
     try {
       console.log('Loading child accounts', { familyCode, currentUser: currentUser?.uid, accountType: currentAccountType });
-      if (!currentUser || !db || !familyCode) {
-        console.error('Cannot load child accounts: missing user, Firestore, or familyCode');
-        showError('child-user-id', 'Unable to load child accounts.');
+      if (!currentUser || !db || !familyCode || typeof familyCode !== 'string' || familyCode.trim() === '') {
+        console.error('Cannot load child accounts: invalid user, Firestore, or familyCode', { familyCode, currentUser: !!currentUser, db: !!db });
+        if (childUserId) {
+          childUserId.innerHTML = '<option value="">Invalid family data</option>';
+        }
+        return;
+      }
+      if (!currentAccountType || !['admin', 'child'].includes(currentAccountType)) {
+        console.error('Invalid account type', { currentAccountType });
+        if (childUserId) {
+          childUserId.innerHTML = '<option value="">Invalid account type</option>';
+        }
         return;
       }
       if (currentAccountType === 'admin') {
-        childSelector.classList.remove('hidden');
-        childUserId.innerHTML = '<option value="">Select a Child</option>';
-        await retryFirestoreOperation(() => 
-          db.collection('users')
-            .where('familyCode', '==', familyCode)
-            .where('accountType', '==', 'child')
-            .get()
-            .then(snapshot => {
-              console.log('Child users fetched:', { 
-                count: snapshot.size, 
-                familyCode, 
-                docs: snapshot.docs.map(doc => ({ id: doc.id, email: doc.data().email, familyCode: doc.data().familyCode, accountType: doc.data().accountType }))
-              });
-              if (snapshot.empty) {
-                console.warn('No child accounts found for familyCode:', familyCode);
-                childUserId.innerHTML = '<option value="">No children found</option>';
-              } else {
-                snapshot.forEach(doc => {
-                  const data = doc.data();
-                  const email = data.email || 'Unnamed Child';
-                  const option = document.createElement('option');
-                  option.value = doc.id;
-                  option.textContent = email;
-                  childUserId.appendChild(option);
+        if (childSelector && childUserId) {
+          childSelector.classList.remove('hidden');
+          childUserId.innerHTML = '<option value="">Select a Child</option>';
+          await retryFirestoreOperation(() => 
+            db.collection('users')
+              .where('familyCode', '==', familyCode)
+              .where('accountType', '==', 'child')
+              .get()
+              .then(snapshot => {
+                console.log('Child users fetched:', { 
+                  count: snapshot.size, 
+                  familyCode, 
+                  docs: snapshot.docs.map(doc => ({ id: doc.id, email: doc.data().email, familyCode: doc.data().familyCode, accountType: doc.data().accountType }))
                 });
-              }
-            })
-        );
-        // Set currentChildUserId to first child or current user's ID if none selected
-        currentChildUserId = childUserId.value || currentUser.uid;
+                if (snapshot.empty) {
+                  console.warn('No child accounts found for familyCode:', familyCode);
+                  childUserId.innerHTML = '<option value="">No children found</option>';
+                } else {
+                  snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const email = data.email || 'Unnamed Child';
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = email;
+                    childUserId.appendChild(option);
+                  });
+                }
+              })
+          );
+          // Set currentChildUserId to first child or current user's ID if none selected
+          currentChildUserId = childUserId.value || currentUser.uid;
+        } else {
+          console.error('Child selector elements not found', { childSelector: !!childSelector, childUserId: !!childUserId });
+        }
       } else {
-        childSelector.classList.add('hidden');
+        if (childSelector) {
+          childSelector.classList.add('hidden');
+        }
         currentChildUserId = currentUser.uid;
       }
-      await loadChildTransactions();
+      // Temporarily skip loadChildTransactions to isolate loading issue
+      // await loadChildTransactions();
     } catch (error) {
       console.error('Error loading child accounts:', {
         message: error.message,
@@ -1049,8 +1067,9 @@ document.addEventListener('DOMContentLoaded', () => {
         familyCode,
         accountType: currentAccountType
       });
-      showError('child-user-id', 'Failed to load child accounts.');
-      childUserId.innerHTML = '<option value="">Error loading children</option>';
+      if (childUserId) {
+        childUserId.innerHTML = '<option value="">Error loading children</option>';
+      }
     }
   }
 
