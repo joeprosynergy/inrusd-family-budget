@@ -1534,12 +1534,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   
+
 // Categories
 async function loadCategories() {
   try {
     console.log('Loading categories and budgets for dropdowns');
-    if (!db) {
-      console.error('Firestore not available');
+    if (!db || !currentUser || !familyCode) {
+      console.error('Firestore, user, or familyCode not available', { db: !!db, user: !!currentUser, familyCode });
+      categorySelect.innerHTML = '<option value="">Select Category</option>';
+      categoryBudgetSelect.innerHTML = '<option value="none">None</option>';
       return;
     }
     categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
@@ -1552,9 +1555,9 @@ async function loadCategories() {
     }
 
     await retryFirestoreOperation(() => 
-      db.collection('budgets').where('familyCode', '==', familyCode).get()
+      db.collection('budgets').where('familyCode', '==', familyCode).limit(50).get()
         .then(budgetSnapshot => {
-          console.log('Budgets fetched:', { count: budgetSnapshot.size });
+          console.log('Budgets fetched for dropdowns:', { count: budgetSnapshot.size });
           budgetSnapshot.forEach(budgetDoc => {
             const budget = budgetDoc.data();
             console.log('Adding budget to dropdowns:', { id: budgetDoc.id, name: budget.name });
@@ -1573,7 +1576,7 @@ async function loadCategories() {
     );
 
     await retryFirestoreOperation(() => 
-      db.collection('categories').where('familyCode', '==', familyCode).get()
+      db.collection('categories').where('familyCode', '==', familyCode).limit(50).get()
         .then(snapshot => {
           console.log('Categories fetched:', { count: snapshot.size });
           snapshot.forEach(doc => {
@@ -1584,7 +1587,7 @@ async function loadCategories() {
             categorySelect.insertBefore(option, categorySelect.querySelector('option[value="add-new"]'));
           });
 
-          categoryTable.innerHTML = '';
+          categoryTable.innerHTML = snapshot.empty ? '<tr><td colspan="4" class="text-center py-4">No categories found</td></tr>' : '';
           snapshot.forEach(doc => {
             const category = doc.data();
             const tr = document.createElement('tr');
@@ -1623,6 +1626,7 @@ async function loadCategories() {
       message: error.message,
       stack: error.stack
     });
+    categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Failed to load categories</td></tr>';
   }
 }
 
@@ -1636,7 +1640,7 @@ try {
       const type = document.getElementById('category-type').value;
       const budgetId = document.getElementById('category-budget').value === 'none' ? null : document.getElementById('category-budget').value;
       if (!name) showError('category-name', 'Name is required');
-      if (name && currentUser && db) {
+      if (name && currentUser && db && familyCode) {
         addCategory.disabled = true;
         addCategory.textContent = 'Adding...';
         retryFirestoreOperation(() => 
@@ -1662,7 +1666,7 @@ try {
           addCategory.innerHTML = 'Add Category';
         });
       } else {
-        console.error('Firestore or user not available');
+        console.error('Firestore, user, or familyCode not available');
         showError('category-name', db ? 'Invalid input data' : 'Database service not available');
       }
     });
@@ -1686,7 +1690,7 @@ try {
       const type = document.getElementById('new-category-type').value;
       const budgetId = document.getElementById('new-category-budget').value === 'none' ? null : document.getElementById('new-category-budget').value;
       if (!name) showError('new-category-name', 'Name is required');
-      if (name && currentUser && db) {
+      if (name && currentUser && db && familyCode) {
         saveCategory.disabled = true;
         saveCategory.textContent = 'Saving...';
         retryFirestoreOperation(() => 
@@ -1713,7 +1717,7 @@ try {
           saveCategory.textContent = 'Save';
         });
       } else {
-        console.error('Firestore or user not available');
+        console.error('Firestore, user, or familyCode not available');
         showError('new-category-name', db ? 'Invalid input data' : 'Database service not available');
       }
     });
@@ -1734,7 +1738,7 @@ try {
       if (e.target.classList.contains('edit-category')) {
         console.log('Edit Category clicked:', e.target.dataset.id);
         const id = e.target.dataset.id;
-        if (db) {
+        if (db && currentUser && familyCode) {
           retryFirestoreOperation(() => 
             db.collection('categories').doc(id).get().then(doc => {
               if (doc.exists) {
@@ -1753,7 +1757,7 @@ try {
                     return;
                   }
                   addCategory.disabled = true;
-                  addCategory.textContent = 'Updating...?';
+                  addCategory.textContent = 'Updating...';
                   retryFirestoreOperation(() => 
                     db.collection('categories').doc(id).update({
                       name,
@@ -1790,7 +1794,7 @@ try {
       if (e.target.classList.contains('delete-category')) {
         console.log('Delete Category clicked:', e.target.dataset.id);
         const id = e.target.dataset.id;
-        if (deleteConfirmModal && db) {
+        if (deleteConfirmModal && db && currentUser && familyCode) {
           deleteConfirmMessage.textContent = 'Are you sure you want to delete this category?';
           deleteConfirmModal.classList.remove('hidden');
           const confirmHandler = () => {
@@ -1813,7 +1817,7 @@ try {
           confirmDelete.addEventListener('click', confirmHandler, { once: true });
           cancelDelete.addEventListener('click', cancelHandler, { once: true });
         } else {
-          console.error('Delete confirmation modal or Firestore not available');
+          console.error('Delete confirmation modal, Firestore, user, or familyCode not available');
         }
       }
     });
@@ -1829,63 +1833,67 @@ try {
 async function loadBudgets() {
   try {
     console.log('Loading budgets');
-    if (!db) {
-      console.error('Firestore not available');
+    if (!db || !currentUser || !familyCode) {
+      console.error('Firestore, user, or familyCode not available', { db: !!db, user: !!currentUser, familyCode });
+      budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Unable to load budgets</td></tr>';
+      budgetTiles.innerHTML = '<div class="text-center py-4">Unable to load budgets</div>';
       return;
     }
     budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
     const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
     await retryFirestoreOperation(() => 
-      db.collection('budgets').where('familyCode', '==', familyCode).get()
+      db.collection('budgets')
+        .where('familyCode', '==', familyCode)
+        .where('createdAt', '>=', start)
+        .where('createdAt', '<=', end)
+        .limit(50)
+        .get()
         .then(snapshot => {
           console.log('Budgets fetched for table and tiles:', { count: snapshot.size });
-          budgetTable.innerHTML = '';
-          budgetTiles.innerHTML = '';
+          budgetTable.innerHTML = snapshot.empty ? '<tr><td colspan="5" class="text-center py-4">No budgets found</td></tr>' : '';
+          budgetTiles.innerHTML = snapshot.empty ? '<div class="text-center py-4">No budgets found</div>' : '';
           let totalBudgetAmount = 0;
           let totalRemainingAmount = 0;
           snapshot.forEach(doc => {
             const budget = doc.data();
-            const createdAt = budget.createdAt ? budget.createdAt.toDate() : new Date();
-            if (createdAt >= start && createdAt <= end) {
-              const spent = budget.spent || 0;
-              totalBudgetAmount += budget.amount;
-              totalRemainingAmount += budget.amount - spent;
-              const tr = document.createElement('tr');
-              tr.classList.add('table-row');
-              tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, currency)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, currency)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, currency)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                  <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
-                  <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
-                </td>
-              `;
-              budgetTable.appendChild(tr);
-              const tile = document.createElement('div');
-              tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
-              const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
-              tile.innerHTML = `
-                <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
-                <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, currency)}</span></p>
-                <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, currency)}</span></p>
-                <p class="text-sm font-semibold text-gray-700 mt-2">
-                  Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, currency)}</span>
-                </p>
-                <div class="w-full bg-gray-200 rounded-full mt-4 h-2.5">
-                  <div class="bg-green-600 h-2.5 rounded-full" style="width: ${Math.min(percentage, 100)}%"></div>
-                </div>
-              `;
-              console.log('Budget tile added:', {
-                id: doc.id,
-                name: budget.name,
-                amount: formatCurrency(budget.amount, currency),
-                spent: formatCurrency(spent, currency)
-              });
-              budgetTiles.appendChild(tile);
-            }
+            const spent = budget.spent || 0;
+            totalBudgetAmount += budget.amount;
+            totalRemainingAmount += budget.amount - spent;
+            const tr = document.createElement('tr');
+            tr.classList.add('table-row');
+            tr.innerHTML = `
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, currency)}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, currency)}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, currency)}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
+                <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
+              </td>
+            `;
+            budgetTable.appendChild(tr);
+            const tile = document.createElement('div');
+            tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
+            const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
+            tile.innerHTML = `
+              <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
+              <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, currency)}</span></p>
+              <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, currency)}</span></p>
+              <p class="text-sm font-semibold text-gray-700 mt-2">
+                Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, currency)}</span>
+              </p>
+              <div class="w-full bg-gray-200 rounded-full mt-4 h-2.5">
+                <div class="bg-green-600 h-2.5 rounded-full" style="width: ${Math.min(percentage, 100)}%"></div>
+              </div>
+            `;
+            console.log('Budget tile added:', {
+              id: doc.id,
+              name: budget.name,
+              amount: formatCurrency(budget.amount, currency),
+              spent: formatCurrency(spent, currency)
+            });
+            budgetTiles.appendChild(tile);
           });
           totalBudget.textContent = formatCurrency(totalBudgetAmount, currency);
           totalRemaining.textContent = formatCurrency(totalRemainingAmount, currency);
@@ -1900,7 +1908,8 @@ async function loadBudgets() {
       message: error.message,
       stack: error.stack
     });
-    showError('budget-name', 'Failed to load budgets.');
+    budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Failed to load budgets</td></tr>';
+    budgetTiles.innerHTML = '<div class="text-center py-4">Failed to load budgets</div>';
   }
 }
 
@@ -1914,7 +1923,7 @@ try {
       const amount = parseFloat(document.getElementById('budget-amount').value);
       if (!name) showError('budget-name', 'Name is required');
       if (!amount || amount <= 0) showError('budget-amount', 'Valid amount is required');
-      if (name && amount > 0 && currentUser && db) {
+      if (name && amount > 0 && currentUser && db && familyCode) {
         addBudget.disabled = true;
         addBudget.textContent = 'Adding...';
         retryFirestoreOperation(() => 
@@ -1940,7 +1949,7 @@ try {
           addBudget.innerHTML = 'Add Budget';
         });
       } else {
-        console.error('Firestore or user not available');
+        console.error('Firestore, user, or familyCode not available');
         showError('budget-name', db ? 'Invalid input data' : 'Database service not available');
       }
     });
@@ -1964,7 +1973,7 @@ try {
       const amount = parseFloat(document.getElementById('new-budget-amount').value);
       if (!name) showError('new-budget-name', 'Name is required');
       if (!amount || amount <= 0) showError('new-budget-amount', 'Valid amount is required');
-      if (name && amount > 0 && currentUser && db) {
+      if (name && amount > 0 && currentUser && db && familyCode) {
         saveBudget.disabled = true;
         saveBudget.textContent = 'Saving...';
         retryFirestoreOperation(() => 
@@ -1991,7 +2000,7 @@ try {
           saveBudget.textContent = 'Save';
         });
       } else {
-        console.error('Firestore or user not available');
+        console.error('Firestore, user, or familyCode not available');
         showError('new-budget-name', db ? 'Invalid input data' : 'Database service not available');
       }
     });
@@ -2011,7 +2020,7 @@ try {
       if (e.target.classList.contains('edit-budget')) {
         console.log('Edit Budget clicked:', e.target.dataset.id);
         const id = e.target.dataset.id;
-        if (db) {
+        if (db && currentUser && familyCode) {
           retryFirestoreOperation(() => 
             db.collection('budgets').doc(id).get().then(doc => {
               if (doc.exists) {
@@ -2068,7 +2077,7 @@ try {
       if (e.target.classList.contains('delete-budget')) {
         console.log('Delete Budget clicked:', e.target.dataset.id);
         const id = e.target.dataset.id;
-        if (deleteConfirmModal && db) {
+        if (deleteConfirmModal && db && currentUser && familyCode) {
           deleteConfirmMessage.textContent = 'Are you sure you want to delete this budget?';
           deleteConfirmModal.classList.remove('hidden');
           const confirmHandler = () => {
@@ -2092,7 +2101,7 @@ try {
           confirmDelete.addEventListener('click', confirmHandler, { once: true });
           cancelDelete.addEventListener('click', cancelHandler, { once: true });
         } else {
-          console.error('Delete confirmation modal or Firestore not available');
+          console.error('Delete confirmation modal, Firestore, user, or familyCode not available');
         }
       }
     });
@@ -2108,46 +2117,60 @@ try {
 async function loadTransactions() {
   try {
     console.log('Loading transactions');
-    if (!db) {
-      console.error('Firestore not available');
+    if (!db || !currentUser || !familyCode) {
+      console.error('Firestore, user, or familyCode not available', { db: !!db, user: !!currentUser, familyCode });
+      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Unable to load transactions</td></tr>';
       return;
     }
     transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
     await retryFirestoreOperation(() => 
-      db.collection('transactions').where('familyCode', '==', familyCode).get()
+      db.collection('transactions')
+        .where('familyCode', '==', familyCode)
+        .where('createdAt', '>=', start)
+        .where('createdAt', '<=', end)
+        .limit(50)
+        .get()
         .then(snapshot => {
           console.log('Transactions fetched:', { count: snapshot.size });
-          transactionTable.innerHTML = '';
+          transactionTable.innerHTML = snapshot.empty ? '<tr><td colspan="5" class="text-center py-4">No transactions found</td></tr>' : '';
           snapshot.forEach(doc => {
             const transaction = doc.data();
-            const createdAt = transaction.createdAt ? transaction.createdAt.toDate() : new Date();
-            if (createdAt >= start && createdAt <= end) {
-              const tr = document.createElement('tr');
-              tr.classList.add('table-row');
-              db.collection('categories').doc(transaction.categoryId).get().then(categoryDoc => {
-                const categoryName = categoryDoc.exists ? categoryDoc.data().name : 'Unknown';
-                tr.innerHTML = `
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, currency)}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm">
-                    <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
-                    <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
-                  </td>
-                `;
-                console.log('Transaction row added:', {
-                  id: doc.id,
-                  type: transaction.type,
-                  amount: formatCurrency(transaction.amount, currency),
-                  category: categoryName
-                });
-                transactionTable.appendChild(tr);
-              }).catch(error => {
-                console.error('Error fetching category for transaction:', error.code, error.message);
+            const tr = document.createElement('tr');
+            tr.classList.add('table-row');
+            db.collection('categories').doc(transaction.categoryId).get().then(categoryDoc => {
+              const categoryName = categoryDoc.exists ? categoryDoc.data().name : 'Unknown';
+              tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, currency)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                  <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
+                  <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
+                </td>
+              `;
+              console.log('Transaction row added:', {
+                id: doc.id,
+                type: transaction.type,
+                amount: formatCurrency(transaction.amount, currency),
+                category: categoryName
               });
-            }
+              transactionTable.appendChild(tr);
+            }).catch(error => {
+              console.error('Error fetching category for transaction:', error.code, error.message);
+              tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, currency)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Error</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                  <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
+                  <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
+                </td>
+              `;
+              transactionTable.appendChild(tr);
+            });
           });
         })
     );
@@ -2156,6 +2179,7 @@ async function loadTransactions() {
       message: error.message,
       stack: error.stack
     });
+    transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Failed to load transactions</td></tr>';
   }
 }
 
@@ -2171,7 +2195,7 @@ try {
       const description = document.getElementById('description').value.trim();
       if (!amount || amount <= 0) showError('amount', 'Valid amount is required');
       if (!categoryId) showError('category', 'Category is required');
-      if (amount > 0 && categoryId && currentUser && db) {
+      if (amount > 0 && categoryId && currentUser && db && familyCode) {
         addTransaction.disabled = true;
         addTransaction.textContent = 'Adding...';
         retryFirestoreOperation(() => 
@@ -2214,7 +2238,7 @@ try {
           addTransaction.innerHTML = 'Add Transaction';
         });
       } else {
-        console.error('Firestore or user not available');
+        console.error('Firestore, user, or familyCode not available');
         showError('category', db ? 'Invalid input data' : 'Database service not available');
       }
     });
@@ -2225,7 +2249,7 @@ try {
       if (e.target.classList.contains('edit-transaction')) {
         console.log('Edit Transaction clicked:', e.target.dataset.id);
         const id = e.target.dataset.id;
-        if (db) {
+        if (db && currentUser && familyCode) {
           retryFirestoreOperation(() => 
             db.collection('transactions').doc(id).get().then(async doc => {
               if (doc.exists) {
@@ -2344,7 +2368,7 @@ try {
       if (e.target.classList.contains('delete-transaction')) {
         console.log('Delete Transaction clicked:', e.target.dataset.id);
         const id = e.target.dataset.id;
-        if (deleteConfirmModal && db) {
+        if (deleteConfirmModal && db && currentUser && familyCode) {
           deleteConfirmMessage.textContent = 'Are you sure you want to delete this transaction?';
           deleteConfirmModal.classList.remove('hidden');
           const confirmHandler = () => {
@@ -2386,7 +2410,7 @@ try {
           confirmDelete.addEventListener('click', confirmHandler, { once: true });
           cancelDelete.addEventListener('click', cancelHandler, { once: true });
         } else {
-          console.error('Delete confirmation modal or Firestore not available');
+          console.error('Delete confirmation modal, Firestore, user, or familyCode not available');
         }
       }
     });
@@ -2409,7 +2433,7 @@ try {
       const amount = parseFloat(document.getElementById('child-transaction-amount').value);
       const description = document.getElementById('child-transaction-description').value.trim();
       if (!amount || amount <= 0) showError('child-transaction-amount', 'Valid amount is required');
-      if (amount > 0 && currentUser && db) {
+      if (amount > 0 && currentUser && db && familyCode) {
         addChildTransaction.disabled = true;
         addChildTransaction.textContent = 'Adding...';
         retryFirestoreOperation(() => 
@@ -2437,7 +2461,7 @@ try {
           addChildTransaction.innerHTML = 'Add Transaction';
         });
       } else {
-        console.error('Firestore or user not available');
+        console.error('Firestore, user, or familyCode not available');
         showError('child-transaction-description', db ? 'Invalid input data' : 'Database service not available');
       }
     });
@@ -2448,7 +2472,7 @@ try {
       if (e.target.classList.contains('edit-child-transaction')) {
         console.log('Edit Child Transaction clicked:', e.target.dataset.id);
         const id = e.target.dataset.id;
-        if (db) {
+        if (db && currentUser && familyCode) {
           retryFirestoreOperation(() => 
             db.collection('childTransactions').doc(id).get().then(doc => {
               if (doc.exists) {
@@ -2507,7 +2531,7 @@ try {
       if (e.target.classList.contains('delete-child-transaction')) {
         console.log('Delete Child Transaction clicked:', e.target.dataset.id);
         const id = e.target.dataset.id;
-        if (deleteConfirmModal && db) {
+        if (deleteConfirmModal && db && currentUser && familyCode) {
           deleteConfirmMessage.textContent = 'Are you sure you want to delete this child transaction?';
           deleteConfirmModal.classList.remove('hidden');
           const confirmHandler = () => {
@@ -2531,7 +2555,7 @@ try {
           confirmDelete.addEventListener('click', confirmHandler, { once: true });
           cancelDelete.addEventListener('click', cancelHandler, { once: true });
         } else {
-          console.error('Delete confirmation modal or Firestore not available');
+          console.error('Delete confirmation modal, Firestore, user, or familyCode not available');
         }
       }
     });
@@ -2556,8 +2580,10 @@ try {
 async function updateDashboard() {
   try {
     console.log('Updating dashboard');
-    if (!db) {
-      console.error('Firestore not available');
+    if (!db || !currentUser || !familyCode) {
+      console.error('Firestore, user, or familyCode not available', { db: !!db, user: !!currentUser, familyCode });
+      balance.textContent = formatCurrency(0, currency);
+      document.getElementById('after-budget').textContent = formatCurrency(0, currency);
       return;
     }
     const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
@@ -2565,17 +2591,20 @@ async function updateDashboard() {
     let totalBudgetAmount = 0;
     await Promise.all([
       retryFirestoreOperation(() => 
-        db.collection('transactions').where('familyCode', '==', familyCode).get()
+        db.collection('transactions')
+          .where('familyCode', '==', familyCode)
+          .where('createdAt', '>=', start)
+          .where('createdAt', '<=', end)
+          .limit(50)
+          .get()
           .then(snapshot => {
+            console.log('Transactions fetched for dashboard:', { count: snapshot.size });
             snapshot.forEach(doc => {
               const transaction = doc.data();
-              const createdAt = transaction.createdAt ? transaction.createdAt.toDate() : new Date();
-              if (createdAt >= start && createdAt <= end) {
-                if (transaction.type === 'credit') {
-                  totalBalance += transaction.amount;
-                } else {
-                  totalBalance -= transaction.amount;
-                }
+              if (transaction.type === 'credit') {
+                totalBalance += transaction.amount;
+              } else {
+                totalBalance -= transaction.amount;
               }
             });
             balance.textContent = formatCurrency(totalBalance, currency);
@@ -2583,14 +2612,17 @@ async function updateDashboard() {
           })
       ),
       retryFirestoreOperation(() => 
-        db.collection('budgets').where('familyCode', '==', familyCode).get()
+        db.collection('budgets')
+          .where('familyCode', '==', familyCode)
+          .where('createdAt', '>=', start)
+          .where('createdAt', '<=', end)
+          .limit(50)
+          .get()
           .then(snapshot => {
+            console.log('Budgets fetched for dashboard:', { count: snapshot.size });
             snapshot.forEach(doc => {
               const budget = doc.data();
-              const createdAt = budget.createdAt ? budget.createdAt.toDate() : new Date();
-              if (createdAt >= start && createdAt <= end) {
-                totalBudgetAmount += budget.amount;
-              }
+              totalBudgetAmount += budget.amount;
             });
           })
       )
@@ -2603,6 +2635,8 @@ async function updateDashboard() {
       message: error.message,
       stack: error.stack
     });
+    balance.textContent = formatCurrency(0, currency);
+    document.getElementById('after-budget').textContent = formatCurrency(0, currency);
     showError('balance', 'Failed to update dashboard.');
   }
 }
