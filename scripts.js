@@ -619,7 +619,462 @@ document.addEventListener('DOMContentLoaded', () => {
       stack: error.stack
     });
   }
+
+  // User State
+  let currentUser = null;
+  let userCurrency = 'INR';
+  let familyCode = '';
+  let isEditing = { transaction: false, budget: false, category: false, profile: false, childTransaction: false };
+  let currentChildUserId = null; // Tracks selected child for admin view
+  let currentAccountType = null; // Tracks user's account type
+
+  // Utility Functions
+  function formatCurrency(amount, currency) {
+    try {
+      console.log('Formatting currency:', { amount, currency });
+      let displayAmount = amount;
+      if (currency === 'INR' && userCurrency === 'USD') {
+        displayAmount = amount * exchangeRateCache.rate;
+      } else if (currency === 'USD' && userCurrency === 'INR') {
+        displayAmount = amount / exchangeRateCache.rate;
+      }
+      if (userCurrency === 'USD') {
+        return `$${Number(displayAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
+      return `₹${Number(displayAmount).toLocaleString('en-IN')}`;
+    } catch (error) {
+      console.error('Error formatting currency:', {
+        message: error.message,
+        stack: error.stack,
+        amount,
+        currency
+      });
+      return amount.toString();
+    }
+  }
+
+  function showError(elementId, message) {
+    try {
+      console.log('Showing error:', { elementId, message });
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'text-red-600 text-sm mt-1';
+      errorDiv.textContent = message;
+      const element = document.getElementById(elementId);
+      if (element) {
+        element.parentElement.appendChild(errorDiv);
+        setTimeout(() => errorDiv.remove(), 3000);
+      } else {
+        console.error('Error element not found:', elementId);
+      }
+    } catch (error) {
+      console.error('Error showing error message:', {
+        message: error.message,
+        stack: error.stack,
+        elementId,
+        message
+      });
+    }
+  }
+
+  function clearErrors() {
+    try {
+      console.log('Clearing errors');
+      document.querySelectorAll('.text-red-600').forEach(el => el.remove());
+    } catch (error) {
+      console.error('Error clearing errors:', {
+        message: error.message,
+        stack: error.stack
+      });
+    }
+  }
+
+  // Update Currency
+  async function updateCurrency(newCurrency) {
+    try {
+      console.log('Updating currency to:', newCurrency);
+      if (!currentUser || !db) {
+        console.error('Cannot update currency: missing user or Firestore');
+        return;
+      }
+      userCurrency = newCurrency;
+      await retryFirestoreOperation(() => 
+        db.collection('users').doc(currentUser.uid).update({
+          currency: newCurrency
+        })
+      );
+      console.log('Currency updated in Firestore:', newCurrency);
+      currencyToggle.value = newCurrency;
+      profileCurrency.value = newCurrency;
+      await loadBudgets();
+      await loadTransactions();
+      await loadChildAccounts();
+      await updateDashboard();
+    } catch (error) {
+      console.error('Error updating currency:', {
+        message: error.message,
+        stack: error.stack
+      });
+      showError('currency-toggle', 'Failed to update currency.');
+    }
+  }
+
+  // Load Profile Data
+  async function loadProfileData() {
+    try {
+      console.log('Loading profile data');
+      if (!currentUser || !db) {
+        console.error('Cannot load profile data: missing user or Firestore');
+        return;
+      }
+      profileEmail.value = currentUser.email || '--';
+      profileCurrency.value = userCurrency || 'INR';
+      profileFamilyCode.value = familyCode || '--';
+      profileAccountType.value = '--';
+      await retryFirestoreOperation(() => 
+        db.collection('users').doc(currentUser.uid).get()
+          .then(doc => {
+            if (doc.exists) {
+              const data = doc.data();
+              profileCurrency.value = data.currency || 'INR';
+              profileFamilyCode.value = data.familyCode || '--';
+              profileAccountType.value = data.accountType || '--';
+              currentAccountType = data.accountType || '--';
+              console.log('Profile data loaded:', {
+                email: currentUser.email,
+                currency: data.currency,
+                familyCode: data.familyCode,
+                accountType: data.accountType
+              });
+            } else {
+              console.error('User document not found for UID:', currentUser.uid);
+              showError('profile-email', 'Profile data not found.');
+            }
+          })
+      );
+    } catch (error) {
+      console.error('Error loading profile data:', {
+        message: error.message,
+        stack: error.stack
+      });
+      showError('profile-email', 'Failed to load profile data.');
+    }
+  }
+
+  // Authentication
+  try {
+    if (signupButton) {
+      signupButton.addEventListener('click', () => {
+        console.log('Signup button clicked');
+        clearErrors();
+        console.log('Reading signup form inputs');
+        const email = document.getElementById('signup-email')?.value.trim();
+        const password = document.getElementById('signup-password')?.value;
+        const confirmPassword = document.getElementById('signup-confirm-password')?.value;
+        const currency = document.getElementById('signup-currency')?.value;
+        const familyCodeInput = document.getElementById('signup-family-code')?.value.trim();
+        const accountType = document.getElementById('signup-account-type')?.value;
+
+        console.log('Validating inputs:', {
+          email,
+          password: password ? '[redacted]' : 'missing',
+          confirmPassword: confirmPassword ? '[redacted]' : 'missing',
+          currency,
+          familyCodeInput,
+          accountType
+        });
+
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          showError('signup-email', 'Valid email is required');
+          console.log('Validation failed: Invalid or missing email');
+          return;
+        }
+        if (!password || password.length < 6) {
+          showError('signup-password', 'Password must be at least 6 characters');
+          console.log('Validation failed: Invalid or missing password');
+          return;
+        }
+        if (password !== confirmPassword) {
+          showError('signup-confirm-password', 'Passwords do not match');
+          console.log('Validation failed: Passwords do not match');
+          return;
+        }
+        if (!familyCodeInput) {
+          showError('signup-family-code', 'Family code is required');
+          console.log('Validation failed: Missing family code');
+          return;
+        }
+        if (!currency || !['INR', 'USD'].includes(currency)) {
+          showError('signup-currency', 'Valid currency is required');
+          console.log('Validation failed: Invalid currency');
+          return;
+        }
+        if (!accountType || !['admin', 'child'].includes(accountType)) {
+          showError('signup-account-type', 'Valid account type is required');
+          console.log('Validation failed: Invalid account type');
+          return;
+        }
+
+        if (!auth) {
+          console.error('Auth service not available');
+          showError('signup-email', 'Authentication service not available.');
+          return;
+        }
+        if (!db) {
+          console.error('Firestore service not available');
+          showError('signup-email', 'Database service not available.');
+          return;
+        }
+
+        console.log('Attempting to create user with email:', email);
+        signupButton.disabled = true;
+        signupButton.textContent = 'Signing up...';
+        auth.createUserWithEmailAndPassword(email, password)
+          .then(credential => {
+            console.log('Authentication response:', {
+              credential: credential ? 'received' : 'null',
+              user: credential && credential.user ? credential.user.uid : 'null'
+            });
+            if (!credential || !credential.user) {
+              throw new Error('No user credential returned from authentication');
+            }
+            console.log('User created successfully:', credential.user.uid);
+            console.log('Writing user data to Firestore:', {
+              uid: credential.user.uid,
+              currency,
+              familyCode: familyCodeInput,
+              accountType
+            });
+            return db.collection('users').doc(credential.user.uid).set({
+              currency,
+              familyCode: familyCodeInput,
+              accountType,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+          })
+          .then(() => {
+            console.log('User data written to Firestore successfully');
+            signupButton.disabled = false;
+            signupButton.textContent = 'Sign Up';
+            document.getElementById('signup-email').value = '';
+            document.getElementById('signup-password').value = '';
+            document.getElementById('signup-confirm-password').value = '';
+            document.getElementById('signup-family-code').value = '';
+            document.getElementById('signup-currency').value = 'INR';
+            document.getElementById('signup-account-type').value = 'admin';
+          })
+          .catch(error => {
+            console.error('Signup error:', {
+              code: error.code,
+              message: error.message,
+              email,
+              familyCode: familyCodeInput,
+              currency,
+              accountType,
+              network: navigator.onLine
+            });
+            signupButton.disabled = false;
+            signupButton.textContent = 'Sign Up';
+            let errorMessage = error.message || 'Failed to sign up.';
+            if (error.code === 'auth/email-already-in-use') {
+              errorMessage = 'This email is already registered. Please log in or use a different email.';
+            } else if (error.code === 'auth/invalid-email') {
+              errorMessage = 'Invalid email format.';
+            } else if (error.code === 'auth/weak-password') {
+              errorMessage = 'Password is too weak.';
+            } else if (error.code === 'auth/network-request-failed') {
+              errorMessage = 'Network error. Please check your connection.';
+            }
+            showError('signup-email', errorMessage);
+          });
+      });
+    } else {
+      console.error('signupButton not found');
+    }
+
+    if (loginButton) {
+      loginButton.addEventListener('click', () => {
+        console.log('Login button clicked');
+        clearErrors();
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        if (!email) showError('login-email', 'Email is required');
+        if (!password) showError('login-password', 'Password is required');
+        if (email && password && auth) {
+          loginButton.disabled = true;
+          loginButton.textContent = 'Logging in...';
+          auth.signInWithEmailAndPassword(email, password)
+            .then(() => {
+              loginButton.disabled = false;
+              loginButton.textContent = 'Login';
+            })
+            .catch(error => {
+              loginButton.disabled = false;
+              loginButton.textContent = 'Login';
+              console.error('Login error:', error.code, error.message);
+              showError('login-password', error.message || 'Failed to log in.');
+            });
+        } else {
+          console.error('Auth service not available or invalid inputs');
+          showError('login-email', auth ? 'Invalid input data' : 'Authentication service not available.');
+        }
+      });
+    }
+
+    if (resetButton) {
+      resetButton.addEventListener('click', () => {
+        console.log('Reset button clicked');
+        clearErrors();
+        const email = document.getElementById('reset-email').value;
+        if (!email) showError('reset-email', 'Email is required');
+        if (email && auth) {
+          resetButton.disabled = true;
+          resetButton.textContent = 'Sending...';
+          auth.sendPasswordResetEmail(email)
+            .then(() => {
+              console.log('Password reset email sent');
+              alert('Password reset email sent');
+              showLoginModal();
+              resetButton.disabled = false;
+              resetButton.textContent = 'Send Reset Link';
+            })
+            .catch(error => {
+              console.error('Reset error:', error.code, error.message);
+              resetButton.disabled = false;
+              resetButton.textContent = 'Send Reset Link';
+              showError('reset-email', error.message || 'Failed to send reset email');
+            });
+        } else {
+          console.error('Auth service not available');
+          showError('reset-email', auth ? 'Invalid email' : 'Authentication service not available.');
+        }
+      });
+    }
+
+    if (logoutButton) {
+      logoutButton.addEventListener('click', () => {
+        console.log('Logout button clicked');
+        if (auth) {
+          auth.signOut();
+        } else {
+          console.error('Auth service not available');
+          showError('logout-button', 'Authentication service not available');
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error binding auth event listeners:', {
+      message: error.message,
+      stack: error.stack
+    });
+  }
+
+  // Load App Data
+  async function loadAppData() {
+    try {
+      console.log('Loading app data');
+      if (!currentUser || !familyCode || !db) {
+        console.error('Cannot load app data: missing user, familyCode, or Firestore');
+        return;
+      }
+      exchangeRateCache.rate = await fetchExchangeRate();
+      if (currencyToggle) {
+        currencyToggle.value = userCurrency;
+      }
+      await Promise.all([
+        loadCategories(),
+        loadBudgets(),
+        loadTransactions(),
+        loadChildAccounts(),
+        loadProfileData(),
+        updateDashboard()
+      ]);
+      console.log('App data loaded successfully');
+    } catch (error) {
+      console.error('Error loading app data:', {
+        message: error.message,
+        stack: error.stack
+      });
+    }
+  }
+
+  // Load Child Accounts
+  async function loadChildAccounts() {
+    try {
+      console.log('Loading child accounts', { familyCode, currentUser: currentUser?.uid, accountType: currentAccountType });
+      if (!currentUser || !db || !familyCode) {
+        console.error('Cannot load child accounts: missing user, Firestore, or familyCode');
+        showError('child-user-id', 'Unable to load child accounts.');
+        return;
+      }
+      if (currentAccountType === 'admin') {
+        childSelector.classList.remove('hidden');
+        childUserId.innerHTML = '<option value="">Select a Child</option>';
+        await retryFirestoreOperation(() => 
+          db.collection('users')
+            .where('familyCode', '==', familyCode)
+            .where('accountType', '==', 'child')
+            .get()
+            .then(snapshot => {
+              console.log('Child users fetched:', { 
+                count: snapshot.size, 
+                familyCode, 
+                docs: snapshot.docs.map(doc => ({ id: doc.id, email: doc.data().email, familyCode: doc.data().familyCode, accountType: doc.data().accountType }))
+              });
+              if (snapshot.empty) {
+                console.warn('No child accounts found for familyCode:', familyCode);
+                childUserId.innerHTML = '<option value="">No children found</option>';
+              } else {
+                snapshot.forEach(doc => {
+                  const data = doc.data();
+                  const email = data.email || 'Unnamed Child';
+                  const option = document.createElement('option');
+                  option.value = doc.id;
+                  option.textContent = email;
+                  childUserId.appendChild(option);
+                });
+              }
+            })
+        );
+        // Set currentChildUserId to first child or current user's ID if none selected
+        currentChildUserId = childUserId.value || currentUser.uid;
+      } else {
+        childSelector.classList.add('hidden');
+        currentChildUserId = currentUser.uid;
+      }
+      await loadChildTransactions();
+    } catch (error) {
+      console.error('Error loading child accounts:', {
+        message: error.message,
+        stack: error.stack,
+        familyCode,
+        accountType: currentAccountType
+      });
+      showError('child-user-id', 'Failed to load child accounts.');
+      childUserId.innerHTML = '<option value="">Error loading children</option>';
+    }
+  }
+
+
+
+
+
+
   
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+
+
+
   // User State
   let currentUser = null;
   let userCurrency = 'INR';
