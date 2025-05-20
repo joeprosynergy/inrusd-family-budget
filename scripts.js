@@ -631,6 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+
   // User State
   let currentUser = null;
   let userCurrency = 'INR';
@@ -1378,9 +1379,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Bind Add Child Transaction Listener (outside loadChildTransactions to prevent duplicates)
+  // Bind Add Child Transaction Listener (singleton to prevent duplicates)
+  let addChildTransactionHandler = null;
   if (addChildTransaction) {
-    addChildTransaction.addEventListener('click', async () => {
+    // Remove any existing listeners to prevent duplicates
+    if (addChildTransactionHandler) {
+      addChildTransaction.removeEventListener('click', addChildTransactionHandler);
+    }
+    addChildTransactionHandler = async () => {
       console.log('Add Child Transaction clicked', { isEditing: isEditing.childTransaction, currentChildUserId, accountType: currentAccountType });
       if (isEditing.childTransaction) return;
       clearErrors();
@@ -1428,7 +1434,8 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Firestore or user not available');
         showError('child-transaction-description', db ? 'Invalid input data' : 'Database service not available');
       }
-    });
+    };
+    addChildTransaction.addEventListener('click', addChildTransactionHandler);
   }
 
 
