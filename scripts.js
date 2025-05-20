@@ -8,7 +8,10 @@ document.addEventListener('DOMContentLoaded', () => {
       profileSection, pageTitle, addTransaction, transactionTable, addBudget, budgetTable, budgetTiles, addCategory,
       categoryTable, categorySelect, categoryBudgetSelect, addCategoryModal, addBudgetModal, saveCategory, cancelCategory,
       saveBudget, cancelBudget, balance, totalBudget, totalRemaining, profileEmail, profileCurrency, profileFamilyCode,
-      profileAccountType, editProfile, saveProfile, currencyToggle;
+      profileAccountType, editProfile, saveProfile, currencyToggle, deleteConfirmModal, deleteConfirmMessage, confirmDelete,
+      cancelDelete, dashboardFilter, customDateRange, filterStartDate, filterEndDate, childAccountsTab, childAccountsSection,
+      childSelector, childUserId, childBalance, childTransactionType, childTransactionAmount, childTransactionDescription,
+      addChildTransaction, childTransactionTable, childTiles;
 
   try {
     authSection = document.getElementById('auth-section');
@@ -60,6 +63,28 @@ document.addEventListener('DOMContentLoaded', () => {
     editProfile = document.getElementById('edit-profile');
     saveProfile = document.getElementById('save-profile');
     currencyToggle = document.getElementById('currency-toggle');
+    // New elements for delete confirmation
+    deleteConfirmModal = document.getElementById('delete-confirm-modal');
+    deleteConfirmMessage = document.getElementById('delete-confirm-message');
+    confirmDelete = document.getElementById('confirm-delete');
+    cancelDelete = document.getElementById('cancel-delete');
+    // New elements for dashboard filter
+    dashboardFilter = document.getElementById('dashboard-filter');
+    customDateRange = document.getElementById('custom-date-range');
+    filterStartDate = document.getElementById('filter-start-date');
+    filterEndDate = document.getElementById('filter-end-date');
+    // New elements for child accounts
+    childAccountsTab = document.getElementById('child-accounts-tab');
+    childAccountsSection = document.getElementById('child-accounts-section');
+    childSelector = document.getElementById('child-selector');
+    childUserId = document.getElementById('child-user-id');
+    childBalance = document.getElementById('child-balance');
+    childTransactionType = document.getElementById('child-transaction-type');
+    childTransactionAmount = document.getElementById('child-transaction-amount');
+    childTransactionDescription = document.getElementById('child-transaction-description');
+    addChildTransaction = document.getElementById('add-child-transaction');
+    childTransactionTable = document.getElementById('child-transaction-table');
+    childTiles = document.getElementById('child-tiles');
 
     // Validate critical DOM elements
     const criticalElements = {
@@ -67,7 +92,10 @@ document.addEventListener('DOMContentLoaded', () => {
       showSignupBtn, showResetBtn, showLoginFromSignupBtn, showLoginFromResetBtn, dashboardTab, transactionsTab,
       budgetsTab, categoriesTab, profileTab, dashboardSection, transactionsSection, budgetsSection, categoriesSection,
       profileSection, pageTitle, categoryBudgetSelect, addCategoryModal, profileEmail, profileCurrency, profileFamilyCode,
-      profileAccountType, editProfile, saveProfile, currencyToggle
+      profileAccountType, editProfile, saveProfile, currencyToggle, deleteConfirmModal, deleteConfirmMessage, confirmDelete,
+      cancelDelete, dashboardFilter, customDateRange, filterStartDate, filterEndDate, childAccountsTab, childAccountsSection,
+      childSelector, childUserId, childBalance, childTransactionType, childTransactionAmount, childTransactionDescription,
+      addChildTransaction, childTransactionTable, childTiles
     };
     for (const [key, element] of Object.entries(criticalElements)) {
       console.log(`Checking DOM element ${key}: ${element ? 'found' : 'not found'}`);
@@ -323,11 +351,13 @@ document.addEventListener('DOMContentLoaded', () => {
       transactionsTab.classList.remove('bg-blue-800');
       budgetsTab.classList.remove('bg-blue-800');
       categoriesTab.classList.remove('bg-blue-800');
+      childAccountsTab.classList/remove('bg-blue-800');
       profileTab.classList.remove('bg-blue-800');
       dashboardSection.classList.remove('hidden');
       transactionsSection.classList.add('hidden');
       budgetsSection.classList.add('hidden');
       categoriesSection.classList.add('hidden');
+      childAccountsSection.classList.add('hidden');
       profileSection.classList.add('hidden');
       pageTitle.textContent = 'Budget Dashboard';
     }
@@ -338,11 +368,13 @@ document.addEventListener('DOMContentLoaded', () => {
       dashboardTab.classList.remove('bg-blue-800');
       budgetsTab.classList.remove('bg-blue-800');
       categoriesTab.classList.remove('bg-blue-800');
+      childAccountsTab.classList.remove('bg-blue-800');
       profileTab.classList.remove('bg-blue-800');
       transactionsSection.classList.remove('hidden');
       dashboardSection.classList.add('hidden');
       budgetsSection.classList.add('hidden');
       categoriesSection.classList.add('hidden');
+      childAccountsSection.classList.add('hidden');
       profileSection.classList.add('hidden');
       pageTitle.textContent = 'Transactions';
     }
@@ -353,11 +385,13 @@ document.addEventListener('DOMContentLoaded', () => {
       dashboardTab.classList.remove('bg-blue-800');
       transactionsTab.classList.remove('bg-blue-800');
       categoriesTab.classList.remove('bg-blue-800');
+      childAccountsTab.classList.remove('bg-blue-800');
       profileTab.classList.remove('bg-blue-800');
       budgetsSection.classList.remove('hidden');
       dashboardSection.classList.add('hidden');
       transactionsSection.classList.add('hidden');
       categoriesSection.classList.add('hidden');
+      childAccountsSection.classList.add('hidden');
       profileSection.classList.add('hidden');
       pageTitle.textContent = 'Budgets';
     }
@@ -368,13 +402,33 @@ document.addEventListener('DOMContentLoaded', () => {
       dashboardTab.classList.remove('bg-blue-800');
       transactionsTab.classList.remove('bg-blue-800');
       budgetsTab.classList.remove('bg-blue-800');
+      childAccountsTab.classList.remove('bg-blue-800');
       profileTab.classList.remove('bg-blue-800');
       categoriesSection.classList.remove('hidden');
       dashboardSection.classList.add('hidden');
       transactionsSection.classList.add('hidden');
       budgetsSection.classList.add('hidden');
+      childAccountsSection.classList.add('hidden');
       profileSection.classList.add('hidden');
       pageTitle.textContent = 'Categories';
+    }
+
+    function showChildAccounts() {
+      console.log('Showing child accounts');
+      childAccountsTab.classList.add('bg-blue-800');
+      dashboardTab.classList.remove('bg-blue-800');
+      transactionsTab.classList.remove('bg-blue-800');
+      budgetsTab.classList.remove('bg-blue-800');
+      categoriesTab.classList.remove('bg-blue-800');
+      profileTab.classList.remove('bg-blue-800');
+      childAccountsSection.classList.remove('hidden');
+      dashboardSection.classList.add('hidden');
+      transactionsSection.classList.add('hidden');
+      budgetsSection.classList.add('hidden');
+      categoriesSection.classList.add('hidden');
+      profileSection.classList.add('hidden');
+      pageTitle.textContent = 'Child Accounts';
+      loadChildAccounts();
     }
 
     function showProfile() {
@@ -384,11 +438,13 @@ document.addEventListener('DOMContentLoaded', () => {
       transactionsTab.classList.remove('bg-blue-800');
       budgetsTab.classList.remove('bg-blue-800');
       categoriesTab.classList.remove('bg-blue-800');
+      childAccountsTab.classList.remove('bg-blue-800');
       profileSection.classList.remove('hidden');
       dashboardSection.classList.add('hidden');
       transactionsSection.classList.add('hidden');
       budgetsSection.classList.add('hidden');
       categoriesSection.classList.add('hidden');
+      childAccountsSection.classList.add('hidden');
       pageTitle.textContent = 'User Profile';
       loadProfileData();
     }
@@ -424,6 +480,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (categoriesTab) {
       categoriesTab.addEventListener('click', showCategories);
+    }
+    if (childAccountsTab) {
+      childAccountsTab.addEventListener('click', showChildAccounts);
+    } else {
+      console.error('childAccountsTab not found');
     }
     if (profileTab) {
       profileTab.addEventListener('click', showProfile);
@@ -539,18 +600,33 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       console.error('currencyToggle not found');
     }
+    if (dashboardFilter) {
+      dashboardFilter.addEventListener('change', () => {
+        console.log('Dashboard filter changed:', dashboardFilter.value);
+        if (dashboardFilter.value === 'custom') {
+          customDateRange.classList.remove('hidden');
+        } else {
+          customDateRange.classList.add('hidden');
+        }
+        updateDashboard(); // To be implemented in second half
+      });
+    } else {
+      console.error('dashboardFilter not found');
+    }
   } catch (error) {
     console.error('Error setting up modal/tab switching:', {
       message: error.message,
       stack: error.stack
     });
   }
-  
+
   // User State
   let currentUser = null;
   let userCurrency = 'INR';
   let familyCode = '';
-  let isEditing = { transaction: false, budget: false, category: false, profile: false };
+  let isEditing = { transaction: false, budget: false, category: false, profile: false, childTransaction: false };
+  let currentChildUserId = null; // Tracks selected child for admin view
+  let currentAccountType = null; // Tracks user's account type
 
   // Utility Functions
   function formatCurrency(amount, currency) {
@@ -631,6 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
       profileCurrency.value = newCurrency;
       await loadBudgets();
       await loadTransactions();
+      await loadChildAccounts();
       await updateDashboard();
     } catch (error) {
       console.error('Error updating currency:', {
@@ -661,6 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
               profileCurrency.value = data.currency || 'INR';
               profileFamilyCode.value = data.familyCode || '--';
               profileAccountType.value = data.accountType || '--';
+              currentAccountType = data.accountType || '--';
               console.log('Profile data loaded:', {
                 email: currentUser.email,
                 currency: data.currency,
@@ -843,7 +921,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (resetButton) {
-      loginButton.addEventListener('click', () => {
+      resetButton.addEventListener('click', () => {
         console.log('Reset button clicked');
         clearErrors();
         const email = document.getElementById('reset-email').value;
@@ -906,6 +984,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadCategories(),
         loadBudgets(),
         loadTransactions(),
+        loadChildAccounts(),
         loadProfileData(),
         updateDashboard()
       ]);
@@ -915,6 +994,223 @@ document.addEventListener('DOMContentLoaded', () => {
         message: error.message,
         stack: error.stack
       });
+    }
+  }
+
+  // Get Date Range for Filters
+  function getDateRange(filter) {
+    const now = new Date();
+    const start = new Date();
+    const end = new Date();
+    
+    switch (filter) {
+      case '1week':
+        start.setDate(now.getDate() - 7);
+        break;
+      case '1month':
+        start.setMonth(now.getMonth() - 1);
+        break;
+      case 'thisMonth':
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+        end.setMonth(now.getMonth() + 1);
+        end.setDate(0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'lastMonth':
+        start.setMonth(now.getMonth() - 1);
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+        end.setMonth(now.getMonth());
+        end.setDate(0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'thisYear':
+        start.setMonth(0);
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+        end.setMonth(11);
+        end.setDate(31);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'lastYear':
+        start.setFullYear(now.getFullYear() - 1);
+        start.setMonth(0);
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+        end.setFullYear(now.getFullYear() - 1);
+        end.setMonth(11);
+        end.setDate(31);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'custom':
+        const startDate = filterStartDate.value ? new Date(filterStartDate.value) : null;
+        const endDate = filterEndDate.value ? new Date(filterEndDate.value) : null;
+        if (startDate && endDate && startDate <= endDate) {
+          start.setTime(startDate.getTime());
+          start.setHours(0, 0, 0, 0);
+          end.setTime(endDate.getTime());
+          end.setHours(23, 59, 59, 999);
+        } else {
+          console.warn('Invalid custom date range; using default (all time)');
+          start.setTime(0); // Default to all time
+        }
+        break;
+      default:
+        start.setTime(0); // All time
+        break;
+    }
+    return { start, end };
+  }
+
+  // Load Child Accounts
+  async function loadChildAccounts() {
+    try {
+      console.log('Loading child accounts');
+      if (!currentUser || !db) {
+        console.error('Cannot load child accounts: missing user or Firestore');
+        return;
+      }
+      if (currentAccountType === 'admin') {
+        childSelector.classList.remove('hidden');
+        childUserId.innerHTML = '<option value="">Select a Child</option>';
+        await retryFirestoreOperation(() => 
+          db.collection('users')
+            .where('familyCode', '==', familyCode)
+            .where('accountType', '==', 'child')
+            .get()
+            .then(snapshot => {
+              console.log('Child users fetched:', { count: snapshot.size });
+              snapshot.forEach(doc => {
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = doc.data().email || doc.id;
+                childUserId.appendChild(option);
+              });
+            })
+        );
+        // Set currentChildUserId to first child or current user's ID if none selected
+        currentChildUserId = childUserId.value || currentUser.uid;
+      } else {
+        childSelector.classList.add('hidden');
+        currentChildUserId = currentUser.uid;
+      }
+      await loadChildTransactions();
+    } catch (error) {
+      console.error('Error loading child accounts:', {
+        message: error.message,
+        stack: error.stack
+      });
+      showError('child-user-id', 'Failed to load child accounts.');
+    }
+  }
+
+  // Load Child Transactions
+  async function loadChildTransactions() {
+    try {
+      console.log('Loading child transactions for user:', currentChildUserId);
+      if (!db || !currentChildUserId) {
+        console.error('Firestore or user ID not available');
+        return;
+      }
+      childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
+      let totalBalance = 0;
+      await retryFirestoreOperation(() => 
+        db.collection('childTransactions')
+          .where('userId', '==', currentChildUserId)
+          .get()
+          .then(snapshot => {
+            console.log('Child transactions fetched:', { count: snapshot.size });
+            childTransactionTable.innerHTML = '';
+            snapshot.forEach(doc => {
+              const transaction = doc.data();
+              if (transaction.type === 'credit') {
+                totalBalance += transaction.amount;
+              } else {
+                totalBalance -= transaction.amount;
+              }
+              const tr = document.createElement('tr');
+              tr.classList.add('table-row');
+              tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                  <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${doc.id}">Edit</button>
+                  <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${doc.id}">Delete</button>
+                </td>
+              `;
+              childTransactionTable.appendChild(tr);
+            });
+            childBalance.textContent = formatCurrency(totalBalance, 'INR');
+            console.log('Child balance updated:', { totalBalance: formatCurrency(totalBalance, 'INR') });
+          })
+      );
+    } catch (error) {
+      console.error('Error loading child transactions:', {
+        message: error.message,
+        stack: error.stack
+      });
+      showError('child-transaction-description', 'Failed to load child transactions.');
+    }
+  }
+
+  // Load Child Tiles
+  async function loadChildTiles() {
+    try {
+      console.log('Loading child tiles');
+      if (!db || !familyCode) {
+        console.error('Firestore or familyCode not available');
+        return;
+      }
+      childTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
+      const childBalances = new Map();
+      await retryFirestoreOperation(() => 
+        db.collection('users')
+          .where('familyCode', '==', familyCode)
+          .where('accountType', '==', 'child')
+          .get()
+          .then(snapshot => {
+            console.log('Child users for tiles fetched:', { count: snapshot.size });
+            const promises = snapshot.docs.map(doc => {
+              const userId = doc.id;
+              const email = doc.data().email || userId;
+              return retryFirestoreOperation(() => 
+                db.collection('childTransactions')
+                  .where('userId', '==', userId)
+                  .get()
+                  .then(transSnapshot => {
+                    let balance = 0;
+                    transSnapshot.forEach(transDoc => {
+                      const trans = transDoc.data();
+                      balance += trans.type === 'credit' ? trans.amount : -trans.amount;
+                    });
+                    childBalances.set(userId, { email, balance });
+                  })
+              );
+            });
+            return Promise.all(promises);
+          })
+      );
+      childTiles.innerHTML = '';
+      childBalances.forEach(({ email, balance }, userId) => {
+        const tile = document.createElement('div');
+        tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'child-tile');
+        tile.innerHTML = `
+          <h3 class="text-lg font-semibold text-gray-700">${email}</h3>
+          <p class="text-sm font-semibold text-gray-700 mt-2">
+            Balance: <span id="child-${userId}-balance">${formatCurrency(balance, 'INR')}</span>
+          </p>
+        `;
+        console.log('Child tile added:', { userId, email, balance: formatCurrency(balance, 'INR') });
+        childTiles.appendChild(tile);
+      });
+    } catch (error) {
+      console.error('Error loading child tiles:', {
+        message: error.message,
+        stack: error.stack
+      });
+      childTiles.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
     }
   }
 
@@ -1174,16 +1470,30 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.classList.contains('delete-category')) {
           console.log('Delete Category clicked:', e.target.dataset.id);
           const id = e.target.dataset.id;
-          if (db) {
-            retryFirestoreOperation(() => 
-              db.collection('categories').doc(id).delete().then(() => {
-                console.log('Category deleted successfully:', { id });
-                loadCategories();
-              })
-            ).catch(error => {
-              console.error('Error deleting category:', error.code, error.message);
-              showError('category-name', 'Failed to delete category.');
-            });
+          if (deleteConfirmModal && db) {
+            deleteConfirmMessage.textContent = 'Are you sure you want to delete this category?';
+            deleteConfirmModal.classList.remove('hidden');
+            const confirmHandler = () => {
+              retryFirestoreOperation(() => 
+                db.collection('categories').doc(id).delete().then(() => {
+                  console.log('Category deleted successfully:', { id });
+                  loadCategories();
+                  deleteConfirmModal.classList.add('hidden');
+                })
+              ).catch(error => {
+                console.error('Error deleting category:', error.code, error.message);
+                showError('category-name', 'Failed to delete category.');
+              });
+              confirmDelete.removeEventListener('click', confirmHandler);
+            };
+            const cancelHandler = () => {
+              deleteConfirmModal.classList.add('hidden');
+              cancelDelete.removeEventListener('click', cancelHandler);
+            };
+            confirmDelete.addEventListener('click', confirmHandler, { once: true });
+            cancelDelete.addEventListener('click', cancelHandler, { once: true });
+          } else {
+            console.error('Delete confirmation modal or Firestore not available');
           }
         }
       });
@@ -1205,6 +1515,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
       budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
+      const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
       await retryFirestoreOperation(() => 
         db.collection('budgets').where('familyCode', '==', familyCode).get()
           .then(snapshot => {
@@ -1215,43 +1526,46 @@ document.addEventListener('DOMContentLoaded', () => {
             let totalRemainingAmount = 0;
             snapshot.forEach(doc => {
               const budget = doc.data();
-              const spent = budget.spent || 0;
-              totalBudgetAmount += budget.amount;
-              totalRemainingAmount += budget.amount - spent;
-              const tr = document.createElement('tr');
-              tr.classList.add('table-row');
-              tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, 'INR')}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, 'INR')}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, 'INR')}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                  <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
-                  <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
-                </td>
-              `;
-              budgetTable.appendChild(tr);
-              const tile = document.createElement('div');
-              tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
-              const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
-              tile.innerHTML = `
-                <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
-                <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, 'INR')}</span></p>
-                <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, 'INR')}</span></p>
-                <p class="text-sm font-semibold text-gray-700 mt-2">
-                  Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, 'INR')}</span>
-                </p>
-                <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
-                  <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
-                </div>
-              `;
-              console.log('Budget tile added:', {
-                id: doc.id,
-                name: budget.name,
-                amount: formatCurrency(budget.amount, 'INR'),
-                spent: formatCurrency(spent, 'INR')
-              });
-              budgetTiles.appendChild(tile);
+              const createdAt = budget.createdAt ? budget.createdAt.toDate() : new Date();
+              if (createdAt >= start && createdAt <= end) {
+                const spent = budget.spent || 0;
+                totalBudgetAmount += budget.amount;
+                totalRemainingAmount += budget.amount - spent;
+                const tr = document.createElement('tr');
+                tr.classList.add('table-row');
+                tr.innerHTML = `
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, 'INR')}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, 'INR')}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, 'INR')}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm">
+                    <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
+                    <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
+                  </td>
+                `;
+                budgetTable.appendChild(tr);
+                const tile = document.createElement('div');
+                tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
+                const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
+                tile.innerHTML = `
+                  <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
+                  <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, 'INR')}</span></p>
+                  <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, 'INR')}</span></p>
+                  <p class="text-sm font-semibold text-gray-700 mt-2">
+                    Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, 'INR')}</span>
+                  </p>
+                  <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
+                    <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
+                  </div>
+                `;
+                console.log('Budget tile added:', {
+                  id: doc.id,
+                  name: budget.name,
+                  amount: formatCurrency(budget.amount, 'INR'),
+                  spent: formatCurrency(spent, 'INR')
+                });
+                budgetTiles.appendChild(tile);
+              }
             });
             totalBudget.textContent = formatCurrency(totalBudgetAmount, 'INR');
             totalRemaining.textContent = formatCurrency(totalRemainingAmount, 'INR');
@@ -1434,17 +1748,31 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.classList.contains('delete-budget')) {
           console.log('Delete Budget clicked:', e.target.dataset.id);
           const id = e.target.dataset.id;
-          if (db) {
-            retryFirestoreOperation(() => 
-              db.collection('budgets').doc(id).delete().then(() => {
-                console.log('Budget deleted successfully:', { id });
-                loadBudgets();
-                loadCategories();
-              })
-            ).catch(error => {
-              console.error('Error deleting budget:', error.code, error.message);
-              showError('budget-name', 'Failed to delete budget.');
-            });
+          if (deleteConfirmModal && db) {
+            deleteConfirmMessage.textContent = 'Are you sure you want to delete this budget?';
+            deleteConfirmModal.classList.remove('hidden');
+            const confirmHandler = () => {
+              retryFirestoreOperation(() => 
+                db.collection('budgets').doc(id).delete().then(() => {
+                  console.log('Budget deleted successfully:', { id });
+                  loadBudgets();
+                  loadCategories();
+                  deleteConfirmModal.classList.add('hidden');
+                })
+              ).catch(error => {
+                console.error('Error deleting budget:', error.code, error.message);
+                showError('budget-name', 'Failed to delete budget.');
+              });
+              confirmDelete.removeEventListener('click', confirmHandler);
+            };
+            const cancelHandler = () => {
+              deleteConfirmModal.classList.add('hidden');
+              cancelDelete.removeEventListener('click', cancelHandler);
+            };
+            confirmDelete.addEventListener('click', confirmHandler, { once: true });
+            cancelDelete.addEventListener('click', cancelHandler, { once: true });
+          } else {
+            console.error('Delete confirmation modal or Firestore not available');
           }
         }
       });
@@ -1465,6 +1793,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
+      const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
       await retryFirestoreOperation(() => 
         db.collection('transactions').where('familyCode', '==', familyCode).get()
           .then(snapshot => {
@@ -1472,30 +1801,33 @@ document.addEventListener('DOMContentLoaded', () => {
             transactionTable.innerHTML = '';
             snapshot.forEach(doc => {
               const transaction = doc.data();
-              const tr = document.createElement('tr');
-              tr.classList.add('table-row');
-              db.collection('categories').doc(transaction.categoryId).get().then(categoryDoc => {
-                const categoryName = categoryDoc.exists ? categoryDoc.data().name : 'Unknown';
-                tr.innerHTML = `
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm">
-                    <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
-                    <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
-                  </td>
-                `;
-                console.log('Transaction row added:', {
-                  id: doc.id,
-                  type: transaction.type,
-                  amount: formatCurrency(transaction.amount, 'INR'),
-                  category: categoryName
+              const createdAt = transaction.createdAt ? transaction.createdAt.toDate() : new Date();
+              if (createdAt >= start && createdAt <= end) {
+                const tr = document.createElement('tr');
+                tr.classList.add('table-row');
+                db.collection('categories').doc(transaction.categoryId).get().then(categoryDoc => {
+                  const categoryName = categoryDoc.exists ? categoryDoc.data().name : 'Unknown';
+                  tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                      <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
+                      <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
+                    </td>
+                  `;
+                  console.log('Transaction row added:', {
+                    id: doc.id,
+                    type: transaction.type,
+                    amount: formatCurrency(transaction.amount, 'INR'),
+                    category: categoryName
+                  });
+                  transactionTable.appendChild(tr);
+                }).catch(error => {
+                  console.error('Error fetching category for transaction:', error.code, error.message);
                 });
-                transactionTable.appendChild(tr);
-              }).catch(error => {
-                console.error('Error fetching category for transaction:', error.code, error.message);
-              });
+              }
             });
           })
       );
@@ -1692,41 +2024,208 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.classList.contains('delete-transaction')) {
           console.log('Delete Transaction clicked:', e.target.dataset.id);
           const id = e.target.dataset.id;
-          if (db) {
-            retryFirestoreOperation(() => 
-              db.collection('transactions').doc(id).get().then(async doc => {
-                if (doc.exists) {
-                  const transaction = doc.data();
-                  if (transaction.type === 'debit' && transaction.categoryId) {
-                    const categoryDoc = await db.collection('categories').doc(transaction.categoryId).get();
-                    if (categoryDoc.exists && categoryDoc.data().budgetId) {
-                      const budgetId = categoryDoc.data().budgetId;
-                      console.log('Deducting budget spent for budgetId:', budgetId, 'by amount:', transaction.amount);
-                      await retryFirestoreOperation(() => 
-                        db.collection('budgets').doc(budgetId).update({
-                          spent: firebase.firestore.FieldValue.increment(-transaction.amount)
-                        })
-                      );
-                      console.log('Budget spent deducted successfully:', { budgetId, amount: transaction.amount });
-                      await loadBudgets();
+          if (deleteConfirmModal && db) {
+            deleteConfirmMessage.textContent = 'Are you sure you want to delete this transaction?';
+            deleteConfirmModal.classList.remove('hidden');
+            const confirmHandler = () => {
+              retryFirestoreOperation(() => 
+                db.collection('transactions').doc(id).get().then(async doc => {
+                  if (doc.exists) {
+                    const transaction = doc.data();
+                    if (transaction.type === 'debit' && transaction.categoryId) {
+                      const categoryDoc = await db.collection('categories').doc(transaction.categoryId).get();
+                      if (categoryDoc.exists && categoryDoc.data().budgetId) {
+                        const budgetId = categoryDoc.data().budgetId;
+                        console.log('Deducting budget spent for budgetId:', budgetId, 'by amount:', transaction.amount);
+                        await retryFirestoreOperation(() => 
+                          db.collection('budgets').doc(budgetId).update({
+                            spent: firebase.firestore.FieldValue.increment(-transaction.amount)
+                          })
+                        );
+                        console.log('Budget spent deducted successfully:', { budgetId, amount: transaction.amount });
+                        await loadBudgets();
+                      }
                     }
+                    await db.collection('transactions').doc(id).delete();
+                    console.log('Transaction deleted successfully:', { id });
+                    await loadTransactions();
+                    await updateDashboard();
+                    deleteConfirmModal.classList.add('hidden');
                   }
-                  await db.collection('transactions').doc(id).delete();
-                  console.log('Transaction deleted successfully:', { id });
-                  await loadTransactions();
-                  await updateDashboard();
-                }
-              })
-            ).catch(error => {
-              console.error('Error deleting transaction:', error.code, error.message);
-              showError('category', 'Failed to delete transaction.');
-            });
+                })
+              ).catch(error => {
+                console.error('Error deleting transaction:', error.code, error.message);
+                showError('category', 'Failed to delete transaction.');
+              });
+              confirmDelete.removeEventListener('click', confirmHandler);
+            };
+            const cancelHandler = () => {
+              deleteConfirmModal.classList.add('hidden');
+              cancelDelete.removeEventListener('click', cancelHandler);
+            };
+            confirmDelete.addEventListener('click', confirmHandler, { once: true });
+            cancelDelete.addEventListener('click', cancelHandler, { once: true });
+          } else {
+            console.error('Delete confirmation modal or Firestore not available');
           }
         }
       });
     }
   } catch (error) {
     console.error('Error binding transaction event listeners:', {
+      message: error.message,
+      stack: error.stack
+    });
+  }
+
+  // Child Transactions
+  try {
+    if (addChildTransaction) {
+      addChildTransaction.addEventListener('click', () => {
+        console.log('Add Child Transaction clicked', { isEditing: isEditing.childTransaction });
+        if (isEditing.childTransaction) return;
+        clearErrors();
+        const type = childTransactionType.value;
+        const amount = parseFloat(childTransactionAmount.value);
+        const description = childTransactionDescription.value.trim();
+        if (!amount || amount <= 0) showError('child-transaction-amount', 'Valid amount is required');
+        if (amount > 0 && currentUser && db) {
+          addChildTransaction.disabled = true;
+          addChildTransaction.textContent = 'Adding...';
+          retryFirestoreOperation(() => 
+            db.collection('childTransactions').add({
+              type,
+              amount,
+              description,
+              userId: currentChildUserId || currentUser.uid,
+              familyCode,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(async () => {
+              console.log('Child transaction added successfully:', { type, amount, userId: currentChildUserId });
+              childTransactionType.value = 'debit';
+              childTransactionAmount.value = '';
+              childTransactionDescription.value = '';
+              addChildTransaction.innerHTML = 'Add Transaction';
+              addChildTransaction.disabled = false;
+              await loadChildTransactions();
+              await loadChildTiles();
+            })
+          ).catch(error => {
+            console.error('Error adding child transaction:', error.code, error.message);
+            showError('child-transaction-description', 'Failed to add transaction.');
+            addChildTransaction.disabled = false;
+            addChildTransaction.innerHTML = 'Add Transaction';
+          });
+        } else {
+          console.error('Firestore or user not available');
+          showError('child-transaction-description', db ? 'Invalid input data' : 'Database service not available');
+        }
+      });
+    }
+
+    if (childTransactionTable) {
+      childTransactionTable.addEventListener('click', e => {
+        if (e.target.classList.contains('edit-child-transaction')) {
+          console.log('Edit Child Transaction clicked:', e.target.dataset.id);
+          const id = e.target.dataset.id;
+          if (db) {
+            retryFirestoreOperation(() => 
+              db.collection('childTransactions').doc(id).get().then(doc => {
+                if (doc.exists) {
+                  const data = doc.data();
+                  childTransactionType.value = data.type;
+                  childTransactionAmount.value = data.amount;
+                  childTransactionDescription.value = data.description;
+                  addChildTransaction.innerHTML = 'Update Transaction';
+                  isEditing.childTransaction = true;
+                  console.log('Entered edit mode for child transaction:', id);
+                  const updateHandler = async () => {
+                    const type = childTransactionType.value;
+                    const amount = parseFloat(childTransactionAmount.value);
+                    const description = childTransactionDescription.value.trim();
+                    if (!amount || amount <= 0) {
+                      showError('child-transaction-amount', 'Valid amount is required');
+                      return;
+                    }
+                    addChildTransaction.disabled = true;
+                    addChildTransaction.textContent = 'Updating...';
+                    try {
+                      await retryFirestoreOperation(() => 
+                        db.collection('childTransactions').doc(id).update({
+                          type,
+                          amount,
+                          description
+                        })
+                      );
+                      console.log('Child transaction updated successfully:', { id, type, amount });
+                      childTransactionType.value = 'debit';
+                      childTransactionAmount.value = '';
+                      childTransactionDescription.value = '';
+                      addChildTransaction.innerHTML = 'Add Transaction';
+                      addChildTransaction.disabled = false;
+                      isEditing.childTransaction = false;
+                      console.log('Exited edit mode for child transaction:', id);
+                      await loadChildTransactions();
+                      await loadChildTiles();
+                    } catch (error) {
+                      console.error('Error updating child transaction:', error.code, error.message);
+                      showError('child-transaction-description', 'Failed to update transaction.');
+                      addChildTransaction.disabled = false;
+                      addChildTransaction.innerHTML = 'Add Transaction';
+                      isEditing.childTransaction = false;
+                    }
+                  };
+                  addChildTransaction.addEventListener('click', updateHandler, { once: true });
+                }
+              })
+            ).catch(error => {
+              console.error('Error fetching child transaction:', error.code, error.message);
+              showError('child-transaction-description', 'Failed to fetch transaction.');
+            });
+          }
+        }
+        if (e.target.classList.contains('delete-child-transaction')) {
+          console.log('Delete Child Transaction clicked:', e.target.dataset.id);
+          const id = e.target.dataset.id;
+          if (deleteConfirmModal && db) {
+            deleteConfirmMessage.textContent = 'Are you sure you want to delete this child transaction?';
+            deleteConfirmModal.classList.remove('hidden');
+            const confirmHandler = () => {
+              retryFirestoreOperation(() => 
+                db.collection('childTransactions').doc(id).delete().then(async () => {
+                  console.log('Child transaction deleted successfully:', { id });
+                  await loadChildTransactions();
+                  await loadChildTiles();
+                  deleteConfirmModal.classList.add('hidden');
+                })
+              ).catch(error => {
+                console.error('Error deleting child transaction:', error.code, error.message);
+                showError('child-transaction-description', 'Failed to delete transaction.');
+              });
+              confirmDelete.removeEventListener('click', confirmHandler);
+            };
+            const cancelHandler = () => {
+              deleteConfirmModal.classList.add('hidden');
+              cancelDelete.removeEventListener('click', cancelHandler);
+            };
+            confirmDelete.addEventListener('click', confirmHandler, { once: true });
+            cancelDelete.addEventListener('click', cancelHandler, { once: true });
+          } else {
+            console.error('Delete confirmation modal or Firestore not available');
+          }
+        }
+      });
+    }
+
+    if (childUserId) {
+      childUserId.addEventListener('change', () => {
+        console.log('Child user selected:', childUserId.value);
+        currentChildUserId = childUserId.value || currentUser.uid;
+        loadChildTransactions();
+      });
+    }
+  } catch (error) {
+    console.error('Error binding child transaction event listeners:', {
       message: error.message,
       stack: error.stack
     });
@@ -1740,22 +2239,44 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Firestore not available');
         return;
       }
+      const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
       let totalBalance = 0;
-      await retryFirestoreOperation(() => 
-        db.collection('transactions').where('familyCode', '==', familyCode).get()
-          .then(snapshot => {
-            snapshot.forEach(doc => {
-              const transaction = doc.data();
-              if (transaction.type === 'credit') {
-                totalBalance += transaction.amount;
-              } else {
-                totalBalance -= transaction.amount;
-              }
-            });
-            balance.textContent = formatCurrency(totalBalance, 'INR');
-            console.log('Dashboard balance updated:', { totalBalance: formatCurrency(totalBalance, 'INR') });
-          })
-      );
+      let totalBudgetAmount = 0;
+      await Promise.all([
+        retryFirestoreOperation(() => 
+          db.collection('transactions').where('familyCode', '==', familyCode).get()
+            .then(snapshot => {
+              snapshot.forEach(doc => {
+                const transaction = doc.data();
+                const createdAt = transaction.createdAt ? transaction.createdAt.toDate() : new Date();
+                if (createdAt >= start && createdAt <= end) {
+                  if (transaction.type === 'credit') {
+                    totalBalance += transaction.amount;
+                  } else {
+                    totalBalance -= transaction.amount;
+                  }
+                }
+              });
+              balance.textContent = formatCurrency(totalBalance, 'INR');
+              console.log('Dashboard balance updated:', { totalBalance: formatCurrency(totalBalance, 'INR') });
+            })
+        ),
+        retryFirestoreOperation(() => 
+          db.collection('budgets').where('familyCode', '==', familyCode).get()
+            .then(snapshot => {
+              snapshot.forEach(doc => {
+                const budget = doc.data();
+                const createdAt = budget.createdAt ? budget.createdAt.toDate() : new Date();
+                if (createdAt >= start && createdAt <= end) {
+                  totalBudgetAmount += budget.amount;
+                }
+              });
+            })
+        )
+      ]);
+      document.getElementById('after-budget').textContent = formatCurrency(totalBalance - totalBudgetAmount, 'INR');
+      console.log('After budget updated:', { afterBudget: formatCurrency(totalBalance - totalBudgetAmount, 'INR') });
+      await loadChildTiles();
     } catch (error) {
       console.error('Error updating dashboard:', {
         message: error.message,
