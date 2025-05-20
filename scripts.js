@@ -635,6 +635,8 @@ document.addEventListener('DOMContentLoaded', () => {
   
 
 
+ 
+
   // User State
   let currentUser = null;
   let userCurrency = 'INR';
@@ -1131,7 +1133,7 @@ document.addEventListener('DOMContentLoaded', () => {
         message: error.message,
         stack: error.stack,
         familyCode,
-        accountType: previousCurrentAccountType
+        accountType: currentAccountType
       });
       showError('child-user-id', 'Failed to load child accounts.');
       childUserId.innerHTML = '<option value="">Error loading children</option>';
@@ -1382,37 +1384,60 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Bind Add Child Transaction Listener (singleton with debouncing to prevent duplicates)
-  let isAddChildTransactionBound = false;
-  let lastAddClickTime = 0;
-  const DEBOUNCE_MS = 1000; // 1 second debounce
-  if (addChildTransaction && !isAddChildTransactionBound) {
+  // Bind Add Child Transaction Listener (robust singleton to prevent duplicates)
+  if (addChildTransaction) {
+    // Remove all existing click listeners to ensure single binding
+    const button = addChildTransaction;
+    const newListenerId = `add-child-transaction-${Date.now()}`;
+    if (button.dataset.listenerId) {
+      console.log('Removing previous addChildTransaction listener:', { oldListenerId: button.dataset.listenerId });
+      // Clone the button to remove all existing listeners
+      const newButton = button.cloneNode(true);
+      button.parentNode.replaceChild(newButton, button);
+      addChildTransaction = newButton;
+    }
+    button.dataset.listenerId = newListenerId;
+    
+    // Debouncing and lock variables
+    let lastAddClickTime = 0;
+    let isProcessing = false;
+    const DEBOUNCE_MS = 1000; // 1 second debounce
+
     const addChildTransactionHandler = async (event) => {
       const now = Date.now();
-      if (now - lastAddClickTime < DEBOUNCE_MS) {
-        console.log('Add Child Transaction ignored: debouncing', { timeSinceLastClick: now - lastAddClickTime });
+      if (now - lastAddClickTime < DEBOUNCE_MS || isProcessing) {
+        console.log('Add Child Transaction ignored:', { 
+          timeSinceLastClick: now - lastAddClickTime, 
+          isProcessing 
+        });
         return;
       }
       lastAddClickTime = now;
-      console.log('Add Child Transaction clicked', { isEditing: isEditing.childTransaction, currentChildUserId, accountType: currentAccountType });
-      if (isEditing.childTransaction) return;
-      clearErrors();
-      const type = childTransactionType.value;
-      const amount = parseFloat(childTransactionAmount.value);
-      const description = childTransactionDescription.value.trim();
-      if (!amount || amount <= 0) {
-        showError('child-transaction-amount', 'Valid amount is required');
-        return;
-      }
-      if (currentAccountType === 'admin' && !currentChildUserId) {
-        showError('child-user-id', 'Please select a child account');
-        return;
-      }
-      if (currentUser && db) {
-        addChildTransaction.disabled = true;
-        addChildTransaction.textContent = 'Adding...';
-        const transactionUserId = currentAccountType === 'admin' ? currentChildUserId : currentUser.uid;
-        try {
+      isProcessing = true;
+      console.log('Add Child Transaction executing:', { 
+        listenerId: newListenerId, 
+        currentChildUserId, 
+        accountType: currentAccountType 
+      });
+
+      try {
+        if (isEditing.childTransaction) return;
+        clearErrors();
+        const type = childTransactionType.value;
+        const amount = parseFloat(childTransactionAmount.value);
+        const description = childTransactionDescription.value.trim();
+        if (!amount || amount <= 0) {
+          showError('child-transaction-amount', 'Valid amount is required');
+          return;
+        }
+        if (currentAccountType === 'admin' && !currentChildUserId) {
+          showError('child-user-id', 'Please select a child account');
+          return;
+        }
+        if (currentUser && db) {
+          addChildTransaction.disabled = true;
+          addChildTransaction.textContent = 'Adding...';
+          const transactionUserId = currentAccountType === 'admin' ? currentChildUserId : currentUser.uid;
           await retryFirestoreOperation(() => 
             db.collection('childTransactions').add({
               type,
@@ -1423,7 +1448,12 @@ document.addEventListener('DOMContentLoaded', () => {
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             })
           );
-          console.log('Child transaction added successfully:', { type, amount, userId: transactionUserId, familyCode });
+          console.log('Child transaction added successfully:', { 
+            type, 
+            amount, 
+            userId: transactionUserId, 
+            familyCode 
+          });
           childTransactionType.value = 'debit';
           childTransactionAmount.value = '';
           childTransactionDescription.value = '';
@@ -1431,20 +1461,26 @@ document.addEventListener('DOMContentLoaded', () => {
           addChildTransaction.disabled = false;
           await loadChildTransactions();
           await loadChildTiles();
-        } catch (error) {
-          console.error('Error adding child transaction:', { code: error.code, message: error.message, userId: transactionUserId });
-          showError('child-transaction-description', 'Failed to add transaction.');
-          addChildTransaction.disabled = false;
-          addChildTransaction.innerHTML = 'Add Transaction';
+        } else {
+          console.error('Firestore or user not available');
+          showError('child-transaction-description', db ? 'Invalid input data' : 'Database service not available');
         }
-      } else {
-        console.error('Firestore or user not available');
-        showError('child-transaction-description', db ? 'Invalid input data' : 'Database service not available');
+      } catch (error) {
+        console.error('Error adding child transaction:', { 
+          code: error.code, 
+          message: error.message, 
+          userId: transactionUserId 
+        });
+        showError('child-transaction-description', 'Failed to add transaction.');
+        addChildTransaction.disabled = false;
+        addChildTransaction.innerHTML = 'Add Transaction';
+      } finally {
+        isProcessing = false;
       }
     };
+
     addChildTransaction.addEventListener('click', addChildTransactionHandler);
-    isAddChildTransactionBound = true;
-    console.log('Add Child Transaction listener bound successfully');
+    console.log('Add Child Transaction listener bound:', { listenerId: newListenerId });
   }
 
 
