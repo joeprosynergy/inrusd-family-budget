@@ -620,6 +620,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+
+
+
+
+
+  
+
+ 
   // User State
   let currentUser = null;
   let userCurrency = 'INR';
@@ -1081,6 +1089,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .where('accountType', '==', 'child')
             .get()
             .then(snapshot => {
+              let validChildren = 0;
               console.log('Child users fetched:', { 
                 count: snapshot.size, 
                 familyCode, 
@@ -1092,16 +1101,22 @@ document.addEventListener('DOMContentLoaded', () => {
               } else {
                 snapshot.forEach(doc => {
                   const data = doc.data();
-                  const email = data.email || 'Unnamed Child';
-                  const option = document.createElement('option');
-                  option.value = doc.id;
-                  option.textContent = email;
-                  childUserId.appendChild(option);
+                  if (data.email && data.email.trim() !== '') {
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = data.email;
+                    childUserId.appendChild(option);
+                    validChildren++;
+                  } else {
+                    console.warn('Skipping child account with missing or empty email:', { id: doc.id, data });
+                  }
                 });
+                if (validChildren === 0) {
+                  childUserId.innerHTML = '<option value="">No valid children found</option>';
+                }
               }
             })
         );
-        // Set currentChildUserId to first child or current user's ID if none selected
         currentChildUserId = childUserId.value || currentUser.uid;
       } else {
         childSelector.classList.add('hidden');
@@ -1156,8 +1171,8 @@ document.addEventListener('DOMContentLoaded', () => {
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm">
-                    <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${doc.id}">Edit</button>
-                    <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${doc.id}">Delete</button>
+                    <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${doc.id}" data-user-id="${transaction.userId}">Edit</button>
+                    <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${doc.id}" data-user-id="${transaction.userId}">Delete</button>
                   </td>
                 `;
                 childTransactionTable.appendChild(tr);
@@ -1206,7 +1221,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const promises = snapshot.docs.map(doc => {
               const userId = doc.id;
-              const email = doc.data().email || 'Unnamed Child';
+              const email = doc.data().email || `Child ${userId.substring(0, 8)}`;
               return retryFirestoreOperation(() => 
                 db.collection('childTransactions')
                   .where('userId', '==', userId)
@@ -1255,6 +1270,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+
+
+  
 
 
 
