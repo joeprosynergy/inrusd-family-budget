@@ -351,7 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
       transactionsTab.classList.remove('bg-blue-800');
       budgetsTab.classList.remove('bg-blue-800');
       categoriesTab.classList.remove('bg-blue-800');
-      childAccountsTab.classList/remove('bg-blue-800');
+      childAccountsTab.classList.remove('bg-blue-800');
       profileTab.classList.remove('bg-blue-800');
       dashboardSection.classList.remove('hidden');
       transactionsSection.classList.add('hidden');
@@ -608,7 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           customDateRange.classList.add('hidden');
         }
-        updateDashboard(); // To be implemented in second half
+        updateDashboard();
       });
     } else {
       console.error('dashboardFilter not found');
@@ -619,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
       stack: error.stack
     });
   }
-
+  
   // User State
   let currentUser = null;
   let userCurrency = 'INR';
