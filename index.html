@@ -102,7 +102,7 @@
       </div>
     </nav>
     <main class="p-4 sm:p-6">
-      <!-- Dashboard Section: Updated Labels, After Budget, Filter, Child Tiles -->
+      <!-- Dashboard Section: Updated Balance Tile with After Budget -->
       <div id="dashboard-section" class="space-y-4 sm:space-y-6">
         <!-- Filter Controls -->
         <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
@@ -123,11 +123,12 @@
             </div>
           </div>
         </div>
-        <!-- Summary Tiles -->
+        <!-- Summary Tiles: Moved After Budget to Balance Tile -->
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
           <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
             <h3 class="text-base sm:text-lg font-semibold text-gray-700">Balance</h3>
             <p id="balance" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
+            <p class="text-sm text-gray-500 mt-2">After Budget: <span id="after-budget">₹0</span></p>
           </div>
           <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
             <h3 class="text-base sm:text-lg font-semibold text-gray-700">Total Budget</h3>
@@ -136,7 +137,6 @@
           <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
             <h3 class="text-base sm:text-lg font-semibold text-gray-700">Total Unspent Budget</h3>
             <p id="total-remaining" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
-            <p class="text-sm text-gray-500 mt-2">After Budget: <span id="after-budget">₹0</span></p>
           </div>
         </div>
         <!-- Budget and Child Tiles -->
@@ -349,7 +349,7 @@
     </div>
   </div>
 
-  <!-- New Delete Confirmation Modal -->
+  <!-- Delete Confirmation Modal (Unchanged) -->
   <div id="delete-confirm-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
     <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
       <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Confirm Deletion</h3>
