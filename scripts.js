@@ -1535,6 +1535,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   
 
+
 // Categories
 async function loadCategories() {
   try {
@@ -1543,6 +1544,7 @@ async function loadCategories() {
       console.error('Firestore, user, or familyCode not available', { db: !!db, user: !!currentUser, familyCode });
       categorySelect.innerHTML = '<option value="">Select Category</option>';
       categoryBudgetSelect.innerHTML = '<option value="none">None</option>';
+      categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Unable to load categories</td></tr>';
       return;
     }
     categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
@@ -1555,7 +1557,7 @@ async function loadCategories() {
     }
 
     await retryFirestoreOperation(() => 
-      db.collection('budgets').where('familyCode', '==', familyCode).limit(50).get()
+      db.collection('budgets').where('familyCode', '==', familyCode).get()
         .then(budgetSnapshot => {
           console.log('Budgets fetched for dropdowns:', { count: budgetSnapshot.size });
           budgetSnapshot.forEach(budgetDoc => {
@@ -1576,7 +1578,7 @@ async function loadCategories() {
     );
 
     await retryFirestoreOperation(() => 
-      db.collection('categories').where('familyCode', '==', familyCode).limit(50).get()
+      db.collection('categories').where('familyCode', '==', familyCode).get()
         .then(snapshot => {
           console.log('Categories fetched:', { count: snapshot.size });
           snapshot.forEach(doc => {
@@ -1841,16 +1843,10 @@ async function loadBudgets() {
     }
     budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
-    const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
     await retryFirestoreOperation(() => 
-      db.collection('budgets')
-        .where('familyCode', '==', familyCode)
-        .where('createdAt', '>=', start)
-        .where('createdAt', '<=', end)
-        .limit(50)
-        .get()
+      db.collection('budgets').where('familyCode', '==', familyCode).get()
         .then(snapshot => {
-          console.log('Budgets fetched for table and tiles:', { count: snapshot.size });
+          console.log('Budgets fetched for table and tiles:', { count: snapshot.size, isEmpty: snapshot.empty });
           budgetTable.innerHTML = snapshot.empty ? '<tr><td colspan="5" class="text-center py-4">No budgets found</td></tr>' : '';
           budgetTiles.innerHTML = snapshot.empty ? '<div class="text-center py-4">No budgets found</div>' : '';
           let totalBudgetAmount = 0;
@@ -2123,16 +2119,10 @@ async function loadTransactions() {
       return;
     }
     transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
-    const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
     await retryFirestoreOperation(() => 
-      db.collection('transactions')
-        .where('familyCode', '==', familyCode)
-        .where('createdAt', '>=', start)
-        .where('createdAt', '<=', end)
-        .limit(50)
-        .get()
+      db.collection('transactions').where('familyCode', '==', familyCode).get()
         .then(snapshot => {
-          console.log('Transactions fetched:', { count: snapshot.size });
+          console.log('Transactions fetched:', { count: snapshot.size, isEmpty: snapshot.empty });
           transactionTable.innerHTML = snapshot.empty ? '<tr><td colspan="5" class="text-center py-4">No transactions found</td></tr>' : '';
           snapshot.forEach(doc => {
             const transaction = doc.data();
@@ -2190,7 +2180,7 @@ try {
       if (isEditing.transaction) return;
       clearErrors();
       const type = document.getElementById('type').value;
-      const amount = parseFloat(document.getElementById('amount').value);
+      const amount = parseFloat(document.ggetElementById('amount').value);
       const categoryId = document.getElementById('category').value;
       const description = document.getElementById('description').value.trim();
       if (!amount || amount <= 0) showError('amount', 'Valid amount is required');
@@ -2586,19 +2576,13 @@ async function updateDashboard() {
       document.getElementById('after-budget').textContent = formatCurrency(0, currency);
       return;
     }
-    const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
     let totalBalance = 0;
     let totalBudgetAmount = 0;
     await Promise.all([
       retryFirestoreOperation(() => 
-        db.collection('transactions')
-          .where('familyCode', '==', familyCode)
-          .where('createdAt', '>=', start)
-          .where('createdAt', '<=', end)
-          .limit(50)
-          .get()
+        db.collection('transactions').where('familyCode', '==', familyCode).get()
           .then(snapshot => {
-            console.log('Transactions fetched for dashboard:', { count: snapshot.size });
+            console.log('Transactions fetched for dashboard:', { count: snapshot.size, isEmpty: snapshot.empty });
             snapshot.forEach(doc => {
               const transaction = doc.data();
               if (transaction.type === 'credit') {
@@ -2612,14 +2596,9 @@ async function updateDashboard() {
           })
       ),
       retryFirestoreOperation(() => 
-        db.collection('budgets')
-          .where('familyCode', '==', familyCode)
-          .where('createdAt', '>=', start)
-          .where('createdAt', '<=', end)
-          .limit(50)
-          .get()
+        db.collection('budgets').where('familyCode', '==', familyCode).get()
           .then(snapshot => {
-            console.log('Budgets fetched for dashboard:', { count: snapshot.size });
+            console.log('Budgets fetched for dashboard:', { count: snapshot.size, isEmpty: snapshot.empty });
             snapshot.forEach(doc => {
               const budget = doc.data();
               totalBudgetAmount += budget.amount;
