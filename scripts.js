@@ -629,6 +629,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+
   // User State
   let currentUser = null;
   let userCurrency = 'INR';
@@ -857,7 +858,7 @@ document.addEventListener('DOMContentLoaded', () => {
               currency,
               familyCode: familyCodeInput,
               accountType,
-              email: email, // Ensure email is stored
+              email: email,
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
           })
@@ -1180,7 +1181,59 @@ document.addEventListener('DOMContentLoaded', () => {
           })
       );
 
-      // Bind event listeners for edit and delete
+      // Bind event listeners for add, edit, and delete
+      if (addChildTransaction) {
+        addChildTransaction.addEventListener('click', async () => {
+          console.log('Add Child Transaction clicked', { isEditing: isEditing.childTransaction, currentChildUserId, accountType: currentAccountType });
+          if (isEditing.childTransaction) return;
+          clearErrors();
+          const type = childTransactionType.value;
+          const amount = parseFloat(childTransactionAmount.value);
+          const description = childTransactionDescription.value.trim();
+          if (!amount || amount <= 0) {
+            showError('child-transaction-amount', 'Valid amount is required');
+            return;
+          }
+          if (currentAccountType === 'admin' && !currentChildUserId) {
+            showError('child-user-id', 'Please select a child account');
+            return;
+          }
+          if (currentUser && db) {
+            addChildTransaction.disabled = true;
+            addChildTransaction.textContent = 'Adding...';
+            const transactionUserId = currentAccountType === 'admin' ? currentChildUserId : currentUser.uid;
+            try {
+              await retryFirestoreOperation(() => 
+                db.collection('childTransactions').add({
+                  type,
+                  amount,
+                  description,
+                  userId: transactionUserId,
+                  familyCode,
+                  createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                })
+              );
+              console.log('Child transaction added successfully:', { type, amount, userId: transactionUserId, familyCode });
+              childTransactionType.value = 'debit';
+              childTransactionAmount.value = '';
+              childTransactionDescription.value = '';
+              addChildTransaction.innerHTML = 'Add Transaction';
+              addChildTransaction.disabled = false;
+              await loadChildTransactions();
+              await loadChildTiles();
+            } catch (error) {
+              console.error('Error adding child transaction:', { code: error.code, message: error.message, userId: transactionUserId });
+              showError('child-transaction-description', 'Failed to add transaction.');
+              addChildTransaction.disabled = false;
+              addChildTransaction.innerHTML = 'Add Transaction';
+            }
+          } else {
+            console.error('Firestore or user not available');
+            showError('child-transaction-description', db ? 'Invalid input data' : 'Database service not available');
+          }
+        });
+      }
+
       childTransactionTable.querySelectorAll('.edit-child-transaction').forEach(button => {
         button.addEventListener('click', () => {
           const id = button.dataset.id;
@@ -1233,7 +1286,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       isEditing.childTransaction = false;
                     }
                   };
-                  addChildTransaction.removeEventListener('click', updateHandler); // Prevent multiple bindings
+                  addChildTransaction.removeEventListener('click', updateHandler);
                   addChildTransaction.addEventListener('click', updateHandler, { once: true });
                 }
               })
@@ -1274,7 +1327,7 @@ document.addEventListener('DOMContentLoaded', () => {
               deleteConfirmModal.classList.add('hidden');
               cancelDelete.removeEventListener('click', cancelHandler);
             };
-            confirmDelete.removeEventListener('click', confirmHandler); // Prevent multiple bindings
+            confirmDelete.removeEventListener('click', confirmHandler);
             cancelDelete.removeEventListener('click', cancelHandler);
             confirmDelete.addEventListener('click', confirmHandler, { once: true });
             cancelDelete.addEventListener('click', cancelHandler, { once: true });
