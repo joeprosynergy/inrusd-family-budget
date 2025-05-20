@@ -1386,7 +1386,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Bind Add Child Transaction Listener (global singleton to prevent duplicates)
+  // Bind Add Child Transaction Listener (global singleton with idempotency)
   // Global singleton to ensure single listener
   const ADD_CHILD_TRANSACTION_SYMBOL = Symbol('addChildTransactionHandler');
   if (addChildTransaction && !window[ADD_CHILD_TRANSACTION_SYMBOL]) {
@@ -1406,12 +1406,15 @@ document.addEventListener('DOMContentLoaded', () => {
     addChildTransaction = removeAllListeners();
 
     const addChildTransactionHandler = async (event) => {
+      event.preventDefault(); // Block default behavior
       event.stopPropagation(); // Prevent event bubbling
       executionCount++;
       const now = Date.now();
+      const txId = `${listenerId}-${now}`; // Unique transaction ID
       if (now - lastAddClickTime < DEBOUNCE_MS || isProcessing) {
         console.log('Add Child Transaction ignored:', { 
           listenerId,
+          txId,
           executionCount,
           timeSinceLastClick: now - lastAddClickTime, 
           isProcessing,
@@ -1423,6 +1426,7 @@ document.addEventListener('DOMContentLoaded', () => {
       isProcessing = true;
       console.log('Add Child Transaction executing:', { 
         listenerId, 
+        txId,
         executionCount,
         currentChildUserId, 
         accountType: currentAccountType,
@@ -1447,13 +1451,16 @@ document.addEventListener('DOMContentLoaded', () => {
           addChildTransaction.disabled = true;
           addChildTransaction.textContent = 'Adding...';
           const transactionUserId = currentAccountType === 'admin' ? currentChildUserId : currentUser.uid;
+          // Use txId to ensure idempotency
+          const txRef = db.collection('childTransactions').doc(txId);
           await retryFirestoreOperation(() => 
-            db.collection('childTransactions').add({
+            txRef.set({
               type,
               amount,
               description,
               userId: transactionUserId,
               familyCode,
+              txId, // Store txId for uniqueness
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             })
           );
@@ -1462,6 +1469,7 @@ document.addEventListener('DOMContentLoaded', () => {
             amount, 
             userId: transactionUserId, 
             familyCode,
+            txId,
             executionCount 
           });
           childTransactionType.value = 'debit';
@@ -1469,9 +1477,8 @@ document.addEventListener('DOMContentLoaded', () => {
           childTransactionDescription.value = '';
           addChildTransaction.innerHTML = 'Add Transaction';
           addChildTransaction.disabled = false;
-          await loadChildTransactions();
         } else {
-          console.error('Firestore or user not available');
+          console.error('Firestore or user not available', { txId, executionCount });
           showError('child-transaction-description', db ? 'Invalid input data' : 'Database service not available');
         }
       } catch (error) {
@@ -1479,6 +1486,7 @@ document.addEventListener('DOMContentLoaded', () => {
           code: error.code, 
           message: error.message, 
           userId: transactionUserId,
+          txId,
           executionCount 
         });
         showError('child-transaction-description', 'Failed to add transaction.');
