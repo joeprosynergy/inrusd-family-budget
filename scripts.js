@@ -633,6 +633,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   
+
   // User State
   let currentUser = null;
   let userCurrency = 'INR';
@@ -1301,25 +1302,110 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Bind Add Child Transaction Listener with Debouncing
-  let isAddingTransaction = false; // Prevent concurrent adds
-  if (addChildTransaction && !window.addChildTransactionBound) {
-    window.addChildTransactionBound = true; // Global flag to prevent re-binding
-    let lastClickTime = 0;
-    const debounceDelay = 500; // 500ms debounce
-    const addTransactionHandler = async (event) => {
-      const now = Date.now();
-      if (now - lastClickTime < debounceDelay || isAddingTransaction) {
-        console.log('Add Child Transaction debounced or in progress:', { now, lastClickTime, isAddingTransaction });
+  // Load Child Tiles
+  async function loadChildTiles() {
+    try {
+      console.log('Loading child tiles', { familyCode });
+      if (!db || !familyCode) {
+        console.error('Firestore or familyCode not available');
+        childTiles.innerHTML = '<div class="text-center py-4">No family data</div>';
         return;
       }
-      lastClickTime = now;
+      childTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
+      const childBalances = new Map();
+      await retryFirestoreOperation(() => 
+        db.collection('users')
+          .where('familyCode', '==', familyCode)
+          .where('accountType', '==', 'child')
+          .get()
+          .then(snapshot => {
+            console.log('Child users for tiles fetched:', { 
+              count: snapshot.size, 
+              docs: snapshot.docs.map(doc => ({ id: doc.id, email: doc.data().email, familyCode: doc.data().familyCode }))
+            });
+            if (snapshot.empty) {
+              childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
+              return [];
+            }
+            const promises = snapshot.docs.map(doc => {
+              const userId = doc.id;
+              const email = doc.data().email && doc.data().email.trim() !== '' ? doc.data().email : `Child Account ${userId.substring(0, 8)}`;
+              if (!doc.data().email || doc.data().email.trim() === '') {
+                console.warn('Child account with missing or empty email in tiles:', { id: userId, email: doc.data().email });
+              }
+              return retryFirestoreOperation(() => 
+                db.collection('childTransactions')
+                  .where('userId', '==', userId)
+                  .get()
+                  .then(transSnapshot => {
+                    let balance = 0;
+                    transSnapshot.forEach(transDoc => {
+                      const trans = transDoc.data();
+                      balance += trans.type === 'credit' ? trans.amount : -trans.amount;
+                    });
+                    childBalances.set(userId, { email, balance });
+                  })
+                  .catch(error => {
+                    console.warn('No transactions for child:', { userId, email, error: error.message });
+                    childBalances.set(userId, { email, balance: 0 });
+                  })
+              );
+            });
+            return Promise.all(promises);
+          })
+      );
+      childTiles.innerHTML = '';
+      if (childBalances.size === 0) {
+        childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
+      } else {
+        childBalances.forEach(({ email, balance }, userId) => {
+          const tile = document.createElement('div');
+          tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'child-tile');
+          tile.innerHTML = `
+            <h3 class="text-lg font-semibold text-gray-700">${email}</h3>
+            <p class="text-sm font-semibold text-gray-700 mt-2">
+              Balance: <span id="child-${userId}-balance">${formatCurrency(balance, 'INR')}</span>
+            </p>
+          `;
+          console.log('Child tile added:', { userId, email, balance: formatCurrency(balance, 'INR') });
+          childTiles.appendChild(tile);
+        });
+      }
+    } catch (error) {
+      console.error('Error loading child tiles:', {
+        message: error.message,
+        stack: error.stack,
+        familyCode
+      });
+      childTiles.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
+    }
+  }
+
+  // Bind Add Child Transaction Listener (singleton with debounce and lock)
+  let addChildTransactionHandler = null;
+  let isAddingTransaction = false; // Lock to prevent concurrent adds
+  if (addChildTransaction) {
+    // Remove any existing listeners
+    if (addChildTransactionHandler) {
+      addChildTransaction.removeEventListener('click', addChildTransactionHandler);
+    }
+    
+    // Debounce function to limit rapid clicks
+    const debounce = (func, wait) => {
+      let timeout;
+      return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func(...args), wait);
+      };
+    };
+
+    addChildTransactionHandler = async () => {
+      if (isAddingTransaction || isEditing.childTransaction) {
+        console.log('Add Child Transaction skipped: already processing or in edit mode', { isAddingTransaction, isEditing: isEditing.childTransaction });
+        return;
+      }
       isAddingTransaction = true;
-      console.log('Add Child Transaction clicked', { isEditing: isEditing.childTransaction, currentChildUserId, accountType: currentAccountType });
-      if (isEditing.childTransaction) {
-        isAddingTransaction = false;
-        return;
-      }
+      console.log('Add Child Transaction clicked', { currentChildUserId, accountType: currentAccountType });
       clearErrors();
       const type = childTransactionType.value;
       const amount = parseFloat(childTransactionAmount.value);
@@ -1371,7 +1457,9 @@ document.addEventListener('DOMContentLoaded', () => {
         isAddingTransaction = false;
       }
     };
-    addChildTransaction.addEventListener('click', addTransactionHandler);
+
+    // Bind debounced handler
+    addChildTransaction.addEventListener('click', debounce(addChildTransactionHandler, 300));
   }
 
 
