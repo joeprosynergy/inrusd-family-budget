@@ -1542,9 +1542,11 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Firestore not available');
         return;
       }
+      const categorySelect = document.getElementById('category');
+      const categoryBudgetSelect = document.getElementById('category-budget');
+      const newCategoryBudgetSelect = document.getElementById('new-category-budget');
       categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
       categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
-      const newCategoryBudgetSelect = document.getElementById('new-category-budget');
       if (newCategoryBudgetSelect) {
         newCategoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
       } else {
@@ -1584,6 +1586,7 @@ document.addEventListener('DOMContentLoaded', () => {
               categorySelect.insertBefore(option, categorySelect.querySelector('option[value="add-new"]'));
             });
 
+            const categoryTable = document.getElementById('category-table');
             categoryTable.innerHTML = '';
             snapshot.forEach(doc => {
               const category = doc.data();
@@ -1627,6 +1630,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   try {
+    const addCategory = document.getElementById('add-category');
+    const categorySelect = document.getElementById('category');
+    const saveCategory = document.getElementById('save-category');
+    const cancelCategory = document.getElementById('cancel-category');
+    const addCategory esperaModal = document.getElementById('add-category-modal');
+
     if (addCategory) {
       addCategory.addEventListener('click', () => {
         console.log('Add Category clicked', { isEditing: isEditing.category });
@@ -1833,6 +1842,8 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Firestore not available');
         return;
       }
+      const budgetTable = document.getElementById('budget-table');
+      const budgetTiles = document.getElementById('budget-tiles');
       budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
       budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
       const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
@@ -1859,8 +1870,8 @@ document.addEventListener('DOMContentLoaded', () => {
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, 'INR')}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, 'INR')}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm">
-                    <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
-                    <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
+                    <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Editar</button>
+                    <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Eliminar</button>
                   </td>
                 `;
                 budgetTable.appendChild(tr);
@@ -1887,6 +1898,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 budgetTiles.appendChild(tile);
               }
             });
+            const totalBudget = document.getElementById('total-budget');
+            const totalRemaining = document.getElementById('total-unspent-budget');
             totalBudget.textContent = formatCurrency(totalBudgetAmount, 'INR');
             totalRemaining.textContent = formatCurrency(totalRemainingAmount, 'INR');
             console.log('Total budget and remaining updated:', {
@@ -1905,6 +1918,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   try {
+    const addBudget = document.getElementById('add-budget');
+    const categoryBudgetSelect = document.getElementById('category-budget');
+    const saveBudget = document.getElementById('save-budget');
+    const cancelBudget = document.getElementById('cancel-budget');
+    const addBudgetModal = document.getElementById('add-budget-modal');
+
     if (addBudget) {
       addBudget.addEventListener('click', () => {
         console.log('Add Budget clicked', { isEditing: isEditing.budget });
@@ -2112,6 +2131,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Firestore not available');
         return;
       }
+      const transactionTable = document.getElementById('transaction-table');
       transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
       const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
       await retryFirestoreOperation(() => 
@@ -2160,6 +2180,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   try {
+    const addTransaction = document.getElementById('add-transaction');
     if (addTransaction) {
       addTransaction.addEventListener('click', () => {
         console.log('Add Transaction clicked', { isEditing: isEditing.transaction });
@@ -2220,6 +2241,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    const transactionTable = document.getElementById('transaction-table');
     if (transactionTable) {
       transactionTable.addEventListener('click', e => {
         if (e.target.classList.contains('edit-transaction')) {
@@ -2399,7 +2421,103 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Child Transactions
+  async function loadChildTransactions() {
+    try {
+      console.log('Loading child transactions for user:', currentChildUserId || currentUser.uid);
+      if (!db) {
+        console.error('Firestore not available');
+        return;
+      }
+      const childTransactionTable = document.getElementById('child-transaction-table');
+      childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
+      const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
+      await retryFirestoreOperation(() => 
+        db.collection('childTransactions')
+          .where('familyCode', '==', familyCode)
+          .where('userId', '==', currentChildUserId || currentUser.uid)
+          .get()
+          .then(snapshot => {
+            console.log('Child transactions fetched:', { count: snapshot.size });
+            childTransactionTable.innerHTML = '';
+            snapshot.forEach(doc => {
+              const transaction = doc.data();
+              const createdAt = transaction.createdAt ? transaction.createdAt.toDate() : new Date();
+              if (createdAt >= start && createdAt <= end) {
+                const tr = document.createElement('tr');
+                tr.classList.add('table-row');
+                tr.innerHTML = `
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm">
+                    <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${doc.id}">Edit</button>
+                    <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${doc.id}">Delete</button>
+                  </td>
+                `;
+                console.log('Child transaction row added:', {
+                  id: doc.id,
+                  type: transaction.type,
+                  amount: formatCurrency(transaction.amount, 'INR')
+                });
+                childTransactionTable.appendChild(tr);
+              }
+            });
+          })
+      );
+    } catch (error) {
+      console.error('Error loading child transactions:', {
+        message: error.message,
+        stack: error.stack
+      });
+    }
+  }
+
+  async function loadChildTiles() {
+    try {
+      console.log('Loading child tiles');
+      if (!db) {
+        console.error('Firestore not available');
+        return;
+      }
+      const childBalance = document.getElementById('child-balance');
+      let totalChildBalance = 0;
+      const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
+      await retryFirestoreOperation(() => 
+        db.collection('childTransactions')
+          .where('familyCode', '==', familyCode)
+          .where('userId', '==', currentChildUserId || currentUser.uid)
+          .get()
+          .then(snapshot => {
+            snapshot.forEach(doc => {
+              const transaction = doc.data();
+              const createdAt = transaction.createdAt ? transaction.createdAt.toDate() : new Date();
+              if (createdAt >= start && createdAt <= end) {
+                if (transaction.type === 'credit') {
+                  totalChildBalance += transaction.amount;
+                } else {
+                  totalChildBalance -= transaction.amount;
+                }
+              }
+            });
+            childBalance.textContent = formatCurrency(totalChildBalance, 'INR');
+            console.log('Child balance updated:', { totalChildBalance: formatCurrency(totalChildBalance, 'INR') });
+          })
+      );
+    } catch (error) {
+      console.error('Error loading child tiles:', {
+        message: error.message,
+        stack: error.stack
+      });
+    }
+  }
+
   try {
+    const addChildTransaction = document.getElementById('add-child-transaction');
+    const childTransactionType = document.getElementById('child-transaction-type');
+    const childTransactionAmount = document.getElementById('child-transaction-amount');
+    const childTransactionDescription = document.getElementById('child-transaction-description');
+    const childUserId = document.getElementById('child-user-id');
+
     if (addChildTransaction) {
       addChildTransaction.addEventListener('click', () => {
         console.log('Add Child Transaction clicked', { isEditing: isEditing.childTransaction });
@@ -2443,6 +2561,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    const childTransactionTable = document.getElementById('child-transaction-table');
     if (childTransactionTable) {
       childTransactionTable.addEventListener('click', e => {
         if (e.target.classList.contains('edit-child-transaction')) {
@@ -2542,6 +2661,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('Child user selected:', childUserId.value);
         currentChildUserId = childUserId.value || currentUser.uid;
         loadChildTransactions();
+        loadChildTiles();
       });
     }
   } catch (error) {
@@ -2559,6 +2679,9 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Firestore not available');
         return;
       }
+      const balance = document.getElementById('balance');
+      const afterBudget = document.getElementById('after-budget');
+      const totalBudget = document.getElementById('total-budget');
       const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
       let totalBalance = 0;
       let totalBudgetAmount = 0;
@@ -2591,10 +2714,11 @@ document.addEventListener('DOMContentLoaded', () => {
                   totalBudgetAmount += budget.amount;
                 }
               });
+              totalBudget.textContent = formatCurrency(totalBudgetAmount, 'INR');
             })
         )
       ]);
-      document.getElementById('after-budget').textContent = formatCurrency(totalBalance - totalBudgetAmount, 'INR');
+      afterBudget.textContent = formatCurrency(totalBalance - totalBudgetAmount, 'INR');
       console.log('After budget updated:', { afterBudget: formatCurrency(totalBalance - totalBudgetAmount, 'INR') });
       await loadChildTiles();
     } catch (error) {
