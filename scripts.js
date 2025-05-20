@@ -1541,14 +1541,15 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Firestore not available');
         return;
       }
-      categorySelect.innerHTML = '';
-      categoryBudgetSelect.innerHTML = '';
+      categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
+      categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
       const newCategoryBudgetSelect = document.getElementById('new-category-budget');
       if (newCategoryBudgetSelect) {
-        newCategoryBudgetSelect.innerHTML = '';
+        newCategoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
       } else {
         console.error('new-category-budget dropdown not found');
       }
+
       await retryFirestoreOperation(() => 
         db.collection('budgets').where('familyCode', '==', familyCode).get()
           .then(budgetSnapshot => {
@@ -1569,6 +1570,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
           })
       );
+
       await retryFirestoreOperation(() => 
         db.collection('categories').where('familyCode', '==', familyCode).get()
           .then(snapshot => {
@@ -1580,6 +1582,7 @@ document.addEventListener('DOMContentLoaded', () => {
               option.textContent = category.name;
               categorySelect.insertBefore(option, categorySelect.querySelector('option[value="add-new"]'));
             });
+
             categoryTable.innerHTML = '';
             snapshot.forEach(doc => {
               const category = doc.data();
@@ -1587,13 +1590,13 @@ document.addEventListener('DOMContentLoaded', () => {
               tr.classList.add('table-row');
               const budgetName = category.budgetId ? 'Loading...' : 'None';
               tr.innerHTML = `
-                ${category.name}
-                ${category.type}
-                ${budgetName}
-                
-                  Edit
-                  Delete
-                
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${category.name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${category.type}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budgetName}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                  <button class="text-blue-600 hover:text-blue-800 mr-2 edit-category" data-id="${doc.id}">Edit</button>
+                  <button class="text-red-600 hover:text-red-800 delete-category" data-id="${doc.id}">Delete</button>
+                </td>
               `;
               categoryTable.appendChild(tr);
               if (category.budgetId) {
@@ -1621,6 +1624,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   }
+
   try {
     if (addCategory) {
       addCategory.addEventListener('click', () => {
@@ -1662,6 +1666,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     }
+
     if (categorySelect) {
       categorySelect.addEventListener('change', () => {
         console.log('Category select changed:', categorySelect.value);
@@ -1671,6 +1676,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     }
+
     if (saveCategory) {
       saveCategory.addEventListener('click', () => {
         console.log('Save Category clicked');
@@ -1711,6 +1717,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     }
+
     if (cancelCategory) {
       cancelCategory.addEventListener('click', () => {
         console.log('Cancel Category clicked');
@@ -1720,6 +1727,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('new-category-budget').value = 'none';
       });
     }
+
     if (categoryTable) {
       categoryTable.addEventListener('click', e => {
         if (e.target.classList.contains('edit-category')) {
@@ -1815,6 +1823,7 @@ document.addEventListener('DOMContentLoaded', () => {
       stack: error.stack
     });
   }
+
   // Budgets
   async function loadBudgets() {
     try {
@@ -1823,16 +1832,76 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Firestore not available');
         return;
       }
-      budgetTable.innerHTML = 'Loading...';
-      budgetTiles.innerHTML = '
-Loading...
-'; const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : ''); await retryFirestoreOperation(() => db.collection('budgets').where('familyCode', '==', familyCode).get() .then(snapshot => { console.log('Budgets fetched for table and tiles:', { count: snapshot.size }); budgetTable.innerHTML = ''; budgetTiles.innerHTML = ''; let totalBudgetAmount = 0; let totalRemainingAmount = 0; snapshot.forEach(doc => { const budget = doc.data(); const createdAt = budget.createdAt ? budget.createdAt.toDate() : new Date(); if (createdAt >= start && createdAt <= end) { const spent = budget.spent || 0; totalBudgetAmount += budget.amount; totalRemainingAmount += budget.amount - spent; const tr = document.createElement('tr'); tr.classList.add('table-row'); tr.innerHTML = ` ${budget.name} ${formatCurrency(budget.amount, 'INR')} ${formatCurrency(spent, 'INR')} ${formatCurrency(budget.amount - spent, 'INR')} Edit Delete `; budgetTable.appendChild(tr); const tile = document.createElement('div'); tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile'); const percentage = budget.amount ? (spent / budget.amount) * 100 : 0; tile.innerHTML = `
-${budget.name}
-Budget: ${formatCurrency(budget.amount, 'INR')}
-Spent: ${formatCurrency(spent, 'INR')}
-Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
-
-`; console.log('Budget tile added:', { id: doc.id, name: budget.name, amount: formatCurrency(budget.amount, 'INR'), spent: formatCurrency(spent, 'INR') }); budgetTiles.appendChild(tile); } }); totalBudget.textContent = formatCurrency(totalBudgetAmount, 'INR'); totalRemaining.textContent = formatCurrency(totalRemainingAmount, 'INR'); console.log('Total budget and remaining updated:', { totalBudget: formatCurrency(totalBudgetAmount, 'INR'), totalRemaining: formatCurrency(totalRemainingAmount, 'INR') }); }) ); } catch (error) { console.error('Error loading budgets:', { message: error.message, stack: error.stack }); showError('budget-name', 'Failed to load budgets.'); } }
+      budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
+      budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
+      const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
+      await retryFirestoreOperation(() => 
+        db.collection('budgets').where('familyCode', '==', familyCode).get()
+          .then(snapshot => {
+            console.log('Budgets fetched for table and tiles:', { count: snapshot.size });
+            budgetTable.innerHTML = '';
+            budgetTiles.innerHTML = '';
+            let totalBudgetAmount = 0;
+            let totalRemainingAmount = 0;
+            snapshot.forEach(doc => {
+              const budget = doc.data();
+              const createdAt = budget.createdAt ? budget.createdAt.toDate() : new Date();
+              if (createdAt >= start && createdAt <= end) {
+                const spent = budget.spent || 0;
+                totalBudgetAmount += budget.amount;
+                totalRemainingAmount += budget.amount - spent;
+                const tr = document.createElement('tr');
+                tr.classList.add('table-row');
+                tr.innerHTML = `
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, 'INR')}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, 'INR')}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, 'INR')}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm">
+                    <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
+                    <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
+                  </td>
+                `;
+                budgetTable.appendChild(tr);
+                const tile = document.createElement('div');
+                tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
+                const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
+                tile.innerHTML = `
+                  <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
+                  <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, 'INR')}</span></p>
+                  <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, 'INR')}</span></p>
+                  <p class="text-sm font-semibold text-gray-700 mt-2">
+                    Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, 'INR')}</span>
+                  </p>
+                  <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
+                    <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
+                  </div>
+                `;
+                console.log('Budget tile added:', {
+                  id: doc.id,
+                  name: budget.name,
+                  amount: formatCurrency(budget.amount, 'INR'),
+                  spent: formatCurrency(spent, 'INR')
+                });
+                budgetTiles.appendChild(tile);
+              }
+            });
+            totalBudget.textContent = formatCurrency(totalBudgetAmount, 'INR');
+            totalRemaining.textContent = formatCurrency(totalRemainingAmount, 'INR');
+            console.log('Total budget and remaining updated:', {
+              totalBudget: formatCurrency(totalBudgetAmount, 'INR'),
+              totalRemaining: formatCurrency(totalRemainingAmount, 'INR')
+            });
+          })
+      );
+    } catch (error) {
+      console.error('Error loading budgets:', {
+        message: error.message,
+        stack: error.stack
+      });
+      showError('budget-name', 'Failed to load budgets.');
+    }
+  }
 
   try {
     if (addBudget) {
@@ -1875,6 +1944,7 @@ Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
         }
       });
     }
+
     if (categoryBudgetSelect) {
       categoryBudgetSelect.addEventListener('change', () => {
         console.log('Category Budget select changed:', categoryBudgetSelect.value);
@@ -1884,6 +1954,7 @@ Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
         }
       });
     }
+
     if (saveBudget) {
       saveBudget.addEventListener('click', () => {
         console.log('Save Budget clicked');
@@ -1924,6 +1995,7 @@ Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
         }
       });
     }
+
     if (cancelBudget) {
       cancelBudget.addEventListener('click', () => {
         console.log('Cancel Budget clicked');
@@ -1932,6 +2004,7 @@ Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
         document.getElementById('new-budget-amount').value = '';
       });
     }
+
     if (budgetTable) {
       budgetTable.addEventListener('click', e => {
         if (e.target.classList.contains('edit-budget')) {
@@ -2029,6 +2102,7 @@ Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
       stack: error.stack
     });
   }
+
   // Transactions
   async function loadTransactions() {
     try {
@@ -2037,7 +2111,7 @@ Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
         console.error('Firestore not available');
         return;
       }
-      transactionTable.innerHTML = 'Loading...';
+      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
       const { start, end } = getDateRange(dashboardFilter ? dashboardFilter.value : '');
       await retryFirestoreOperation(() => 
         db.collection('transactions').where('familyCode', '==', familyCode).get()
@@ -2053,14 +2127,14 @@ Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
                 db.collection('categories').doc(transaction.categoryId).get().then(categoryDoc => {
                   const categoryName = categoryDoc.exists ? categoryDoc.data().name : 'Unknown';
                   tr.innerHTML = `
-                    ${transaction.type}
-                    ${formatCurrency(transaction.amount, 'INR')}
-                    ${categoryName}
-                    ${transaction.description}
-                    
-                      Edit
-                      Delete
-                    
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                      <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
+                      <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
+                    </td>
                   `;
                   console.log('Transaction row added:', {
                     id: doc.id,
@@ -2083,6 +2157,7 @@ Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
       });
     }
   }
+
   try {
     if (addTransaction) {
       addTransaction.addEventListener('click', () => {
@@ -2143,6 +2218,7 @@ Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
         }
       });
     }
+
     if (transactionTable) {
       transactionTable.addEventListener('click', e => {
         if (e.target.classList.contains('edit-transaction')) {
@@ -2320,6 +2396,7 @@ Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
       stack: error.stack
     });
   }
+
   // Child Transactions
   try {
     if (addChildTransaction) {
@@ -2364,6 +2441,7 @@ Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
         }
       });
     }
+
     if (childTransactionTable) {
       childTransactionTable.addEventListener('click', e => {
         if (e.target.classList.contains('edit-child-transaction')) {
@@ -2457,6 +2535,7 @@ Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
         }
       });
     }
+
     if (childUserId) {
       childUserId.addEventListener('change', () => {
         console.log('Child user selected:', childUserId.value);
@@ -2470,6 +2549,7 @@ Remaining: ${formatCurrency(budget.amount - spent, 'INR')}
       stack: error.stack
     });
   }
+
   // Dashboard Updates
   async function updateDashboard() {
     try {
