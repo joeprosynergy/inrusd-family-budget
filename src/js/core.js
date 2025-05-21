@@ -222,6 +222,19 @@ function clearErrors() {
   }
 }
 
+// Named functions for setters
+function setCurrentUser(user) {
+  currentUser = user;
+}
+
+function setUserCurrency(currency) {
+  userCurrency = currency;
+}
+
+function setFamilyCode(code) {
+  familyCode = code;
+}
+
 export {
   auth,
   db,
@@ -236,7 +249,7 @@ export {
   formatCurrency,
   showError,
   clearErrors,
-  setCurrentUser: (user) => { currentUser = user; },
-  setUserCurrency: (currency) => { userCurrency = currency; },
-  setFamilyCode: (code) => { familyCode = code; }
+  setCurrentUser,
+  setUserCurrency,
+  setFamilyCode
 };
