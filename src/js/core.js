@@ -1,7 +1,7 @@
 // Core module: Firebase initialization, DOM setup, auth state, and utilities
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { fetchExchangeRate } from './utils.js';
 
 let auth = null;
@@ -133,46 +133,58 @@ function setupDOM() {
 
 // Setup Auth State Listener
 function setupAuthStateListener(loadAppDataCallback) {
+  console.log('setupAuthStateListener: Starting');
   if (!auth) {
-    console.error('Auth service not available');
+    console.error('setupAuthStateListener: Auth service not available');
     showError('login-email', 'Authentication service not available.');
     domElements.authSection?.classList.remove('hidden');
     document.getElementById('loading-spinner')?.remove();
     return;
   }
 
-  console.log('Setting up auth state listener');
+  console.log('setupAuthStateListener: Setting up onAuthStateChanged');
   onAuthStateChanged(auth, async user => {
-    console.log('Auth state changed:', user ? user.uid : 'No user');
-    document.getElementById('loading-spinner')?.remove();
-    if (user) {
-      currentUser = user;
-      try {
-        const doc = await db.collection('users').doc(user.uid).get();
-        if (doc.exists) {
-          userCurrency = doc.data().currency || 'INR';
-          familyCode = doc.data().familyCode;
+    console.log('Auth state changed:', user ? `User: ${user.uid}` : 'No user');
+    try {
+      document.getElementById('loading-spinner')?.remove();
+      if (user) {
+        currentUser = user;
+        console.log('Fetching user document for UID:', user.uid);
+        const docRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          console.log('User document found:', docSnap.data());
+          userCurrency = docSnap.data().currency || 'INR';
+          familyCode = docSnap.data().familyCode;
           console.log('User data loaded:', { userCurrency, familyCode });
+          console.log('Calling loadAppDataCallback');
           await loadAppDataCallback();
+          console.log('Hiding authSection, showing appSection');
           domElements.authSection?.classList.add('hidden');
           domElements.appSection?.classList.remove('hidden');
         } else {
-          console.error('User document not found:', user.uid);
+          console.error('User document not found for UID:', user.uid);
           showError('login-email', 'User data not found. Please sign up again.');
           domElements.authSection?.classList.remove('hidden');
         }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-        showError('login-email', 'Failed to load user data.');
+      } else {
+        console.log('No user, showing authSection');
+        currentUser = null;
         domElements.authSection?.classList.remove('hidden');
+        domElements.appSection?.classList.add('hidden');
+        domElements.loginModal?.classList.remove('hidden');
       }
-    } else {
-      currentUser = null;
+    } catch (error) {
+      console.error('setupAuthStateListener error:', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      showError('login-email', 'Failed to load user data.');
       domElements.authSection?.classList.remove('hidden');
-      domElements.appSection?.classList.add('hidden');
-      domElements.loginModal?.classList.remove('hidden');
     }
   });
+  console.log('setupAuthStateListener: Complete');
 }
 
 // Utility: Format Currency
