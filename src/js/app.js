@@ -6,99 +6,18 @@ import {
   userCurrency,
   familyCode,
   domElements,
+  exchangeRateCache,
   formatCurrency,
   showError,
   clearErrors,
-  fetchExchangeRate,
   setUserCurrency,
   setFamilyCode
 } from './core.js';
+import { retryFirestoreOperation, fetchExchangeRate, getDateRange } from './utils.js';
 
 let isEditing = { transaction: false, budget: false, category: false, profile: false, childTransaction: false };
 let currentChildUserId = null;
 let currentAccountType = null;
-
-// Utility: Retry Firestore Operation (to be moved to utils.js)
-async function retryFirestoreOperation(operation, maxRetries = 3, delay = 1000) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`Firestore operation attempt ${attempt}/${maxRetries}`);
-      return await operation();
-    } catch (error) {
-      console.error('Firestore operation failed:', { attempt, code: error.code, message: error.message });
-      if (attempt === maxRetries || error.code === 'permission-denied') {
-        throw error;
-      }
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-}
-
-// Get Date Range for Filters
-function getDateRange(filter) {
-  const now = new Date();
-  const start = new Date();
-  const end = new Date();
-  
-  switch (filter) {
-    case '1week':
-      start.setDate(now.getDate() - 7);
-      break;
-    case '1month':
-      start.setMonth(now.getMonth() - 1);
-      break;
-    case 'thisMonth':
-      start.setDate(1);
-      start.setHours(0, 0, 0, 0);
-      end.setMonth(now.getMonth() + 1);
-      end.setDate(0);
-      end.setHours(23, 59, 59, 999);
-      break;
-    case 'lastMonth':
-      start.setMonth(now.getMonth() - 1);
-      start.setDate(1);
-      start.setHours(0, 0, 0, 0);
-      end.setMonth(now.getMonth());
-      end.setDate(0);
-      end.setHours(23, 59, 59, 999);
-      break;
-    case 'thisYear':
-      start.setMonth(0);
-      start.setDate(1);
-      start.setHours(0, 0, 0, 0);
-      end.setMonth(11);
-      end.setDate(31);
-      end.setHours(23, 59, 59, 999);
-      break;
-    case 'lastYear':
-      start.setFullYear(now.getFullYear() - 1);
-      start.setMonth(0);
-      start.setDate(1);
-      start.setHours(0, 0, 0, 0);
-      end.setFullYear(now.getFullYear() - 1);
-      end.setMonth(11);
-      end.setDate(31);
-      end.setHours(23, 59, 59, 999);
-      break;
-    case 'custom':
-      const startDate = domElements.filterStartDate?.value ? new Date(domElements.filterStartDate.value) : null;
-      const endDate = domElements.filterEndDate?.value ? new Date(domElements.filterEndDate.value) : null;
-      if (startDate && endDate && startDate <= endDate) {
-        start.setTime(startDate.getTime());
-        start.setHours(0, 0, 0, 0);
-        end.setTime(endDate.getTime());
-        end.setHours(23, 59, 59, 999);
-      } else {
-        console.warn('Invalid custom date range; using default (all time)');
-        start.setTime(0);
-      }
-      break;
-    default:
-      start.setTime(0);
-      break;
-  }
-  return { start, end };
-}
 
 // Load App Data
 async function loadAppData() {
@@ -108,7 +27,7 @@ async function loadAppData() {
     return;
   }
   try {
-    await fetchExchangeRate();
+    await fetchExchangeRate(exchangeRateCache); // Use exchangeRateCache from core.js
     if (domElements.currencyToggle) {
       domElements.currencyToggle.value = userCurrency;
     }
@@ -125,6 +44,11 @@ async function loadAppData() {
     console.error('Error loading app data:', error);
     showError('page-title', 'Failed to load app data.');
   }
+}
+
+// Wrapper for getDateRange to pass DOM inputs
+function getDateRangeWrapper(filter) {
+  return getDateRange(filter, domElements.filterStartDate, domElements.filterEndDate);
 }
 
 // Tab Switching
@@ -684,7 +608,7 @@ async function loadBudgets() {
     const budgetTiles = document.getElementById('budget-tiles');
     budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
-    const { start, end } = getDateRange(domElements.dashboardFilter?.value || '');
+    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || '');
     let totalBudgetAmount = 0;
     let totalRemainingAmount = 0;
     await retryFirestoreOperation(() => 
@@ -945,7 +869,7 @@ async function loadTransactions() {
   try {
     const transactionTable = document.getElementById('transaction-table');
     transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
-    const { start, end } = getDateRange(domElements.dashboardFilter?.value || '');
+    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || '');
     await retryFirestoreOperation(() => 
       db.collection('transactions').where('familyCode', '==', familyCode).get()
         .then(snapshot => {
@@ -1543,7 +1467,7 @@ async function updateDashboard() {
     return;
   }
   try {
-    const { start, end } = getDateRange(domElements.dashboardFilter?.value || '');
+    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || '');
     let totalBalance = 0;
     let totalBudgetAmount = 0;
     await Promise.all([
