@@ -1,4 +1,6 @@
 // Entry point: Initializes the family budget app
+console.log('index.js loaded');
+
 import { initializeFirebase, setupDOM, setupAuthStateListener } from './core.js';
 import { setupAuth } from './auth.js';
 import { loadAppData, initApp } from './app.js';
@@ -31,14 +33,21 @@ async function init() {
       stack: error.stack
     });
     // Display user-friendly error
-    const { showError } = await import('./core.js');
-    showError('page-title', 'Failed to initialize the app. Please try refreshing the page.');
+    try {
+      const { showError } = await import('./core.js');
+      showError('page-title', 'Failed to initialize the app. Please try refreshing the page.');
+    } catch (showErrorError) {
+      console.error('Failed to show error:', showErrorError);
+      document.body.innerHTML += '<p style="color: red; text-align: center;">Error: App failed to initialize. Please try refreshing.</p>';
+    }
   }
 }
 
-// Run initialization when DOM is ready
-console.log('Adding DOMContentLoaded listener');
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOMContentLoaded fired, calling init');
-  init();
+// Expose initApp for index.html fallback
+window.initApp = init;
+
+// Run initialization immediately for debugging
+console.log('Calling init directly');
+init().catch(error => {
+  console.error('Direct init failed:', error);
 });
