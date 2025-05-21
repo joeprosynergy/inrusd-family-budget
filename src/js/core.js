@@ -236,7 +236,6 @@ export {
   formatCurrency,
   showError,
   clearErrors,
-}
   setCurrentUser: (user) => { currentUser = user; },
   setUserCurrency: (currency) => { userCurrency = currency; },
   setFamilyCode: (code) => { familyCode = code; }
