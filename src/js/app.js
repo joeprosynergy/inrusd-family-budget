@@ -13,7 +13,7 @@ import {
   setFamilyCode
 } from './core.js';
 import { retryFirestoreOperation, fetchExchangeRate, getDateRange } from './utils.js';
-import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, serverTimestamp, increment } from 'firebase/firestore';
 
 let isEditing = { transaction: false, budget: false, category: false, profile: false, childTransaction: false };
 let currentChildUserId = null;
@@ -331,15 +331,19 @@ async function loadProfileData() {
 
 // Categories
 async function loadCategories() {
-  console.log('Loading categories');
+  console.log('loadCategories: Starting');
   if (!db) {
-    console.error('Firestore not available');
+    console.error('loadCategories: Firestore not available');
     return;
   }
   try {
     const categorySelect = document.getElementById('category');
     const categoryBudgetSelect = domElements.categoryBudgetSelect;
     const newCategoryBudgetSelect = document.getElementById('new-category-budget');
+    if (!categorySelect || !categoryBudgetSelect) {
+      console.error('loadCategories: Missing DOM elements', { categorySelect: !!categorySelect, categoryBudgetSelect: !!categoryBudgetSelect });
+      return;
+    }
     categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
     categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
     if (newCategoryBudgetSelect) {
@@ -347,6 +351,7 @@ async function loadCategories() {
     }
 
     await retryFirestoreOperation(async () => {
+      console.log('loadCategories: Fetching budgets');
       const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
       const budgetsSnapshot = await getDocs(budgetsQuery);
       budgetsSnapshot.forEach(doc => {
@@ -362,9 +367,11 @@ async function loadCategories() {
           newCategoryBudgetSelect.insertBefore(newOption, newCategoryBudgetSelect.querySelector('option[value="add-new"]'));
         }
       });
+      console.log('loadCategories: Budgets loaded', { count: budgetsSnapshot.size });
     });
 
     await retryFirestoreOperation(async () => {
+      console.log('loadCategories: Fetching categories');
       const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
       const categoriesSnapshot = await getDocs(categoriesQuery);
       categoriesSnapshot.forEach(doc => {
@@ -376,6 +383,10 @@ async function loadCategories() {
       });
 
       const categoryTable = document.getElementById('category-table');
+      if (!categoryTable) {
+        console.error('loadCategories: category-table not found');
+        return;
+      }
       categoryTable.innerHTML = '';
       categoriesSnapshot.forEach(async doc => {
         const category = doc.data();
@@ -397,38 +408,55 @@ async function loadCategories() {
             const budgetDoc = await getDoc(doc(db, 'budgets', category.budgetId));
             tr.children[2].textContent = budgetDoc.exists() ? budgetDoc.data().name : 'None';
           } catch (error) {
-            console.error('Error fetching budget for category:', error);
+            console.error('loadCategories: Error fetching budget for category:', error);
             tr.children[2].textContent = 'Error';
           }
         }
       });
+      console.log('loadCategories: Categories loaded', { count: categoriesSnapshot.size });
     });
   } catch (error) {
-    console.error('Error loading categories:', error);
+    console.error('loadCategories error:', error);
     showError('category-name', 'Failed to load categories.');
   }
 }
 
 function setupCategories() {
-  console.log('Setting up category event listeners');
+  console.log('setupCategories: Starting');
   const addCategory = document.getElementById('add-category');
   const categorySelect = document.getElementById('category');
   const saveCategory = document.getElementById('save-category');
   const cancelCategory = document.getElementById('cancel-category');
   const categoryTable = document.getElementById('category-table');
 
-  addCategory?.addEventListener('click', async () => {
+  if (!addCategory || !categorySelect || !saveCategory || !cancelCategory || !categoryTable) {
+    console.error('setupCategories: Missing DOM elements', {
+      addCategory: !!addCategory,
+      categorySelect: !!categorySelect,
+      saveCategory: !!saveCategory,
+      cancelCategory: !!cancelCategory,
+      categoryTable: !!categoryTable
+    });
+    return;
+  }
+
+  addCategory.addEventListener('click', async () => {
     console.log('Add Category clicked', { isEditing: isEditing.category });
-    if (isEditing.category) return;
+    if (isEditing.category) {
+      console.log('Add Category: Blocked due to ongoing edit');
+      return;
+    }
     clearErrors();
     const name = document.getElementById('category-name')?.value.trim();
     const type = document.getElementById('category-type')?.value;
     const budgetId = document.getElementById('category-budget')?.value === 'none' ? null : document.getElementById('category-budget').value;
     if (!name) {
+      console.log('Add Category: Missing name');
       showError('category-name', 'Name is required');
       return;
     }
     if (!currentUser || !db) {
+      console.log('Add Category: Missing user or Firestore');
       showError('category-name', 'Database service not available');
       return;
     }
@@ -451,7 +479,7 @@ function setupCategories() {
       addCategory.innerHTML = 'Add Category';
       await loadCategories();
     } catch (error) {
-      console.error('Error adding category:', error);
+      console.error('Add Category error:', error);
       showError('category-name', 'Failed to add category.');
     } finally {
       addCategory.disabled = false;
@@ -459,25 +487,31 @@ function setupCategories() {
     }
   });
 
-  categorySelect?.addEventListener('change', () => {
+  categorySelect.addEventListener('change', () => {
     console.log('Category select changed:', categorySelect.value);
     if (categorySelect.value === 'add-new') {
-      domElements.addCategoryModal?.classList.remove('hidden');
-      categorySelect.value = '';
+      if (domElements.addCategoryModal) {
+        domElements.addCategoryModal.classList.remove('hidden');
+        categorySelect.value = '';
+      } else {
+        console.error('Category select: addCategoryModal not found');
+      }
     }
   });
 
-  saveCategory?.addEventListener('click', async () => {
+  saveCategory.addEventListener('click', async () => {
     console.log('Save Category clicked');
     clearErrors();
     const name = document.getElementById('new-category-name')?.value.trim();
     const type = document.getElementById('new-category-type')?.value;
     const budgetId = document.getElementById('new-category-budget')?.value === 'none' ? null : document.getElementById('new-category-budget').value;
     if (!name) {
+      console.log('Save Category: Missing name');
       showError('new-category-name', 'Name is required');
       return;
     }
     if (!currentUser || !db) {
+      console.log('Save Category: Missing user or Firestore');
       showError('new-category-name', 'Database service not available');
       return;
     }
@@ -500,7 +534,7 @@ function setupCategories() {
       document.getElementById('new-category-budget').value = 'none';
       await loadCategories();
     } catch (error) {
-      console.error('Error saving category:', error);
+      console.error('Save Category error:', error);
       showError('new-category-name', 'Failed to save category.');
     } finally {
       saveCategory.disabled = false;
@@ -508,7 +542,7 @@ function setupCategories() {
     }
   });
 
-  cancelCategory?.addEventListener('click', () => {
+  cancelCategory.addEventListener('click', () => {
     console.log('Cancel Category clicked');
     domElements.addCategoryModal?.classList.add('hidden');
     document.getElementById('new-category-name').value = '';
@@ -516,26 +550,37 @@ function setupCategories() {
     document.getElementById('new-category-budget').value = 'none';
   });
 
-  categoryTable?.addEventListener('click', async (e) => {
+  categoryTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-category')) {
       console.log('Edit Category clicked:', e.target.dataset.id);
       const id = e.target.dataset.id;
-      if (!db) return;
+      if (!db) {
+        console.error('Edit Category: Firestore not available');
+        return;
+      }
       try {
         const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', id)));
         if (docSnap.exists()) {
           const data = docSnap.data();
-          document.getElementById('category-name').value = data.name;
-          document.getElementById('category-type').value = data.type;
-          document.getElementById('category-budget').value = data.budgetId || 'none';
+          const categoryNameInput = document.getElementById('category-name');
+          const categoryTypeSelect = document.getElementById('category-type');
+          const categoryBudgetSelect = document.getElementById('category-budget');
+          if (!categoryNameInput || !categoryTypeSelect || !categoryBudgetSelect) {
+            console.error('Edit Category: Missing input elements');
+            return;
+          }
+          categoryNameInput.value = data.name;
+          categoryTypeSelect.value = data.type;
+          categoryBudgetSelect.value = data.budgetId || 'none';
           addCategory.innerHTML = 'Update Category';
           isEditing.category = true;
           console.log('Entered edit mode for category:', id);
           const updateHandler = async () => {
-            const name = document.getElementById('category-name')?.value.trim();
-            const type = document.getElementById('category-type')?.value;
-            const budgetId = document.getElementById('category-budget')?.value === 'none' ? null : document.getElementById('category-budget').value;
+            const name = categoryNameInput.value.trim();
+            const type = categoryTypeSelect.value;
+            const budgetId = categoryBudgetSelect.value === 'none' ? null : categoryBudgetSelect.value;
             if (!name) {
+              console.log('Update Category: Missing name');
               showError('category-name', 'Name is required');
               return;
             }
@@ -546,14 +591,14 @@ function setupCategories() {
                 updateDoc(doc(db, 'categories', id), { name, type, budgetId })
               );
               console.log('Category updated:', { id, name, type, budgetId });
-              document.getElementById('category-name').value = '';
-              document.getElementById('category-type').value = 'income';
-              document.getElementById('category-budget').value = 'none';
+              categoryNameInput.value = '';
+              categoryTypeSelect.value = 'income';
+              categoryBudgetSelect.value = 'none';
               addCategory.innerHTML = 'Add Category';
               isEditing.category = false;
               await loadCategories();
             } catch (error) {
-              console.error('Error updating category:', error);
+              console.error('Update Category error:', error);
               showError('category-name', 'Failed to update category.');
             } finally {
               addCategory.disabled = false;
@@ -566,7 +611,7 @@ function setupCategories() {
           addCategory.addEventListener('click', updateHandler, { once: true });
         }
       } catch (error) {
-        console.error('Error fetching category:', error);
+        console.error('Edit Category error:', error);
         showError('category-name', 'Failed to fetch category.');
       }
     }
@@ -583,7 +628,7 @@ function setupCategories() {
             await loadCategories();
             domElements.deleteConfirmModal.classList.add('hidden');
           } catch (error) {
-            console.error('Error deleting category:', error);
+            console.error('Delete Category error:', error);
             showError('category-name', 'Failed to delete category.');
           }
           domElements.confirmDelete.removeEventListener('click', confirmHandler);
@@ -864,48 +909,67 @@ function setupBudgets() {
 
 // Transactions
 async function loadTransactions() {
-  console.log('Loading transactions');
+  console.log('loadTransactions: Starting');
   if (!db) {
-    console.error('Firestore not available');
+    console.error('loadTransactions: Firestore not available');
     return;
   }
   try {
     const transactionTable = document.getElementById('transaction-table');
+    if (!transactionTable) {
+      console.error('loadTransactions: transaction-table not found');
+      return;
+    }
     transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || '');
+    console.log('loadTransactions: Date range', { start: start.toISOString(), end: end.toISOString() });
     await retryFirestoreOperation(async () => {
-      const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
+      const transactionsQuery = query(
+        collection(db, 'transactions'),
+        where('familyCode', '==', familyCode),
+        orderBy('createdAt', 'desc')
+      );
       const snapshot = await getDocs(transactionsQuery);
+      console.log('loadTransactions: Fetched transactions', { count: snapshot.size });
       transactionTable.innerHTML = '';
-      snapshot.forEach(async doc => {
-        const transaction = doc.data();
-        const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
-        if (createdAt >= start && createdAt <= end) {
-          const tr = document.createElement('tr');
-          tr.classList.add('table-row');
-          try {
-            const categoryDoc = await getDoc(doc(db, 'categories', transaction.categoryId));
-            const categoryName = categoryDoc.exists() ? categoryDoc.data().name : 'Unknown';
-            tr.innerHTML = `
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">
-                <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
-                <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
-              </td>
-            `;
-            transactionTable.appendChild(tr);
-          } catch (error) {
-            console.error('Error fetching category for transaction:', error);
+      if (snapshot.empty) {
+        transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found</td></tr>';
+      } else {
+        for (const doc of snapshot.docs) {
+          const transaction = doc.data();
+          const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
+          if (createdAt >= start && createdAt <= end) {
+            const tr = document.createElement('tr');
+            tr.classList.add('table-row');
+            try {
+              const categoryDoc = await getDoc(doc(db, 'categories', transaction.categoryId));
+              const categoryName = categoryDoc.exists() ? categoryDoc.data().name : 'Unknown';
+              tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                  <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
+                  <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
+                </td>
+              `;
+              transactionTable.appendChild(tr);
+            } catch (error) {
+              console.error('loadTransactions: Error fetching category for transaction:', { id: doc.id, error });
+            }
           }
         }
-      });
+      }
+      console.log('loadTransactions: Table updated');
     });
   } catch (error) {
-    console.error('Error loading transactions:', error);
+    console.error('loadTransactions error:', error);
     showError('category', 'Failed to load transactions.');
+    const transactionTable = document.getElementById('transaction-table');
+    if (transactionTable) {
+      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Error loading transactions</td></tr>';
+    }
   }
 }
 
@@ -1129,25 +1193,33 @@ function setupTransactions() {
 
 // Child Accounts
 async function loadChildAccounts() {
-  console.log('Loading child accounts', { familyCode, accountType: currentAccountType });
+  console.log('loadChildAccounts: Starting', { familyCode, accountType: currentAccountType });
   if (!currentUser || !db || !familyCode) {
-    console.error('Cannot load child accounts: missing user, Firestore, or familyCode');
+    console.error('loadChildAccounts: Missing user, Firestore, or familyCode');
     showError('child-user-id', 'Unable to load child accounts.');
     return;
   }
   try {
     if (currentAccountType === 'admin') {
-      domElements.childSelector?.classList.remove('hidden');
-      domElements.childUserId.innerHTML = '<option value="">Select a Child</option>';
+      const childSelector = domElements.childSelector;
+      const childUserIdSelect = domElements.childUserId;
+      if (!childSelector || !childUserIdSelect) {
+        console.error('loadChildAccounts: Missing DOM elements', { childSelector: !!childSelector, childUserIdSelect: !!childUserIdSelect });
+        return;
+      }
+      childSelector.classList.remove('hidden');
+      childUserIdSelect.innerHTML = '<option value="">Select a Child</option>';
       await retryFirestoreOperation(async () => {
+        console.log('loadChildAccounts: Fetching child users');
         const usersQuery = query(
           collection(db, 'users'),
           where('familyCode', '==', familyCode),
           where('accountType', '==', 'child')
         );
         const snapshot = await getDocs(usersQuery);
+        console.log('loadChildAccounts: Child users fetched', { count: snapshot.size });
         if (snapshot.empty) {
-          domElements.childUserId.innerHTML = '<option value="">No children found</option>';
+          childUserIdSelect.innerHTML = '<option value="">No children found</option>';
         } else {
           snapshot.forEach(doc => {
             const data = doc.data();
@@ -1155,27 +1227,29 @@ async function loadChildAccounts() {
             const option = document.createElement('option');
             option.value = doc.id;
             option.textContent = displayName;
-            domElements.childUserId.appendChild(option);
+            childUserIdSelect.appendChild(option);
           });
         }
       });
-      currentChildUserId = domElements.childUserId.value || currentUser.uid;
+      currentChildUserId = childUserIdSelect.value || null;
+      console.log('loadChildAccounts: Current child user ID', { currentChildUserId });
     } else {
       domElements.childSelector?.classList.add('hidden');
       currentChildUserId = currentUser.uid;
+      console.log('loadChildAccounts: Non-admin, using current user ID', { currentChildUserId });
     }
     await loadChildTransactions();
   } catch (error) {
-    console.error('Error loading child accounts:', error);
+    console.error('loadChildAccounts error:', error);
     showError('child-user-id', 'Failed to load child accounts.');
     domElements.childUserId.innerHTML = '<option value="">Error loading children</option>';
   }
 }
 
 async function loadChildTransactions() {
-  console.log('Loading child transactions for user:', currentChildUserId);
+  console.log('loadChildTransactions: Starting for user:', currentChildUserId);
   if (!db || !currentChildUserId) {
-    console.error('Firestore or user ID not available');
+    console.error('loadChildTransactions: Firestore or user ID not available', { db: !!db, currentChildUserId });
     domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No user selected</td></tr>';
     domElements.childBalance.textContent = formatCurrency(0, 'INR');
     return;
@@ -1184,8 +1258,10 @@ async function loadChildTransactions() {
     domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
     let totalBalance = 0;
     await retryFirestoreOperation(async () => {
+      console.log('loadChildTransactions: Fetching transactions');
       const transactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', currentChildUserId));
       const snapshot = await getDocs(transactionsQuery);
+      console.log('loadChildTransactions: Transactions fetched', { count: snapshot.size });
       domElements.childTransactionTable.innerHTML = '';
       if (snapshot.empty) {
         domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No transactions found</td></tr>';
@@ -1210,7 +1286,7 @@ async function loadChildTransactions() {
       domElements.childBalance.textContent = formatCurrency(totalBalance, 'INR');
     });
   } catch (error) {
-    console.error('Error loading child transactions:', error);
+    console.error('loadChildTransactions error:', error);
     showError('child-transaction-description', 'Failed to load child transactions.');
     domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Error loading transactions</td></tr>';
     domElements.childBalance.textContent = formatCurrency(0, 'INR');
@@ -1276,13 +1352,22 @@ async function loadChildTiles() {
 }
 
 function setupChildAccounts() {
-  console.log('Setting up child account event listeners');
+  console.log('setupChildAccounts: Starting');
   const addChildTransaction = domElements.addChildTransaction;
   const childTransactionTable = domElements.childTransactionTable;
   const childUserId = domElements.childUserId;
 
+  if (!addChildTransaction || !childTransactionTable || !childUserId) {
+    console.error('setupChildAccounts: Missing DOM elements', {
+      addChildTransaction: !!addChildTransaction,
+      childTransactionTable: !!childTransactionTable,
+      childUserId: !!childUserId
+    });
+    return;
+  }
+
   // Add Child Transaction (with idempotency)
-  if (addChildTransaction && !addChildTransaction._listenerBound) {
+  if (!addChildTransaction._listenerBound) {
     let isProcessing = false;
     const DEBOUNCE_MS = 5000;
     let lastAddClickTime = 0;
@@ -1298,25 +1383,37 @@ function setupChildAccounts() {
       lastAddClickTime = now;
       isProcessing = true;
 
-      console.log('Add Child Transaction clicked', { isEditing: isEditing.childTransaction });
-      if (isEditing.childTransaction) return;
+      console.log('Add Child Transaction clicked', {
+        isEditing: isEditing.childTransaction,
+        currentChildUserId,
+        currentAccountType
+      });
+      if (isEditing.childTransaction) {
+        console.log('Add Child Transaction: Blocked due to ongoing edit');
+        isProcessing = false;
+        return;
+      }
       clearErrors();
       const type = domElements.childTransactionType?.value;
       const amount = parseFloat(domElements.childTransactionAmount?.value);
       const description = domElements.childTransactionDescription?.value.trim();
       const transactionUserId = currentAccountType === 'admin' ? currentChildUserId : currentUser.uid;
       const txId = `tx-${transactionUserId}-${type}-${amount}-${description}-${now}`.replace(/[^a-zA-Z0-9-]/g, '-');
+      console.log('Add Child Transaction inputs:', { type, amount, description, transactionUserId, txId });
       if (!amount || amount <= 0) {
+        console.log('Add Child Transaction: Invalid amount');
         showError('child-transaction-amount', 'Valid amount is required');
         isProcessing = false;
         return;
       }
       if (currentAccountType === 'admin' && !currentChildUserId) {
+        console.log('Add Child Transaction: No child selected');
         showError('child-user-id', 'Please select a child account');
         isProcessing = false;
         return;
       }
       if (!currentUser || !db) {
+        console.log('Add Child Transaction: Missing user or Firestore');
         showError('child-transaction-description', 'Database service not available');
         isProcessing = false;
         return;
@@ -1343,7 +1440,7 @@ function setupChildAccounts() {
         await loadChildTransactions();
         await loadChildTiles();
       } catch (error) {
-        console.error('Error adding child transaction:', error);
+        console.error('Add Child Transaction error:', error);
         showError('child-transaction-description', 'Failed to add transaction.');
       } finally {
         addChildTransaction.disabled = false;
@@ -1356,11 +1453,14 @@ function setupChildAccounts() {
     addChildTransaction._listenerBound = true;
   }
 
-  childTransactionTable?.addEventListener('click', async (e) => {
+  childTransactionTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-child-transaction')) {
       console.log('Edit Child Transaction clicked:', e.target.dataset.id);
       const id = e.target.dataset.id;
-      if (!db) return;
+      if (!db) {
+        console.error('Edit Child Transaction: Firestore not available');
+        return;
+      }
       try {
         const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'childTransactions', id)));
         if (docSnap.exists()) {
@@ -1376,6 +1476,7 @@ function setupChildAccounts() {
             const amount = parseFloat(domElements.childTransactionAmount?.value);
             const description = domElements.childTransactionDescription?.value.trim();
             if (!amount || amount <= 0) {
+              console.log('Update Child Transaction: Invalid amount');
               showError('child-transaction-amount', 'Valid amount is required');
               return;
             }
@@ -1398,7 +1499,7 @@ function setupChildAccounts() {
               await loadChildTransactions();
               await loadChildTiles();
             } catch (error) {
-              console.error('Error updating child transaction:', error);
+              console.error('Update Child Transaction error:', error);
               showError('child-transaction-description', 'Failed to update transaction.');
             } finally {
               addChildTransaction.disabled = false;
@@ -1411,7 +1512,7 @@ function setupChildAccounts() {
           addChildTransaction.addEventListener('click', updateHandler, { once: true });
         }
       } catch (error) {
-        console.error('Error fetching child transaction:', error);
+        console.error('Edit Child Transaction error:', error);
         showError('child-transaction-description', 'Failed to fetch transaction.');
       }
     }
@@ -1429,7 +1530,7 @@ function setupChildAccounts() {
             await loadChildTiles();
             domElements.deleteConfirmModal.classList.add('hidden');
           } catch (error) {
-            console.error('Error deleting child transaction:', error);
+            console.error('Delete Child Transaction error:', error);
             showError('child-transaction-description', 'Failed to delete transaction.');
           }
           domElements.confirmDelete.removeEventListener('click', confirmHandler);
@@ -1444,9 +1545,10 @@ function setupChildAccounts() {
     }
   });
 
-  childUserId?.addEventListener('change', () => {
+  childUserId.addEventListener('change', () => {
     console.log('Child user selected:', childUserId.value);
     currentChildUserId = childUserId.value || currentUser.uid;
+    console.log('Child user updated:', { currentChildUserId });
     loadChildTransactions();
   });
 }
