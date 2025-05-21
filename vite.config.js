@@ -2,20 +2,20 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   build: {
-    outDir: 'public', // Output directory for Netlify
-    assetsDir: 'assets', // Subdirectory for assets (e.g., CSS)
+    outDir: 'public',
+    assetsDir: 'assets',
     rollupOptions: {
       input: {
-        main: 'src/js/index.js', // JavaScript entry point
-        tailwind: 'src/css/tailwind.css' // Tailwind CSS entry point
+        main: 'src/js/index.js',
+        tailwind: 'src/css/tailwind.css'
       },
       output: {
-        entryFileNames: '[name].js', // Output JS as bundle.js
-        assetFileNames: 'assets/[name].[ext]' // Output CSS to assets/tailwind.css
+        entryFileNames: '[name].js',
+        assetFileNames: 'assets/[name].[ext]'
       }
     },
-    sourcemap: true // Generate sourcemaps for debugging
+    sourcemap: true
   },
-  envPrefix: 'VITE_', // Prefix for environment variables
-  base: '/' // Base URL for Netlify
+  envPrefix: 'VITE_',
+  base: '/'
 });
