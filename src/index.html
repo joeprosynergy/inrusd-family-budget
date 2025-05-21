@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InRUSD: Family Budget</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
+  <script>
+    window.addEventListener('load', () => {
+      console.log('Checking Firebase SDK load status');
+      if (typeof firebase !== 'undefined' && firebase.initializeApp) {
+        console.log('Firebase SDK loaded successfully');
+      } else {
+        console.error('Firebase SDK failed to load');
+      }
+    });
+  </script>
+  <script src="scripts.js" defer></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .table-row:nth-child(even) { background-color: #f9fafb; }
+    .table-row:hover { background-color: #f3f4f6; }
+    .progress-bar { height: 8px; border-radius: 9999px; }
+    .budget-tile { transition: transform 0.2s; }
+    .budget-tile:hover { transform: translateY(-2px); }
+    .child-tile { transition: transform 0.2s; }
+    .child-tile:hover { transform: translateY(-2px); }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans">
+  <!-- Auth Section (Unchanged) -->
+  <div id="auth-section" class="min-h-screen flex items-center justify-center bg-gray-100">
+    <div id="login-modal" class="bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+      <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Login</h2>
+      <div class="space-y-4">
+        <input id="login-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <input id="login-password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <button id="login-button" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Login</button>
+        <div class="text-center space-x-4">
+          <button id="show-signup" onclick="document.getElementById('signup-modal').classList.remove('hidden'); document.getElementById('login-modal').classList.add('hidden');" class="text-blue-600 hover:underline">Sign Up</button>
+          <button id="show-reset" onclick="document.getElementById('reset-modal').classList.remove('hidden'); document.getElementById('login-modal').classList.add('hidden');" class="text-blue-600 hover:underline">Forgot Password?</button>
+        </div>
+      </div>
+    </div>
+    <div id="signup-modal" class="hidden bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+      <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Sign Up</h2>
+      <div class="space-y-4">
+        <input id="signup-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <input id="signup-password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <input id="signup-confirm-password" type="password" placeholder="Confirm Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <input id="signup-family-code" type="text" placeholder="Family Code" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <select id="signup-currency" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          <option value="INR">INR</option>
+          <option value="USD">USD</option>
+        </select>
+        <select id="signup-account-type" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          <option value="admin">Admin</option>
+          <option value="child">Child</option>
+        </select>
+        <button id="signup-button" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Sign Up</button>
+        <div class="text-center">
+          <button id="show-login-from-signup" onclick="document.getElementById('login-modal').classList.remove('hidden'); document.getElementById('signup-modal').classList.add('hidden');" class="text-blue-600 hover:underline">Login</button>
+        </div>
+      </div>
+    </div>
+    <div id="reset-modal" class="hidden bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+      <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Reset Password</h2>
+      <div class="space-y-4">
+        <input id="reset-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <button id="reset-button" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Send Reset Link</button>
+        <div class="text-center">
+          <button id="show-login-from-reset" onclick="document.getElementById('login-modal').classList.remove('hidden'); document.getElementById('reset-modal').classList.add('hidden');" class="text-blue-600 hover:underline">Login</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Section -->
+  <div id="app-section" class="hidden min-h-screen bg-gray-100">
+    <!-- Header (Unchanged) -->
+    <header class="bg-blue-600 text-white p-3 sm:p-4 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-0">
+      <h1 id="page-title" class="text-xl sm:text-2xl font-bold">Budget Dashboard</h1>
+      <div class="flex items-center gap-2 sm:gap-4">
+        <select id="currency-toggle" class="p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-gray-700 text-sm">
+          <option value="INR">INR</option>
+          <option value="USD">USD</option>
+        </select>
+        <button id="logout-button" class="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition text-sm sm:text-base">Logout</button>
+      </div>
+    </header>
+    <!-- Navigation: Added Child Accounts Tab -->
+    <nav class="bg-gray-800 text-white p-3 sm:p-4">
+      <div class="nav flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
+        <button id="dashboard-tab" class="px-3 py-2 rounded-lg bg-blue-800 hover:bg-blue-900 transition text-sm sm:text-base">Dashboard</button>
+        <button id="transactions-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base">Transactions</button>
+        <button id="budgets-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base">Budgets</button>
+        <button id="categories-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base">Categories</button>
+        <button id="child-accounts-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base">Child Accounts</button>
+        <button id="profile-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base">Profile</button>
+      </div>
+    </nav>
+    <main class="p-4 sm:p-6">
+      <!-- Dashboard Section: Updated Balance Tile with After Budget -->
+      <div id="dashboard-section" class="space-y-4 sm:space-y-6">
+        <!-- Filter Controls -->
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Filter Dashboard</h3>
+          <div class="flex flex-col sm:flex-row gap-4">
+            <select id="dashboard-filter" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 w-full sm:w-auto">
+              <option value="1week">Last 1 Week</option>
+              <option value="1month">Last 1 Month</option>
+              <option value="thisMonth">This Month</option>
+              <option value="lastMonth">Last Month</option>
+              <option value="thisYear">This Year</option>
+              <option value="lastYear">Last Year</option>
+              <option value="custom">Custom Range</option>
+            </select>
+            <div id="custom-date-range" class="hidden flex flex-col sm:flex-row gap-4">
+              <input id="filter-start-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <input id="filter-end-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            </div>
+          </div>
+        </div>
+        <!-- Summary Tiles: Moved After Budget to Balance Tile -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+          <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-700">Balance</h3>
+            <p id="balance" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
+            <p class="text-sm text-gray-500 mt-2">After Budget: <span id="after-budget">₹0</span></p>
+          </div>
+          <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-700">Total Budget</h3>
+            <p id="total-budget" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
+          </div>
+          <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-700">Total Unspent Budget</h3>
+            <p id="total-remaining" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
+          </div>
+        </div>
+        <!-- Budget and Child Tiles -->
+        <div id="budget-tiles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"></div>
+        <div id="child-tiles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"></div>
+      </div>
+      <!-- Transactions Section (Unchanged) -->
+      <div id="transactions-section" class="hidden space-y-4 sm:space-y-6">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Transaction</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <select id="type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="debit">Debit</option>
+              <option value="credit">Credit</option>
+            </select>
+            <input id="amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <select id="category" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="">Select Category</option>
+              <option value="add-new">Add New</option>
+            </select>
+            <input id="description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          </div>
+          <button id="add-transaction" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Transaction</button>
+        </div>
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-gray-200">
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Type</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Amount</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Category</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Description</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="transaction-table"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Budgets Section (Unchanged) -->
+      <div id="budgets-section" class="hidden space-y-4 sm:space-y-6">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Budget</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <input id="budget-name" type="text" placeholder="Budget Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <input id="budget-amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          </div>
+          <button id="add-budget" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Budget</button>
+        </div>
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-gray-200">
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Name</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Amount</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Spent</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Remaining</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="budget-table"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Categories Section (Unchanged) -->
+      <div id="categories-section" class="hidden space-y-4 sm:space-y-6">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Category</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <input id="category-name" type="text" placeholder="Category Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <select id="category-type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+            </select>
+            <select id="category-budget" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="none">None</option>
+              <option value="add-new">Add New</option>
+            </select>
+          </div>
+          <button id="add-category" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Category</button>
+        </div>
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-gray-200">
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Name</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Type</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Budget</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="category-table"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Child Accounts Section -->
+      <div id="child-accounts-section" class="hidden space-y-4 sm:space-y-6">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Child Account Transactions</h3>
+          <!-- Admin: Child Selector -->
+          <div id="child-selector" class="mb-4 hidden">
+            <label class="block text-sm font-medium text-gray-700">Select Child</label>
+            <select id="child-user-id" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="">Select a Child</option>
+            </select>
+          </div>
+          <!-- Balance Display -->
+          <div class="mb-4">
+            <h4 class="text-sm font-medium text-gray-700">Child Balance</h4>
+            <p id="child-balance" class="text-lg font-bold text-gray-900">₹0</p>
+          </div>
+          <!-- Add Transaction -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <select id="child-transaction-type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="debit">Debit</option>
+              <option value="credit">Credit</option>
+            </select>
+            <input id="child-transaction-amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <input id="child-transaction-description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          </div>
+          <button id="add-child-transaction" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Transaction</button>
+        </div>
+        <!-- Transaction Table -->
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-gray-200">
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Type</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Amount</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Description</th>
+                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="child-transaction-table"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Profile Section (Unchanged) -->
+      <div id="profile-section" class="hidden space-y-4 sm:space-y-6">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-700">User Profile</h3>
+            <div class="space-x-2">
+              <button id="edit-profile" class="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-sm">Edit</button>
+              <button id="save-profile" class="hidden bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition text-sm">Save</button>
+            </div>
+          </div>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Email</label>
+              <input id="profile-email" type="email" class="mt-1 w-full p-2 border rounded-lg bg-gray-100" readonly>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Currency</label>
+              <select id="profile-currency" class="mt-1 w-full p-2 border rounded-lg bg-gray-100" disabled>
+                <option value="INR">INR</option>
+                <option value="USD">USD</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Family Code</label>
+              <input id="profile-family-code" type="text" class="mt-1 w-full p-2 border rounded-lg bg-gray-100" readonly>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Account Type</label>
+              <select id="profile-account-type" class="mt-1 w-full p-2 border rounded-lg bg-gray-100" disabled>
+                <option value="admin">Admin</option>
+                <option value="child">Child</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Existing Modals (Unchanged) -->
+  <div id="add-category-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+      <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add New Category</h3>
+      <div class="space-y-4">
+        <input id="new-category-name" type="text" placeholder="Category Name" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <select id="new-category-type" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+        </select>
+        <select id="new-category-budget" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          <option value="none">None</option>
+          <option value="add-new">Add New</option>
+        </select>
+        <div class="flex justify-end space-x-4">
+          <button id="save-category" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Save</button>
+          <button id="cancel-category" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="add-budget-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+      <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add New Budget</h3>
+      <div class="space-y-4">
+        <input id="new-budget-name" type="text" placeholder="Budget Name" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <input id="new-budget-amount" type="number" placeholder="Amount" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <div class="flex justify-end space-x-4">
+          <button id="save-budget" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Save</button>
+          <button id="cancel-budget" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal (Unchanged) -->
+  <div id="delete-confirm-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+      <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Confirm Deletion</h3>
+      <p id="delete-confirm-message" class="text-sm text-gray-600 mb-4">Are you sure you want to delete this item?</p>
+      <div class="flex justify-end space-x-4">
+        <button id="confirm-delete" class="bg-red-600 text-white p-3 rounded-lg hover:bg-red-700 transition">Confirm</button>
+        <button id="cancel-delete" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
