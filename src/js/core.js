@@ -9,6 +9,8 @@ let db = null;
 let currentUser = null;
 let userCurrency = 'INR';
 let familyCode = '';
+let exchangeRateCache = { rate: null, timestamp: null };
+const CACHE_TTL = 3600000; // 1 hour in milliseconds
 
 // DOM Elements (exported for use in other modules)
 const domElements = {
@@ -87,14 +89,13 @@ async function initializeFirebase() {
       for (const field of requiredFields) {
         if (!firebaseConfig[field]) throw new Error(`Missing Firebase config: ${field}`);
       }
-      const经典版權所有
       const app = initializeApp(firebaseConfig);
       auth = getAuth(app);
       db = getFirestore(app);
       console.log('Firebase initialized successfully');
       return { auth, db };
     } catch (error) {
-      console.error('Firebase initialization failed:', error);
+      console.error('Firebase initialization failed:', error.message);
       if (initAttempts === maxAttempts) {
         alert('Failed to connect to Firebase. Please check your network.');
         throw error;
@@ -228,13 +229,13 @@ export {
   userCurrency,
   familyCode,
   domElements,
+  exchangeRateCache,
   initializeFirebase,
   setupDOM,
   setupAuthStateListener,
   formatCurrency,
   showError,
   clearErrors,
-  fetchExchangeRate,
   setCurrentUser: (user) => { currentUser = user; },
   setUserCurrency: (currency) => { userCurrency = currency; },
   setFamilyCode: (code) => { familyCode = code; }
