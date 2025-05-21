@@ -1,4 +1,3 @@
-// App module: Handles dashboard, transactions, budgets, categories, child accounts, and profile
 import {
   auth,
   db,
@@ -14,6 +13,7 @@ import {
   setFamilyCode
 } from './core.js';
 import { retryFirestoreOperation, fetchExchangeRate, getDateRange } from './utils.js';
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, serverTimestamp } from 'firebase/firestore';
 
 let isEditing = { transaction: false, budget: false, category: false, profile: false, childTransaction: false };
 let currentChildUserId = null;
@@ -21,12 +21,13 @@ let currentAccountType = null;
 
 // Load App Data
 async function loadAppData() {
-  console.log('Loading app data');
+  console.log('loadAppData: Starting');
   if (!currentUser || !familyCode || !db) {
     console.error('Cannot load app data: missing user, familyCode, or Firestore');
     return;
   }
   try {
+    console.log('Fetching exchange rate');
     await fetchExchangeRate(exchangeRateCache); // Use exchangeRateCache from core.js
     if (domElements.currencyToggle) {
       domElements.currencyToggle.value = userCurrency;
@@ -39,9 +40,13 @@ async function loadAppData() {
       loadProfileData(),
       updateDashboard()
     ]);
-    console.log('App data loaded successfully');
+    console.log('loadAppData: Complete');
   } catch (error) {
-    console.error('Error loading app data:', error);
+    console.error('loadAppData error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
     showError('page-title', 'Failed to load app data.');
   }
 }
@@ -219,7 +224,7 @@ async function setupProfile() {
         await auth.currentUser.updateEmail(email);
       }
       await retryFirestoreOperation(() => 
-        db.collection('users').doc(currentUser.uid).update({
+        updateDoc(doc(db, 'users', currentUser.uid), {
           currency,
           familyCode: familyCodeInput,
           accountType
@@ -268,7 +273,7 @@ async function setupProfile() {
         throw new Error('Missing user or Firestore');
       }
       await retryFirestoreOperation(() => 
-        db.collection('users').doc(currentUser.uid).update({ currency: newCurrency })
+        updateDoc(doc(db, 'users', currentUser.uid), { currency: newCurrency })
       );
       setUserCurrency(newCurrency);
       domElements.profileCurrency.value = newCurrency;
@@ -304,22 +309,20 @@ async function loadProfileData() {
     domElements.profileCurrency.value = userCurrency || 'INR';
     domElements.profileFamilyCode.value = familyCode || '--';
     domElements.profileAccountType.value = '--';
-    await retryFirestoreOperation(() => 
-      db.collection('users').doc(currentUser.uid).get()
-        .then(doc => {
-          if (doc.exists) {
-            const data = doc.data();
-            domElements.profileCurrency.value = data.currency || 'INR';
-            domElements.profileFamilyCode.value = data.familyCode || '--';
-            domElements.profileAccountType.value = data.accountType || '--';
-            currentAccountType = data.accountType || '--';
-            console.log('Profile data loaded:', { email: currentUser.email, currency: data.currency, familyCode: data.familyCode, accountType: data.accountType });
-          } else {
-            console.error('User document not found:', currentUser.uid);
-            showError('profile-email', 'Profile data not found.');
-          }
-        })
-    );
+    await retryFirestoreOperation(async () => {
+      const docSnap = await getDoc(doc(db, 'users', currentUser.uid));
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        domElements.profileCurrency.value = data.currency || 'INR';
+        domElements.profileFamilyCode.value = data.familyCode || '--';
+        domElements.profileAccountType.value = data.accountType || '--';
+        currentAccountType = data.accountType || '--';
+        console.log('Profile data loaded:', { email: currentUser.email, currency: data.currency, familyCode: data.familyCode, accountType: data.accountType });
+      } else {
+        console.error('User document not found:', currentUser.uid);
+        showError('profile-email', 'Profile data not found.');
+      }
+    });
   } catch (error) {
     console.error('Error loading profile data:', error);
     showError('profile-email', 'Failed to load profile data.');
@@ -343,64 +346,63 @@ async function loadCategories() {
       newCategoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
     }
 
-    await retryFirestoreOperation(() => 
-      db.collection('budgets').where('familyCode', '==', familyCode).get()
-        .then(snapshot => {
-          snapshot.forEach(doc => {
-            const budget = doc.data();
-            const option = document.createElement('option');
-            option.value = doc.id;
-            option.textContent = budget.name;
-            categoryBudgetSelect.insertBefore(option, categoryBudgetSelect.querySelector('option[value="add-new"]'));
-            if (newCategoryBudgetSelect) {
-              const newOption = document.createElement('option');
-              newOption.value = doc.id;
-              newOption.textContent = budget.name;
-              newCategoryBudgetSelect.insertBefore(newOption, newCategoryBudgetSelect.querySelector('option[value="add-new"]'));
-            }
-          });
-        })
-    );
+    await retryFirestoreOperation(async () => {
+      const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
+      const budgetsSnapshot = await getDocs(budgetsQuery);
+      budgetsSnapshot.forEach(doc => {
+        const budget = doc.data();
+        const option = document.createElement('option');
+        option.value = doc.id;
+        option.textContent = budget.name;
+        categoryBudgetSelect.insertBefore(option, categoryBudgetSelect.querySelector('option[value="add-new"]'));
+        if (newCategoryBudgetSelect) {
+          const newOption = document.createElement('option');
+          newOption.value = doc.id;
+          newOption.textContent = budget.name;
+          newCategoryBudgetSelect.insertBefore(newOption, newCategoryBudgetSelect.querySelector('option[value="add-new"]'));
+        }
+      });
+    });
 
-    await retryFirestoreOperation(() => 
-      db.collection('categories').where('familyCode', '==', familyCode).get()
-        .then(snapshot => {
-          snapshot.forEach(doc => {
-            const category = doc.data();
-            const option = document.createElement('option');
-            option.value = doc.id;
-            option.textContent = category.name;
-            categorySelect.insertBefore(option, categorySelect.querySelector('option[value="add-new"]'));
-          });
+    await retryFirestoreOperation(async () => {
+      const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
+      const categoriesSnapshot = await getDocs(categoriesQuery);
+      categoriesSnapshot.forEach(doc => {
+        const category = doc.data();
+        const option = document.createElement('option');
+        option.value = doc.id;
+        option.textContent = category.name;
+        categorySelect.insertBefore(option, categorySelect.querySelector('option[value="add-new"]'));
+      });
 
-          const categoryTable = document.getElementById('category-table');
-          categoryTable.innerHTML = '';
-          snapshot.forEach(doc => {
-            const category = doc.data();
-            const tr = document.createElement('tr');
-            tr.classList.add('table-row');
-            const budgetName = category.budgetId ? 'Loading...' : 'None';
-            tr.innerHTML = `
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${category.name}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${category.type}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budgetName}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">
-                <button class="text-blue-600 hover:text-blue-800 mr-2 edit-category" data-id="${doc.id}">Edit</button>
-                <button class="text-red-600 hover:text-red-800 delete-category" data-id="${doc.id}">Delete</button>
-              </td>
-            `;
-            categoryTable.appendChild(tr);
-            if (category.budgetId) {
-              db.collection('budgets').doc(category.budgetId).get().then(budgetDoc => {
-                tr.children[2].textContent = budgetDoc.exists ? budgetDoc.data().name : 'None';
-              }).catch(error => {
-                console.error('Error fetching budget for category:', error);
-                tr.children[2].textContent = 'Error';
-              });
-            }
-          });
-        })
-    );
+      const categoryTable = document.getElementById('category-table');
+      categoryTable.innerHTML = '';
+      categoriesSnapshot.forEach(async doc => {
+        const category = doc.data();
+        const tr = document.createElement('tr');
+        tr.classList.add('table-row');
+        const budgetName = category.budgetId ? 'Loading...' : 'None';
+        tr.innerHTML = `
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${category.name}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${category.type}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budgetName}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm">
+            <button class="text-blue-600 hover:text-blue-800 mr-2 edit-category" data-id="${doc.id}">Edit</button>
+            <button class="text-red-600 hover:text-red-800 delete-category" data-id="${doc.id}">Delete</button>
+          </td>
+        `;
+        categoryTable.appendChild(tr);
+        if (category.budgetId) {
+          try {
+            const budgetDoc = await getDoc(doc(db, 'budgets', category.budgetId));
+            tr.children[2].textContent = budgetDoc.exists() ? budgetDoc.data().name : 'None';
+          } catch (error) {
+            console.error('Error fetching budget for category:', error);
+            tr.children[2].textContent = 'Error';
+          }
+        }
+      });
+    });
   } catch (error) {
     console.error('Error loading categories:', error);
     showError('category-name', 'Failed to load categories.');
@@ -434,12 +436,12 @@ function setupCategories() {
       addCategory.disabled = true;
       addCategory.textContent = 'Adding...';
       await retryFirestoreOperation(() => 
-        db.collection('categories').add({
+        addDoc(collection(db, 'categories'), {
           name,
           type,
           budgetId,
           familyCode,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          createdAt: serverTimestamp()
         })
       );
       console.log('Category added:', { name, type, budgetId });
@@ -483,12 +485,12 @@ function setupCategories() {
       saveCategory.disabled = true;
       saveCategory.textContent = 'Saving...';
       await retryFirestoreOperation(() => 
-        db.collection('categories').add({
+        addDoc(collection(db, 'categories'), {
           name,
           type,
           budgetId,
           familyCode,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          createdAt: serverTimestamp()
         })
       );
       console.log('Category saved:', { name, type, budgetId });
@@ -520,11 +522,12 @@ function setupCategories() {
       const id = e.target.dataset.id;
       if (!db) return;
       try {
-        const doc = await retryFirestoreOperation(() => db.collection('categories').doc(id).get());
-        if (doc.exists) {
-          document.getElementById('category-name').value = doc.data().name;
-          document.getElementById('category-type').value = doc.data().type;
-          document.getElementById('category-budget').value = doc.data().budgetId || 'none';
+        const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', id)));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          document.getElementById('category-name').value = data.name;
+          document.getElementById('category-type').value = data.type;
+          document.getElementById('category-budget').value = data.budgetId || 'none';
           addCategory.innerHTML = 'Update Category';
           isEditing.category = true;
           console.log('Entered edit mode for category:', id);
@@ -540,7 +543,7 @@ function setupCategories() {
               addCategory.disabled = true;
               addCategory.textContent = 'Updating...';
               await retryFirestoreOperation(() => 
-                db.collection('categories').doc(id).update({ name, type, budgetId })
+                updateDoc(doc(db, 'categories', id), { name, type, budgetId })
               );
               console.log('Category updated:', { id, name, type, budgetId });
               document.getElementById('category-name').value = '';
@@ -575,7 +578,7 @@ function setupCategories() {
         domElements.deleteConfirmModal.classList.remove('hidden');
         const confirmHandler = async () => {
           try {
-            await retryFirestoreOperation(() => db.collection('categories').doc(id).delete());
+            await retryFirestoreOperation(() => deleteDoc(doc(db, 'categories', id)));
             console.log('Category deleted:', { id });
             await loadCategories();
             domElements.deleteConfirmModal.classList.add('hidden');
@@ -611,52 +614,51 @@ async function loadBudgets() {
     const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || '');
     let totalBudgetAmount = 0;
     let totalRemainingAmount = 0;
-    await retryFirestoreOperation(() => 
-      db.collection('budgets').where('familyCode', '==', familyCode).get()
-        .then(snapshot => {
-          budgetTable.innerHTML = '';
-          budgetTiles.innerHTML = '';
-          snapshot.forEach(doc => {
-            const budget = doc.data();
-            const createdAt = budget.createdAt ? budget.createdAt.toDate() : new Date();
-            if (createdAt >= start && createdAt <= end) {
-              const spent = budget.spent || 0;
-              totalBudgetAmount += budget.amount;
-              totalRemainingAmount += budget.amount - spent;
-              const tr = document.createElement('tr');
-              tr.classList.add('table-row');
-              tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, 'INR')}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, 'INR')}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, 'INR')}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                  <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
-                  <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
-                </td>
-              `;
-              budgetTable.appendChild(tr);
-              const tile = document.createElement('div');
-              tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
-              const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
-              tile.innerHTML = `
-                <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
-                <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, 'INR')}</span></p>
-                <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, 'INR')}</span></p>
-                <p class="text-sm font-semibold text-gray-700 mt-2">
-                  Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, 'INR')}</span>
-                </p>
-                <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
-                  <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
-                </div>
-              `;
-              budgetTiles.appendChild(tile);
-            }
-          });
-          document.getElementById('total-budget').textContent = formatCurrency(totalBudgetAmount, 'INR');
-          document.getElementById('total-remaining').textContent = formatCurrency(totalRemainingAmount, 'INR');
-        })
-    );
+    await retryFirestoreOperation(async () => {
+      const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
+      const snapshot = await getDocs(budgetsQuery);
+      budgetTable.innerHTML = '';
+      budgetTiles.innerHTML = '';
+      snapshot.forEach(doc => {
+        const budget = doc.data();
+        const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
+        if (createdAt >= start && createdAt <= end) {
+          const spent = budget.spent || 0;
+          totalBudgetAmount += budget.amount;
+          totalRemainingAmount += budget.amount - spent;
+          const tr = document.createElement('tr');
+          tr.classList.add('table-row');
+          tr.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, 'INR')}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, 'INR')}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, 'INR')}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+              <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
+              <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
+            </td>
+          `;
+          budgetTable.appendChild(tr);
+          const tile = document.createElement('div');
+          tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
+          const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
+          tile.innerHTML = `
+            <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
+            <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, 'INR')}</span></p>
+            <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, 'INR')}</span></p>
+            <p class="text-sm font-semibold text-gray-700 mt-2">
+              Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, 'INR')}</span>
+            </p>
+            <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
+              <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
+            </div>
+          `;
+          budgetTiles.appendChild(tile);
+        }
+      });
+      document.getElementById('total-budget').textContent = formatCurrency(totalBudgetAmount, 'INR');
+      document.getElementById('total-remaining').textContent = formatCurrency(totalRemainingAmount, 'INR');
+    });
   } catch (error) {
     console.error('Error loading budgets:', error);
     showError('budget-name', 'Failed to load budgets.');
@@ -692,12 +694,12 @@ function setupBudgets() {
       addBudget.disabled = true;
       addBudget.textContent = 'Adding...';
       await retryFirestoreOperation(() => 
-        db.collection('budgets').add({
+        addDoc(collection(db, 'budgets'), {
           name,
           amount,
           spent: 0,
           familyCode,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          createdAt: serverTimestamp()
         })
       );
       console.log('Budget added:', { name, amount });
@@ -744,12 +746,12 @@ function setupBudgets() {
       saveBudget.disabled = true;
       saveBudget.textContent = 'Saving...';
       await retryFirestoreOperation(() => 
-        db.collection('budgets').add({
+        addDoc(collection(db, 'budgets'), {
           name,
           amount,
           spent: 0,
           familyCode,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          createdAt: serverTimestamp()
         })
       );
       console.log('Budget saved:', { name, amount });
@@ -780,10 +782,11 @@ function setupBudgets() {
       const id = e.target.dataset.id;
       if (!db) return;
       try {
-        const doc = await retryFirestoreOperation(() => db.collection('budgets').doc(id).get());
-        if (doc.exists) {
-          document.getElementById('budget-name').value = doc.data().name;
-          document.getElementById('budget-amount').value = doc.data().amount;
+        const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'budgets', id)));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          document.getElementById('budget-name').value = data.name;
+          document.getElementById('budget-amount').value = data.amount;
           addBudget.innerHTML = 'Update Budget';
           isEditing.budget = true;
           console.log('Entered edit mode for budget:', id);
@@ -802,7 +805,7 @@ function setupBudgets() {
               addBudget.disabled = true;
               addBudget.textContent = 'Updating...';
               await retryFirestoreOperation(() => 
-                db.collection('budgets').doc(id).update({ name, amount })
+                updateDoc(doc(db, 'budgets', id), { name, amount })
               );
               console.log('Budget updated:', { id, name, amount });
               document.getElementById('budget-name').value = '';
@@ -837,7 +840,7 @@ function setupBudgets() {
         domElements.deleteConfirmModal.classList.remove('hidden');
         const confirmHandler = async () => {
           try {
-            await retryFirestoreOperation(() => db.collection('budgets').doc(id).delete());
+            await retryFirestoreOperation(() => deleteDoc(doc(db, 'budgets', id)));
             console.log('Budget deleted:', { id });
             await loadBudgets();
             await loadCategories();
@@ -870,36 +873,36 @@ async function loadTransactions() {
     const transactionTable = document.getElementById('transaction-table');
     transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || '');
-    await retryFirestoreOperation(() => 
-      db.collection('transactions').where('familyCode', '==', familyCode).get()
-        .then(snapshot => {
-          transactionTable.innerHTML = '';
-          snapshot.forEach(doc => {
-            const transaction = doc.data();
-            const createdAt = transaction.createdAt ? transaction.createdAt.toDate() : new Date();
-            if (createdAt >= start && createdAt <= end) {
-              const tr = document.createElement('tr');
-              tr.classList.add('table-row');
-              db.collection('categories').doc(transaction.categoryId).get().then(categoryDoc => {
-                const categoryName = categoryDoc.exists ? categoryDoc.data().name : 'Unknown';
-                tr.innerHTML = `
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm">
-                    <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
-                    <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
-                  </td>
-                `;
-                transactionTable.appendChild(tr);
-              }).catch(error => {
-                console.error('Error fetching category for transaction:', error);
-              });
-            }
-          });
-        })
-    );
+    await retryFirestoreOperation(async () => {
+      const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
+      const snapshot = await getDocs(transactionsQuery);
+      transactionTable.innerHTML = '';
+      snapshot.forEach(async doc => {
+        const transaction = doc.data();
+        const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
+        if (createdAt >= start && createdAt <= end) {
+          const tr = document.createElement('tr');
+          tr.classList.add('table-row');
+          try {
+            const categoryDoc = await getDoc(doc(db, 'categories', transaction.categoryId));
+            const categoryName = categoryDoc.exists() ? categoryDoc.data().name : 'Unknown';
+            tr.innerHTML = `
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
+                <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
+              </td>
+            `;
+            transactionTable.appendChild(tr);
+          } catch (error) {
+            console.error('Error fetching category for transaction:', error);
+          }
+        }
+      });
+    });
   } catch (error) {
     console.error('Error loading transactions:', error);
     showError('category', 'Failed to load transactions.');
@@ -935,21 +938,21 @@ function setupTransactions() {
       addTransaction.disabled = true;
       addTransaction.textContent = 'Adding...';
       const docRef = await retryFirestoreOperation(() => 
-        db.collection('transactions').add({
+        addDoc(collection(db, 'transactions'), {
           type,
           amount,
           categoryId,
           description,
           familyCode,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          createdAt: serverTimestamp()
         })
       );
       if (type === 'debit') {
-        const categoryDoc = await db.collection('categories').doc(categoryId).get();
-        if (categoryDoc.exists && categoryDoc.data().budgetId) {
+        const categoryDoc = await getDoc(doc(db, 'categories', categoryId));
+        if (categoryDoc.exists() && categoryDoc.data().budgetId) {
           await retryFirestoreOperation(() => 
-            db.collection('budgets').doc(categoryDoc.data().budgetId).update({
-              spent: firebase.firestore.FieldValue.increment(amount)
+            updateDoc(doc(db, 'budgets', categoryDoc.data().budgetId), {
+              spent: increment(amount)
             })
           );
           await loadBudgets();
@@ -978,9 +981,9 @@ function setupTransactions() {
       const id = e.target.dataset.id;
       if (!db) return;
       try {
-        const doc = await retryFirestoreOperation(() => db.collection('transactions').doc(id).get());
-        if (doc.exists) {
-          const oldData = doc.data();
+        const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'transactions', id)));
+        if (docSnap.exists()) {
+          const oldData = docSnap.data();
           document.getElementById('type').value = oldData.type;
           document.getElementById('amount').value = oldData.amount;
           document.getElementById('category').value = oldData.categoryId;
@@ -1007,14 +1010,14 @@ function setupTransactions() {
               let oldBudgetId = null;
               let newBudgetId = null;
               if (oldData.type === 'debit') {
-                const oldCategoryDoc = await db.collection('categories').doc(oldData.categoryId).get();
-                if (oldCategoryDoc.exists && oldCategoryDoc.data().budgetId) {
+                const oldCategoryDoc = await getDoc(doc(db, 'categories', oldData.categoryId));
+                if (oldCategoryDoc.exists() && oldCategoryDoc.data().budgetId) {
                   oldBudgetId = oldCategoryDoc.data().budgetId;
                 }
               }
               if (type === 'debit') {
-                const newCategoryDoc = await db.collection('categories').doc(categoryId).get();
-                if (newCategoryDoc.exists && newCategoryDoc.data().budgetId) {
+                const newCategoryDoc = await getDoc(doc(db, 'categories', categoryId));
+                if (newCategoryDoc.exists() && newCategoryDoc.data().budgetId) {
                   newBudgetId = newCategoryDoc.data().budgetId;
                 }
               }
@@ -1022,29 +1025,29 @@ function setupTransactions() {
                 const amountDiff = amount - oldData.amount;
                 if (amountDiff !== 0) {
                   await retryFirestoreOperation(() => 
-                    db.collection('budgets').doc(oldBudgetId).update({
-                      spent: firebase.firestore.FieldValue.increment(amountDiff)
+                    updateDoc(doc(db, 'budgets', oldBudgetId), {
+                      spent: increment(amountDiff)
                     })
                   );
                 }
               } else {
                 if (oldBudgetId && oldData.type === 'debit') {
                   await retryFirestoreOperation(() => 
-                    db.collection('budgets').doc(oldBudgetId).update({
-                      spent: firebase.firestore.FieldValue.increment(-oldData.amount)
+                    updateDoc(doc(db, 'budgets', oldBudgetId), {
+                      spent: increment(-oldData.amount)
                     })
                   );
                 }
                 if (newBudgetId && type === 'debit') {
                   await retryFirestoreOperation(() => 
-                    db.collection('budgets').doc(newBudgetId).update({
-                      spent: firebase.firestore.FieldValue.increment(amount)
+                    updateDoc(doc(db, 'budgets', newBudgetId), {
+                      spent: increment(amount)
                     })
                   );
                 }
               }
               await retryFirestoreOperation(() => 
-                db.collection('transactions').doc(id).update({
+                updateDoc(doc(db, 'transactions', id), {
                   type,
                   amount,
                   categoryId,
@@ -1087,21 +1090,21 @@ function setupTransactions() {
         domElements.deleteConfirmModal.classList.remove('hidden');
         const confirmHandler = async () => {
           try {
-            const doc = await db.collection('transactions').doc(id).get();
-            if (doc.exists) {
-              const transaction = doc.data();
+            const docSnap = await getDoc(doc(db, 'transactions', id));
+            if (docSnap.exists()) {
+              const transaction = docSnap.data();
               if (transaction.type === 'debit' && transaction.categoryId) {
-                const categoryDoc = await db.collection('categories').doc(transaction.categoryId).get();
-                if (categoryDoc.exists && categoryDoc.data().budgetId) {
+                const categoryDoc = await getDoc(doc(db, 'categories', transaction.categoryId));
+                if (categoryDoc.exists() && categoryDoc.data().budgetId) {
                   await retryFirestoreOperation(() => 
-                    db.collection('budgets').doc(categoryDoc.data().budgetId).update({
-                      spent: firebase.firestore.FieldValue.increment(-transaction.amount)
+                    updateDoc(doc(db, 'budgets', categoryDoc.data().budgetId), {
+                      spent: increment(-transaction.amount)
                     })
                   );
                   await loadBudgets();
                 }
               }
-              await retryFirestoreOperation(() => db.collection('transactions').doc(id).delete());
+              await retryFirestoreOperation(() => deleteDoc(doc(db, 'transactions', id)));
               console.log('Transaction deleted:', { id });
               await loadTransactions();
               await updateDashboard();
@@ -1136,26 +1139,26 @@ async function loadChildAccounts() {
     if (currentAccountType === 'admin') {
       domElements.childSelector?.classList.remove('hidden');
       domElements.childUserId.innerHTML = '<option value="">Select a Child</option>';
-      await retryFirestoreOperation(() => 
-        db.collection('users')
-          .where('familyCode', '==', familyCode)
-          .where('accountType', '==', 'child')
-          .get()
-          .then(snapshot => {
-            if (snapshot.empty) {
-              domElements.childUserId.innerHTML = '<option value="">No children found</option>';
-            } else {
-              snapshot.forEach(doc => {
-                const data = doc.data();
-                const displayName = data.email && data.email.trim() !== '' ? data.email : `Child Account ${doc.id.substring(0, 8)}`;
-                const option = document.createElement('option');
-                option.value = doc.id;
-                option.textContent = displayName;
-                domElements.childUserId.appendChild(option);
-              });
-            }
-          })
-      );
+      await retryFirestoreOperation(async () => {
+        const usersQuery = query(
+          collection(db, 'users'),
+          where('familyCode', '==', familyCode),
+          where('accountType', '==', 'child')
+        );
+        const snapshot = await getDocs(usersQuery);
+        if (snapshot.empty) {
+          domElements.childUserId.innerHTML = '<option value="">No children found</option>';
+        } else {
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            const displayName = data.email && data.email.trim() !== '' ? data.email : `Child Account ${doc.id.substring(0, 8)}`;
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = displayName;
+            domElements.childUserId.appendChild(option);
+          });
+        }
+      });
       currentChildUserId = domElements.childUserId.value || currentUser.uid;
     } else {
       domElements.childSelector?.classList.add('hidden');
@@ -1180,35 +1183,32 @@ async function loadChildTransactions() {
   try {
     domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
     let totalBalance = 0;
-    await retryFirestoreOperation(() => 
-      db.collection('childTransactions')
-        .where('userId', '==', currentChildUserId)
-        .get()
-        .then(snapshot => {
-          domElements.childTransactionTable.innerHTML = '';
-          if (snapshot.empty) {
-            domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No transactions found</td></tr>';
-          } else {
-            snapshot.forEach(doc => {
-              const transaction = doc.data();
-              totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
-              const tr = document.createElement('tr');
-              tr.classList.add('table-row');
-              tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                  <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${doc.id}" data-user-id="${transaction.userId}">Edit</button>
-                  <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${doc.id}" data-user-id="${transaction.userId}">Delete</button>
-                </td>
-              `;
-              domElements.childTransactionTable.appendChild(tr);
-            });
-          }
-          domElements.childBalance.textContent = formatCurrency(totalBalance, 'INR');
-        })
-    );
+    await retryFirestoreOperation(async () => {
+      const transactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', currentChildUserId));
+      const snapshot = await getDocs(transactionsQuery);
+      domElements.childTransactionTable.innerHTML = '';
+      if (snapshot.empty) {
+        domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No transactions found</td></tr>';
+      } else {
+        snapshot.forEach(doc => {
+          const transaction = doc.data();
+          totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+          const tr = document.createElement('tr');
+          tr.classList.add('table-row');
+          tr.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+              <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${doc.id}" data-user-id="${transaction.userId}">Edit</button>
+              <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${doc.id}" data-user-id="${transaction.userId}">Delete</button>
+            </td>
+          `;
+          domElements.childTransactionTable.appendChild(tr);
+        });
+      }
+      domElements.childBalance.textContent = formatCurrency(totalBalance, 'INR');
+    });
   } catch (error) {
     console.error('Error loading child transactions:', error);
     showError('child-transaction-description', 'Failed to load child transactions.');
@@ -1227,40 +1227,32 @@ async function loadChildTiles() {
   try {
     domElements.childTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
     const childBalances = new Map();
-    await retryFirestoreOperation(() => 
-      db.collection('users')
-        .where('familyCode', '==', familyCode)
-        .where('accountType', '==', 'child')
-        .get()
-        .then(snapshot => {
-          if (snapshot.empty) {
-            domElements.childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
-            return [];
-          }
-          const promises = snapshot.docs.map(doc => {
-            const userId = doc.id;
-            const email = doc.data().email && doc.data().email.trim() !== '' ? doc.data().email : `Child Account ${userId.substring(0, 8)}`;
-            return retryFirestoreOperation(() => 
-              db.collection('childTransactions')
-                .where('userId', '==', userId)
-                .get()
-                .then(transSnapshot => {
-                  let balance = 0;
-                  transSnapshot.forEach(transDoc => {
-                    const trans = transDoc.data();
-                    balance += trans.type === 'credit' ? trans.amount : -trans.amount;
-                  });
-                  childBalances.set(userId, { email, balance });
-                })
-                .catch(error => {
-                  console.warn('No transactions for child:', { userId, email, error: error.message });
-                  childBalances.set(userId, { email, balance: 0 });
-                })
-            );
+    await retryFirestoreOperation(async () => {
+      const usersQuery = query(collection(db, 'users'), where('familyCode', '==', familyCode), where('accountType', '==', 'child'));
+      const snapshot = await getDocs(usersQuery);
+      if (snapshot.empty) {
+        domElements.childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
+        return [];
+      }
+      const promises = snapshot.docs.map(async doc => {
+        const userId = doc.id;
+        const email = doc.data().email && doc.data().email.trim() !== '' ? doc.data().email : `Child Account ${userId.substring(0, 8)}`;
+        try {
+          const transQuery = query(collection(db, 'childTransactions'), where('userId', '==', userId));
+          const transSnapshot = await getDocs(transQuery);
+          let balance = 0;
+          transSnapshot.forEach(transDoc => {
+            const trans = transDoc.data();
+            balance += trans.type === 'credit' ? trans.amount : -trans.amount;
           });
-          return Promise.all(promises);
-        })
-    );
+          childBalances.set(userId, { email, balance });
+        } catch (error) {
+          console.warn('No transactions for child:', { userId, email, error: error.message });
+          childBalances.set(userId, { email, balance: 0 });
+        }
+      });
+      return Promise.all(promises);
+    });
     domElements.childTiles.innerHTML = '';
     if (childBalances.size === 0) {
       domElements.childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
@@ -1333,14 +1325,14 @@ function setupChildAccounts() {
         addChildTransaction.disabled = true;
         addChildTransaction.textContent = 'Adding...';
         await retryFirestoreOperation(() => 
-          db.collection('childTransactions').doc(txId).set({
+          setDoc(doc(db, 'childTransactions', txId), {
             type,
             amount,
             description,
             userId: transactionUserId,
             familyCode,
             txId,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            createdAt: serverTimestamp()
           })
         );
         console.log('Child transaction added:', { type, amount, userId: transactionUserId, txId });
@@ -1370,9 +1362,9 @@ function setupChildAccounts() {
       const id = e.target.dataset.id;
       if (!db) return;
       try {
-        const doc = await retryFirestoreOperation(() => db.collection('childTransactions').doc(id).get());
-        if (doc.exists) {
-          const data = doc.data();
+        const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'childTransactions', id)));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
           domElements.childTransactionType.value = data.type;
           domElements.childTransactionAmount.value = data.amount;
           domElements.childTransactionDescription.value = data.description;
@@ -1391,7 +1383,7 @@ function setupChildAccounts() {
               addChildTransaction.disabled = true;
               addChildTransaction.textContent = 'Updating...';
               await retryFirestoreOperation(() => 
-                db.collection('childTransactions').doc(id).update({
+                updateDoc(doc(db, 'childTransactions', id), {
                   type,
                   amount,
                   description
@@ -1431,7 +1423,7 @@ function setupChildAccounts() {
         domElements.deleteConfirmModal.classList.remove('hidden');
         const confirmHandler = async () => {
           try {
-            await retryFirestoreOperation(() => db.collection('childTransactions').doc(id).delete());
+            await retryFirestoreOperation(() => deleteDoc(doc(db, 'childTransactions', id)));
             console.log('Child transaction deleted:', { id });
             await loadChildTransactions();
             await loadChildTiles();
@@ -1471,31 +1463,29 @@ async function updateDashboard() {
     let totalBalance = 0;
     let totalBudgetAmount = 0;
     await Promise.all([
-      retryFirestoreOperation(() => 
-        db.collection('transactions').where('familyCode', '==', familyCode).get()
-          .then(snapshot => {
-            snapshot.forEach(doc => {
-              const transaction = doc.data();
-              const createdAt = transaction.createdAt ? transaction.createdAt.toDate() : new Date();
-              if (createdAt >= start && createdAt <= end) {
-                totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
-              }
-            });
-            document.getElementById('balance').textContent = formatCurrency(totalBalance, 'INR');
-          })
-      ),
-      retryFirestoreOperation(() => 
-        db.collection('budgets').where('familyCode', '==', familyCode).get()
-          .then(snapshot => {
-            snapshot.forEach(doc => {
-              const budget = doc.data();
-              const createdAt = budget.createdAt ? budget.createdAt.toDate() : new Date();
-              if (createdAt >= start && createdAt <= end) {
-                totalBudgetAmount += budget.amount;
-              }
-            });
-          })
-      )
+      retryFirestoreOperation(async () => {
+        const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
+        const snapshot = await getDocs(transactionsQuery);
+        snapshot.forEach(doc => {
+          const transaction = doc.data();
+          const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
+          if (createdAt >= start && createdAt <= end) {
+            totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+          }
+        });
+        document.getElementById('balance').textContent = formatCurrency(totalBalance, 'INR');
+      }),
+      retryFirestoreOperation(async () => {
+        const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
+        const snapshot = await getDocs(budgetsQuery);
+        snapshot.forEach(doc => {
+          const budget = doc.data();
+          const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
+          if (createdAt >= start && createdAt <= end) {
+            totalBudgetAmount += budget.amount;
+          }
+        });
+      })
     ]);
     document.getElementById('after-budget').textContent = formatCurrency(totalBalance - totalBudgetAmount, 'INR');
     await loadChildTiles();
@@ -1506,14 +1496,24 @@ async function updateDashboard() {
 }
 
 // Initialize App
-function initApp() {
-  console.log('Initializing app module');
-  setupTabs();
-  setupProfile();
-  setupCategories();
-  setupBudgets();
-  setupTransactions();
-  setupChildAccounts();
+async function initApp() {
+  console.log('initApp: Starting');
+  try {
+    setupTabs();
+    setupProfile();
+    setupCategories();
+    setupBudgets();
+    setupTransactions();
+    setupChildAccounts();
+    console.log('initApp: Complete');
+  } catch (error) {
+    console.error('initApp error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    showError('page-title', 'Failed to initialize app.');
+  }
 }
 
 export { loadAppData, initApp };
