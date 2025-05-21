@@ -4,21 +4,29 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>InRUSD: Family Budget</title>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
+  <link href="/assets/tailwind.css" rel="stylesheet">
   <script>
+    console.log('index.html: Starting script load');
+    window.addEventListener('error', (event) => {
+      console.error('Global error:', {
+        message: event.message,
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        error: event.error
+      });
+    });
     window.addEventListener('load', () => {
-      console.log('Checking Firebase SDK load status');
-      if (typeof firebase !== 'undefined' && firebase.initializeApp) {
-        console.log('Firebase SDK loaded successfully');
+      console.log('index.html: Window load event fired');
+      if (!window.initApp) {
+        console.error('main.js failed to load or initialize');
+        document.body.innerHTML += '<p style="color: red; text-align: center;">Error: App failed to load. Please try refreshing or contact support.</p>';
       } else {
-        console.error('Firebase SDK failed to load');
+        console.log('main.js loaded successfully');
       }
     });
   </script>
-  <script src="scripts.js" defer></script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module" src="/main.js" defer onload="console.log('main.js script tag loaded')" onerror="console.error('Failed to load main.js')"></script>
   <style>
     .table-row:nth-child(even) { background-color: #f9fafb; }
     .table-row:hover { background-color: #f3f4f6; }
