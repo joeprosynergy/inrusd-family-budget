@@ -332,26 +332,28 @@ async function loadProfileData() {
 // Categories
 async function loadCategories() {
   console.log('loadCategories: Starting');
-  if (!db) {
-    console.error('loadCategories: Firestore not available');
+  if (!db || !familyCode) {
+    console.error('loadCategories: Firestore or familyCode not available');
     return;
   }
   try {
     const categorySelect = document.getElementById('category');
     const categoryBudgetSelect = domElements.categoryBudgetSelect;
     const newCategoryBudgetSelect = document.getElementById('new-category-budget');
+
     if (!categorySelect || !categoryBudgetSelect) {
       console.error('loadCategories: Missing DOM elements', { categorySelect: !!categorySelect, categoryBudgetSelect: !!categoryBudgetSelect });
       return;
     }
+
     categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
     categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
     if (newCategoryBudgetSelect) {
       newCategoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
     }
 
+    console.log('loadCategories: Fetching budgets');
     await retryFirestoreOperation(async () => {
-      console.log('loadCategories: Fetching budgets');
       const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
       const budgetsSnapshot = await getDocs(budgetsQuery);
       budgetsSnapshot.forEach(doc => {
@@ -370,8 +372,8 @@ async function loadCategories() {
       console.log('loadCategories: Budgets loaded', { count: budgetsSnapshot.size });
     });
 
+    console.log('loadCategories: Fetching categories');
     await retryFirestoreOperation(async () => {
-      console.log('loadCategories: Fetching categories');
       const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
       const categoriesSnapshot = await getDocs(categoriesQuery);
       categoriesSnapshot.forEach(doc => {
@@ -384,7 +386,7 @@ async function loadCategories() {
 
       const categoryTable = document.getElementById('category-table');
       if (!categoryTable) {
-        console.error('loadCategories: category-table not found');
+        console.error('loadCategories: Category table not found');
         return;
       }
       categoryTable.innerHTML = '';
@@ -442,21 +444,20 @@ function setupCategories() {
 
   addCategory.addEventListener('click', async () => {
     console.log('Add Category clicked', { isEditing: isEditing.category });
-    if (isEditing.category) {
-      console.log('Add Category: Blocked due to ongoing edit');
-      return;
-    }
+    if (isEditing.category) return;
     clearErrors();
     const name = document.getElementById('category-name')?.value.trim();
     const type = document.getElementById('category-type')?.value;
     const budgetId = document.getElementById('category-budget')?.value === 'none' ? null : document.getElementById('category-budget').value;
     if (!name) {
-      console.log('Add Category: Missing name');
       showError('category-name', 'Name is required');
       return;
     }
+    if (!type) {
+      showError('category-type', 'Type is required');
+      return;
+    }
     if (!currentUser || !db) {
-      console.log('Add Category: Missing user or Firestore');
       showError('category-name', 'Database service not available');
       return;
     }
@@ -479,8 +480,8 @@ function setupCategories() {
       addCategory.innerHTML = 'Add Category';
       await loadCategories();
     } catch (error) {
-      console.error('Add Category error:', error);
-      showError('category-name', 'Failed to add category.');
+      console.error('Error adding category:', error);
+      showError('category-name', `Failed to add category: ${error.message}`);
     } finally {
       addCategory.disabled = false;
       addCategory.textContent = 'Add Category';
@@ -490,12 +491,8 @@ function setupCategories() {
   categorySelect.addEventListener('change', () => {
     console.log('Category select changed:', categorySelect.value);
     if (categorySelect.value === 'add-new') {
-      if (domElements.addCategoryModal) {
-        domElements.addCategoryModal.classList.remove('hidden');
-        categorySelect.value = '';
-      } else {
-        console.error('Category select: addCategoryModal not found');
-      }
+      domElements.addCategoryModal?.classList.remove('hidden');
+      categorySelect.value = '';
     }
   });
 
@@ -506,12 +503,14 @@ function setupCategories() {
     const type = document.getElementById('new-category-type')?.value;
     const budgetId = document.getElementById('new-category-budget')?.value === 'none' ? null : document.getElementById('new-category-budget').value;
     if (!name) {
-      console.log('Save Category: Missing name');
       showError('new-category-name', 'Name is required');
       return;
     }
+    if (!type) {
+      showError('new-category-type', 'Type is required');
+      return;
+    }
     if (!currentUser || !db) {
-      console.log('Save Category: Missing user or Firestore');
       showError('new-category-name', 'Database service not available');
       return;
     }
@@ -534,8 +533,8 @@ function setupCategories() {
       document.getElementById('new-category-budget').value = 'none';
       await loadCategories();
     } catch (error) {
-      console.error('Save Category error:', error);
-      showError('new-category-name', 'Failed to save category.');
+      console.error('Error saving category:', error);
+      showError('new-category-name', `Failed to save category: ${error.message}`);
     } finally {
       saveCategory.disabled = false;
       saveCategory.textContent = 'Save';
@@ -555,18 +554,20 @@ function setupCategories() {
       console.log('Edit Category clicked:', e.target.dataset.id);
       const id = e.target.dataset.id;
       if (!db) {
-        console.error('Edit Category: Firestore not available');
+        showError('category-name', 'Database service not available');
         return;
       }
       try {
         const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', id)));
         if (docSnap.exists()) {
           const data = docSnap.data();
+          console.log('Category data fetched for edit:', data);
           const categoryNameInput = document.getElementById('category-name');
           const categoryTypeSelect = document.getElementById('category-type');
           const categoryBudgetSelect = document.getElementById('category-budget');
           if (!categoryNameInput || !categoryTypeSelect || !categoryBudgetSelect) {
-            console.error('Edit Category: Missing input elements');
+            console.error('setupCategories: Missing edit form elements');
+            showError('category-name', 'Form elements not found');
             return;
           }
           categoryNameInput.value = data.name;
@@ -580,8 +581,11 @@ function setupCategories() {
             const type = categoryTypeSelect.value;
             const budgetId = categoryBudgetSelect.value === 'none' ? null : categoryBudgetSelect.value;
             if (!name) {
-              console.log('Update Category: Missing name');
               showError('category-name', 'Name is required');
+              return;
+            }
+            if (!type) {
+              showError('category-type', 'Type is required');
               return;
             }
             try {
@@ -598,8 +602,8 @@ function setupCategories() {
               isEditing.category = false;
               await loadCategories();
             } catch (error) {
-              console.error('Update Category error:', error);
-              showError('category-name', 'Failed to update category.');
+              console.error('Error updating category:', error);
+              showError('category-name', `Failed to update category: ${error.message}`);
             } finally {
               addCategory.disabled = false;
               addCategory.textContent = 'Add Category';
@@ -609,10 +613,13 @@ function setupCategories() {
           addCategory.removeEventListener('click', addCategory._updateHandler);
           addCategory._updateHandler = updateHandler;
           addCategory.addEventListener('click', updateHandler, { once: true });
+        } else {
+          console.error('Category document not found:', id);
+          showError('category-name', 'Category not found');
         }
       } catch (error) {
-        console.error('Edit Category error:', error);
-        showError('category-name', 'Failed to fetch category.');
+        console.error('Error fetching category:', error);
+        showError('category-name', `Failed to fetch category: ${error.message}`);
       }
     }
     if (e.target.classList.contains('delete-category')) {
@@ -628,8 +635,8 @@ function setupCategories() {
             await loadCategories();
             domElements.deleteConfirmModal.classList.add('hidden');
           } catch (error) {
-            console.error('Delete Category error:', error);
-            showError('category-name', 'Failed to delete category.');
+            console.error('Error deleting category:', error);
+            showError('category-name', `Failed to delete category: ${error.message}`);
           }
           domElements.confirmDelete.removeEventListener('click', confirmHandler);
         };
@@ -910,18 +917,18 @@ function setupBudgets() {
 // Transactions
 async function loadTransactions() {
   console.log('loadTransactions: Starting');
-  if (!db) {
-    console.error('loadTransactions: Firestore not available');
+  if (!db || !familyCode) {
+    console.error('loadTransactions: Firestore or familyCode not available');
     return;
   }
   try {
     const transactionTable = document.getElementById('transaction-table');
     if (!transactionTable) {
-      console.error('loadTransactions: transaction-table not found');
+      console.error('loadTransactions: Transaction table not found');
       return;
     }
     transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
-    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || '');
+    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
     console.log('loadTransactions: Date range', { start: start.toISOString(), end: end.toISOString() });
     await retryFirestoreOperation(async () => {
       const transactionsQuery = query(
@@ -930,55 +937,64 @@ async function loadTransactions() {
         orderBy('createdAt', 'desc')
       );
       const snapshot = await getDocs(transactionsQuery);
-      console.log('loadTransactions: Fetched transactions', { count: snapshot.size });
+      console.log('loadTransactions: Transactions fetched', { count: snapshot.size });
       transactionTable.innerHTML = '';
       if (snapshot.empty) {
         transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found</td></tr>';
-      } else {
-        for (const doc of snapshot.docs) {
-          const transaction = doc.data();
-          const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
-          if (createdAt >= start && createdAt <= end) {
-            const tr = document.createElement('tr');
-            tr.classList.add('table-row');
+        return;
+      }
+      for (const doc of snapshot.docs) {
+        const transaction = doc.data();
+        const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
+        if (createdAt >= start && createdAt <= end) {
+          const tr = document.createElement('tr');
+          tr.classList.add('table-row');
+          let categoryName = 'Unknown';
+          if (transaction.categoryId) {
             try {
               const categoryDoc = await getDoc(doc(db, 'categories', transaction.categoryId));
-              const categoryName = categoryDoc.exists() ? categoryDoc.data().name : 'Unknown';
-              tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                  <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
-                  <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
-                </td>
-              `;
-              transactionTable.appendChild(tr);
+              categoryName = categoryDoc.exists() ? categoryDoc.data().name : 'Unknown';
             } catch (error) {
-              console.error('loadTransactions: Error fetching category for transaction:', { id: doc.id, error });
+              console.error('loadTransactions: Error fetching category:', { categoryId: transaction.categoryId, error });
+              categoryName = 'Error';
             }
           }
+          tr.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+              <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
+              <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
+            </td>
+          `;
+          transactionTable.appendChild(tr);
         }
       }
       console.log('loadTransactions: Table updated');
     });
   } catch (error) {
     console.error('loadTransactions error:', error);
-    showError('category', 'Failed to load transactions.');
+    showError('category', `Failed to load transactions: ${error.message}`);
     const transactionTable = document.getElementById('transaction-table');
     if (transactionTable) {
-      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Error loading transactions</td></tr>';
+      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
     }
   }
 }
 
 function setupTransactions() {
-  console.log('Setting up transaction event listeners');
+  console.log('setupTransactions: Starting');
   const addTransaction = document.getElementById('add-transaction');
   const transactionTable = document.getElementById('transaction-table');
 
-  addTransaction?.addEventListener('click', async () => {
+  if (!addTransaction || !transactionTable) {
+    console.error('setupTransactions: Missing DOM elements', { addTransaction: !!addTransaction, transactionTable: !!transactionTable });
+    return;
+  }
+
+  addTransaction.addEventListener('click', async () => {
     console.log('Add Transaction clicked', { isEditing: isEditing.transaction });
     if (isEditing.transaction) return;
     clearErrors();
@@ -1032,34 +1048,46 @@ function setupTransactions() {
       await updateDashboard();
     } catch (error) {
       console.error('Error adding transaction:', error);
-      showError('category', 'Failed to add transaction.');
+      showError('category', `Failed to add transaction: ${error.message}`);
     } finally {
       addTransaction.disabled = false;
       addTransaction.textContent = 'Add Transaction';
     }
   });
 
-  transactionTable?.addEventListener('click', async (e) => {
+  transactionTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-transaction')) {
       console.log('Edit Transaction clicked:', e.target.dataset.id);
       const id = e.target.dataset.id;
-      if (!db) return;
+      if (!db) {
+        showError('category', 'Database service not available');
+        return;
+      }
       try {
         const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'transactions', id)));
         if (docSnap.exists()) {
           const oldData = docSnap.data();
-          document.getElementById('type').value = oldData.type;
-          document.getElementById('amount').value = oldData.amount;
-          document.getElementById('category').value = oldData.categoryId;
-          document.getElementById('description').value = oldData.description;
+          const typeInput = document.getElementById('type');
+          const amountInput = document.getElementById('amount');
+          const categoryInput = document.getElementById('category');
+          const descriptionInput = document.getElementById('description');
+          if (!typeInput || !amountInput || !categoryInput || !descriptionInput) {
+            console.error('setupTransactions: Missing edit form elements');
+            showError('category', 'Form elements not found');
+            return;
+          }
+          typeInput.value = oldData.type;
+          amountInput.value = oldData.amount;
+          categoryInput.value = oldData.categoryId;
+          descriptionInput.value = oldData.description;
           addTransaction.innerHTML = 'Update Transaction';
           isEditing.transaction = true;
           console.log('Entered edit mode for transaction:', id);
           const updateHandler = async () => {
-            const type = document.getElementById('type')?.value;
-            const amount = parseFloat(document.getElementById('amount')?.value);
-            const categoryId = document.getElementById('category')?.value;
-            const description = document.getElementById('description')?.value.trim();
+            const type = typeInput.value;
+            const amount = parseFloat(amountInput.value);
+            const categoryId = categoryInput.value;
+            const description = descriptionInput.value.trim();
             if (!amount || amount <= 0) {
               showError('amount', 'Valid amount is required');
               return;
@@ -1119,10 +1147,10 @@ function setupTransactions() {
                 })
               );
               console.log('Transaction updated:', { id, type, amount, categoryId });
-              document.getElementById('type').value = 'debit';
-              document.getElementById('amount').value = '';
-              document.getElementById('category').value = '';
-              document.getElementById('description').value = '';
+              typeInput.value = 'debit';
+              amountInput.value = '';
+              categoryInput.value = '';
+              descriptionInput.value = '';
               addTransaction.innerHTML = 'Add Transaction';
               isEditing.transaction = false;
               await loadBudgets();
@@ -1130,7 +1158,7 @@ function setupTransactions() {
               await updateDashboard();
             } catch (error) {
               console.error('Error updating transaction:', error);
-              showError('category', 'Failed to update transaction.');
+              showError('category', `Failed to update transaction: ${error.message}`);
             } finally {
               addTransaction.disabled = false;
               addTransaction.textContent = 'Add Transaction';
@@ -1143,7 +1171,7 @@ function setupTransactions() {
         }
       } catch (error) {
         console.error('Error fetching transaction:', error);
-        showError('category', 'Failed to fetch transaction.');
+        showError('category', `Failed to fetch transaction: ${error.message}`);
       }
     }
     if (e.target.classList.contains('delete-transaction')) {
@@ -1176,7 +1204,7 @@ function setupTransactions() {
             }
           } catch (error) {
             console.error('Error deleting transaction:', error);
-            showError('category', 'Failed to delete transaction.');
+            showError('category', `Failed to delete transaction: ${error.message}`);
           }
           domElements.confirmDelete.removeEventListener('click', confirmHandler);
         };
@@ -1201,6 +1229,7 @@ async function loadChildAccounts() {
   }
   try {
     if (currentAccountType === 'admin') {
+      console.log('loadChildAccounts: Admin mode, loading child users');
       const childSelector = domElements.childSelector;
       const childUserIdSelect = domElements.childUserId;
       if (!childSelector || !childUserIdSelect) {
@@ -1210,7 +1239,6 @@ async function loadChildAccounts() {
       childSelector.classList.remove('hidden');
       childUserIdSelect.innerHTML = '<option value="">Select a Child</option>';
       await retryFirestoreOperation(async () => {
-        console.log('loadChildAccounts: Fetching child users');
         const usersQuery = query(
           collection(db, 'users'),
           where('familyCode', '==', familyCode),
@@ -1232,16 +1260,16 @@ async function loadChildAccounts() {
         }
       });
       currentChildUserId = childUserIdSelect.value || null;
-      console.log('loadChildAccounts: Current child user ID', { currentChildUserId });
     } else {
+      console.log('loadChildAccounts: Non-admin mode, using current user');
       domElements.childSelector?.classList.add('hidden');
       currentChildUserId = currentUser.uid;
-      console.log('loadChildAccounts: Non-admin, using current user ID', { currentChildUserId });
     }
+    console.log('loadChildAccounts: Loading child transactions for user:', currentChildUserId);
     await loadChildTransactions();
   } catch (error) {
     console.error('loadChildAccounts error:', error);
-    showError('child-user-id', 'Failed to load child accounts.');
+    showError('child-user-id', `Failed to load child accounts: ${error.message}`);
     domElements.childUserId.innerHTML = '<option value="">Error loading children</option>';
   }
 }
@@ -1249,7 +1277,7 @@ async function loadChildAccounts() {
 async function loadChildTransactions() {
   console.log('loadChildTransactions: Starting for user:', currentChildUserId);
   if (!db || !currentChildUserId) {
-    console.error('loadChildTransactions: Firestore or user ID not available', { db: !!db, currentChildUserId });
+    console.error('loadChildTransactions: Firestore or user ID not available');
     domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No user selected</td></tr>';
     domElements.childBalance.textContent = formatCurrency(0, 'INR');
     return;
@@ -1258,7 +1286,6 @@ async function loadChildTransactions() {
     domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
     let totalBalance = 0;
     await retryFirestoreOperation(async () => {
-      console.log('loadChildTransactions: Fetching transactions');
       const transactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', currentChildUserId));
       const snapshot = await getDocs(transactionsQuery);
       console.log('loadChildTransactions: Transactions fetched', { count: snapshot.size });
@@ -1287,8 +1314,8 @@ async function loadChildTransactions() {
     });
   } catch (error) {
     console.error('loadChildTransactions error:', error);
-    showError('child-transaction-description', 'Failed to load child transactions.');
-    domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Error loading transactions</td></tr>';
+    showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
+    domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
     domElements.childBalance.textContent = formatCurrency(0, 'INR');
   }
 }
@@ -1365,6 +1392,7 @@ function setupChildAccounts() {
     });
     return;
   }
+
 
   // Add Child Transaction (with idempotency)
   if (!addChildTransaction._listenerBound) {
