@@ -17,7 +17,7 @@ export default defineConfig({
     },
     sourcemap: true // Generate sourcemaps for debugging
   },
-  publicDir: false, // Disable publicDir to avoid overlap with outDir
-  envPrefix: 'VITE_', // Prefix for environment variables (e.g., VITE_FIREBASE_API_KEY)
+  publicDir: false, // Disable publicDir to avoid overlap
+  envPrefix: 'VITE_', // For Firebase config variables
   base: '/' // Base URL for Netlify
 });
