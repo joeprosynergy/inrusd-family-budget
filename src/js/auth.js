@@ -2,7 +2,14 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, se
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { showError, clearErrors } from './core.js';
 
+let isSetup = false;
+
 export function setupAuth() {
+  if (isSetup) {
+    console.log('setupAuth: Already initialized, skipping');
+    return;
+  }
+  isSetup = true;
   console.log('setupAuth: Starting');
   const auth = getAuth();
   const db = getFirestore();
@@ -17,7 +24,9 @@ export function setupAuth() {
   // Login button
   const loginButton = checkElement('login-button');
   if (loginButton) {
-    loginButton.addEventListener('click', async () => {
+    loginButton.removeEventListener('click', handleLogin); // Prevent duplicates
+    loginButton.addEventListener('click', handleLogin);
+    async function handleLogin() {
       console.log('Login button clicked');
       clearErrors();
       const email = document.getElementById('login-email')?.value;
@@ -38,7 +47,7 @@ export function setupAuth() {
         });
         showError('login-email', error.message);
       }
-    });
+    }
   } else {
     console.error('Cannot setup login: login-button missing');
   }
@@ -46,7 +55,9 @@ export function setupAuth() {
   // Signup button
   const signupButton = checkElement('signup-button');
   if (signupButton) {
-    signupButton.addEventListener('click', async () => {
+    signupButton.removeEventListener('click', handleSignup); // Prevent duplicates
+    signupButton.addEventListener('click', handleSignup);
+    async function handleSignup() {
       console.log('Signup button clicked');
       clearErrors();
       const email = document.getElementById('signup-email')?.value;
@@ -84,7 +95,7 @@ export function setupAuth() {
         });
         showError('signup-email', error.message);
       }
-    });
+    }
   } else {
     console.error('Cannot setup signup: signup-button missing');
   }
@@ -92,7 +103,9 @@ export function setupAuth() {
   // Reset button
   const resetButton = checkElement('reset-button');
   if (resetButton) {
-    resetButton.addEventListener('click', async () => {
+    resetButton.removeEventListener('click', handleReset); // Prevent duplicates
+    resetButton.addEventListener('click', handleReset);
+    async function handleReset() {
       console.log('Reset button clicked');
       clearErrors();
       const email = document.getElementById('reset-email')?.value;
@@ -113,7 +126,7 @@ export function setupAuth() {
         });
         showError('reset-email', error.message);
       }
-    });
+    }
   } else {
     console.error('Cannot setup reset: reset-button missing');
   }
