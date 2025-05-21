@@ -1394,208 +1394,246 @@ function setupChildAccounts() {
   }
 
 
-  // Add Child Transaction (with idempotency)
-  if (!addChildTransaction._listenerBound) {
-    let isProcessing = false;
-    const DEBOUNCE_MS = 5000;
-    let lastAddClickTime = 0;
+     // Add Child Transaction (with idempotency)
+    if (!addChildTransaction._listenerBound) {
+      let isProcessing = false;
+      const DEBOUNCE_MS = 5000;
+      let lastAddClickTime = 0;
 
-    const addChildTransactionHandler = async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const now = Date.now();
-      if (now - lastAddClickTime < DEBOUNCE_MS || isProcessing) {
-        console.log('Add Child Transaction ignored:', { timeSinceLastClick: now - lastAddClickTime, isProcessing });
-        return;
-      }
-      lastAddClickTime = now;
-      isProcessing = true;
+      const addChildTransactionHandler = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const now = Date.now();
+        if (now - lastAddClickTime < DEBOUNCE_MS || isProcessing) {
+          console.log('addChildTransaction: Ignored due to debounce or processing', { timeSinceLastClick: now - lastAddClickTime, isProcessing });
+          return;
+        }
+        lastAddClickTime = now;
+        isProcessing = true;
 
-      console.log('Add Child Transaction clicked', {
-        isEditing: isEditing.childTransaction,
-        currentChildUserId,
-        currentAccountType
-      });
-      if (isEditing.childTransaction) {
-        console.log('Add Child Transaction: Blocked due to ongoing edit');
-        isProcessing = false;
-        return;
-      }
-      clearErrors();
-      const type = domElements.childTransactionType?.value;
-      const amount = parseFloat(domElements.childTransactionAmount?.value);
-      const description = domElements.childTransactionDescription?.value.trim();
-      const transactionUserId = currentAccountType === 'admin' ? currentChildUserId : currentUser.uid;
-      const txId = `tx-${transactionUserId}-${type}-${amount}-${description}-${now}`.replace(/[^a-zA-Z0-9-]/g, '-');
-      console.log('Add Child Transaction inputs:', { type, amount, description, transactionUserId, txId });
-      if (!amount || amount <= 0) {
-        console.log('Add Child Transaction: Invalid amount');
-        showError('child-transaction-amount', 'Valid amount is required');
-        isProcessing = false;
-        return;
-      }
-      if (currentAccountType === 'admin' && !currentChildUserId) {
-        console.log('Add Child Transaction: No child selected');
-        showError('child-user-id', 'Please select a child account');
-        isProcessing = false;
-        return;
-      }
-      if (!currentUser || !db) {
-        console.log('Add Child Transaction: Missing user or Firestore');
-        showError('child-transaction-description', 'Database service not available');
-        isProcessing = false;
-        return;
-      }
-      try {
-        addChildTransaction.disabled = true;
-        addChildTransaction.textContent = 'Adding...';
-        await retryFirestoreOperation(() => 
-          setDoc(doc(db, 'childTransactions', txId), {
-            type,
-            amount,
-            description,
-            userId: transactionUserId,
-            familyCode,
-            txId,
-            createdAt: serverTimestamp()
-          })
-        );
-        console.log('Child transaction added:', { type, amount, userId: transactionUserId, txId });
-        domElements.childTransactionType.value = 'debit';
-        domElements.childTransactionAmount.value = '';
-        domElements.childTransactionDescription.value = '';
-        addChildTransaction.innerHTML = 'Add Transaction';
-        await loadChildTransactions();
-        await loadChildTiles();
-      } catch (error) {
-        console.error('Add Child Transaction error:', error);
-        showError('child-transaction-description', 'Failed to add transaction.');
-      } finally {
-        addChildTransaction.disabled = false;
-        addChildTransaction.textContent = 'Add Transaction';
-        isProcessing = false;
-      }
-    };
+        console.log('addChildTransaction: Clicked', { isEditing: isEditing.childTransaction, currentChildUserId, currentAccountType });
+        if (isEditing.childTransaction) {
+          console.log('addChildTransaction: Skipped, already in edit mode');
+          isProcessing = false;
+          return;
+        }
+        clearErrors();
+        const typeInput = domElements.childTransactionType;
+        const amountInput = domElements.childTransactionAmount;
+        const descriptionInput = domElements.childTransactionDescription;
+        if (!typeInput || !amountInput || !descriptionInput) {
+          console.error('addChildTransaction: Missing form elements', { typeInput: !!typeInput, amountInput: !!amountInput, descriptionInput: !!descriptionInput });
+          showError('child-transaction-description', 'Form elements not found');
+          isProcessing = false;
+          return;
+        }
+        const type = typeInput.value;
+        const amount = parseFloat(amountInput.value);
+        const description = descriptionInput.value.trim();
+        const transactionUserId = currentAccountType === 'admin' ? currentChildUserId : currentUser.uid;
+        const txId = `tx-${transactionUserId}-${type}-${amount}-${description}-${now}`.replace(/[^a-zA-Z0-9-]/g, '-');
+        if (!amount || amount <= 0) {
+          console.log('addChildTransaction: Invalid amount', { amount });
+          showError('child-transaction-amount', 'Valid amount is required');
+          isProcessing = false;
+          return;
+        }
+        if (currentAccountType === 'admin' && !currentChildUserId) {
+          console.error('addChildTransaction: No child user selected for admin account');
+          showError('child-user-id', 'Please select a child account');
+          isProcessing = false;
+          return;
+        }
+        if (!currentUser || !db) {
+          console.error('addChildTransaction: Missing user or Firestore');
+          showError('child-transaction-description', 'Database service not available');
+          isProcessing = false;
+          return;
+        }
+        try {
+          addChildTransaction.disabled = true;
+          addChildTransaction.textContent = 'Adding...';
+          console.log('addChildTransaction: Adding transaction', { txId, type, amount, transactionUserId, description });
+          await retryFirestoreOperation(() => 
+            setDoc(doc(db, 'childTransactions', txId), {
+              type,
+              amount,
+              description,
+              userId: transactionUserId,
+              familyCode,
+              txId,
+              createdAt: serverTimestamp()
+            })
+          );
+          console.log('addChildTransaction: Transaction added', { type, amount, userId: transactionUserId, txId });
+          typeInput.value = 'debit';
+          amountInput.value = '';
+          descriptionInput.value = '';
+          addChildTransaction.innerHTML = 'Add Transaction';
+          await loadChildTransactions();
+          await loadChildTiles();
+        } catch (error) {
+          console.error('addChildTransaction error:', {
+            code: error.code,
+            message: error.message,
+            stack: error.stack
+          });
+          showError('child-transaction-description', `Failed to add transaction: ${error.message}`);
+        } finally {
+          addChildTransaction.disabled = false;
+          addChildTransaction.textContent = 'Add Transaction';
+          isProcessing = false;
+        }
+      };
 
-    addChildTransaction.addEventListener('click', addChildTransactionHandler);
-    addChildTransaction._listenerBound = true;
-  }
+      addChildTransaction.addEventListener('click', addChildTransactionHandler);
+      addChildTransaction._listenerBound = true;
+    }
 
-  childTransactionTable.addEventListener('click', async (e) => {
-    if (e.target.classList.contains('edit-child-transaction')) {
-      console.log('Edit Child Transaction clicked:', e.target.dataset.id);
-      const id = e.target.dataset.id;
-      if (!db) {
-        console.error('Edit Child Transaction: Firestore not available');
-        return;
-      }
-      try {
-        const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'childTransactions', id)));
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          domElements.childTransactionType.value = data.type;
-          domElements.childTransactionAmount.value = data.amount;
-          domElements.childTransactionDescription.value = data.description;
-          addChildTransaction.innerHTML = 'Update Transaction';
-          isEditing.childTransaction = true;
-          console.log('Entered edit mode for child transaction:', id);
-          const updateHandler = async () => {
-            const type = domElements.childTransactionType?.value;
-            const amount = parseFloat(domElements.childTransactionAmount?.value);
-            const description = domElements.childTransactionDescription?.value.trim();
-            if (!amount || amount <= 0) {
-              console.log('Update Child Transaction: Invalid amount');
-              showError('child-transaction-amount', 'Valid amount is required');
+    childTransactionTable.addEventListener('click', async (e) => {
+      if (e.target.classList.contains('edit-child-transaction')) {
+        console.log('editChildTransaction: Clicked', { id: e.target.dataset.id });
+        const id = e.target.dataset.id;
+        if (!db) {
+          console.error('editChildTransaction: Firestore not available');
+          showError('child-transaction-description', 'Database service not available');
+          return;
+        }
+        try {
+          const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'childTransactions', id)));
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            const typeInput = domElements.childTransactionType;
+            const amountInput = domElements.childTransactionAmount;
+            const descriptionInput = domElements.childTransactionDescription;
+            if (!typeInput || !amountInput || !descriptionInput) {
+              console.error('editChildTransaction: Missing form elements', {
+                typeInput: !!typeInput,
+                amountInput: !!amountInput,
+                descriptionInput: !!descriptionInput
+              });
+              showError('child-transaction-description', 'Form elements not found');
               return;
             }
-            try {
-              addChildTransaction.disabled = true;
-              addChildTransaction.textContent = 'Updating...';
-              await retryFirestoreOperation(() => 
-                updateDoc(doc(db, 'childTransactions', id), {
-                  type,
-                  amount,
-                  description
-                })
-              );
-              console.log('Child transaction updated:', { id, type, amount });
-              domElements.childTransactionType.value = 'debit';
-              domElements.childTransactionAmount.value = '';
-              domElements.childTransactionDescription.value = '';
-              addChildTransaction.innerHTML = 'Add Transaction';
-              isEditing.childTransaction = false;
-              await loadChildTransactions();
-              await loadChildTiles();
-            } catch (error) {
-              console.error('Update Child Transaction error:', error);
-              showError('child-transaction-description', 'Failed to update transaction.');
-            } finally {
-              addChildTransaction.disabled = false;
-              addChildTransaction.textContent = 'Add Transaction';
-              isEditing.childTransaction = false;
-            }
-          };
-          addChildTransaction.removeEventListener('click', addChildTransaction._updateHandler);
-          addChildTransaction._updateHandler = updateHandler;
-          addChildTransaction.addEventListener('click', updateHandler, { once: true });
+            typeInput.value = data.type;
+            amountInput.value = data.amount;
+            descriptionInput.value = data.description;
+            addChildTransaction.innerHTML = 'Update Transaction';
+            isEditing.childTransaction = true;
+            console.log('editChildTransaction: Entered edit mode', { id });
+            const updateHandler = async () => {
+              const type = typeInput.value;
+              const amount = parseFloat(amountInput.value);
+              const description = descriptionInput.value.trim();
+              if (!amount || amount <= 0) {
+                showError('child-transaction-amount', 'Valid amount is required');
+                return;
+              }
+              try {
+                addChildTransaction.disabled = true;
+                addChildTransaction.textContent = 'Updating...';
+                await retryFirestoreOperation(() => 
+                  updateDoc(doc(db, 'childTransactions', id), {
+                    type,
+                    amount,
+                    description
+                  })
+                );
+                console.log('editChildTransaction: Transaction updated', { id, type, amount });
+                typeInput.value = 'debit';
+                amountInput.value = '';
+                descriptionInput.value = '';
+                addChildTransaction.innerHTML = 'Add Transaction';
+                isEditing.childTransaction = false;
+                await loadChildTransactions();
+                await loadChildTiles();
+              } catch (error) {
+                console.error('editChildTransaction error:', error);
+                showError('child-transaction-description', `Failed to update transaction: ${error.message}`);
+              } finally {
+                addChildTransaction.disabled = false;
+                addChildTransaction.textContent = 'Add Transaction';
+                isEditing.childTransaction = false;
+              }
+            };
+            addChildTransaction.removeEventListener('click', addChildTransaction._updateHandler);
+            addChildTransaction._updateHandler = updateHandler;
+            addChildTransaction.addEventListener('click', updateHandler, { once: true });
+          } else {
+            console.error('editChildTransaction: Transaction not found', { id });
+            showError('child-transaction-description', 'Transaction not found');
+          }
+        } catch (error) {
+          console.error('editChildTransaction error:', error);
+          showError('child-transaction-description', `Failed to fetch transaction: ${error.message}`);
         }
-      } catch (error) {
-        console.error('Edit Child Transaction error:', error);
-        showError('child-transaction-description', 'Failed to fetch transaction.');
       }
-    }
-    if (e.target.classList.contains('delete-child-transaction')) {
-      console.log('Delete Child Transaction clicked:', e.target.dataset.id);
-      const id = e.target.dataset.id;
-      if (domElements.deleteConfirmModal && db) {
+      if (e.target.classList.contains('delete-child-transaction')) {
+        console.log('deleteChildTransaction: Clicked', { id: e.target.dataset.id });
+        const id = e.target.dataset.id;
+        if (!domElements.deleteConfirmModal || !db) {
+          console.error('deleteChildTransaction: Missing modal or Firestore', {
+            deleteConfirmModal: !!domElements.deleteConfirmModal,
+            db: !!db
+          });
+          showError('child-transaction-description', 'Cannot delete: Missing components');
+          return;
+        }
         domElements.deleteConfirmMessage.textContent = 'Are you sure you want to delete this child transaction?';
         domElements.deleteConfirmModal.classList.remove('hidden');
         const confirmHandler = async () => {
           try {
             await retryFirestoreOperation(() => deleteDoc(doc(db, 'childTransactions', id)));
-            console.log('Child transaction deleted:', { id });
+            console.log('deleteChildTransaction: Transaction deleted', { id });
             await loadChildTransactions();
             await loadChildTiles();
             domElements.deleteConfirmModal.classList.add('hidden');
           } catch (error) {
-            console.error('Delete Child Transaction error:', error);
-            showError('child-transaction-description', 'Failed to delete transaction.');
+            console.error('deleteChildTransaction error:', error);
+            showError('child-transaction-description', `Failed to delete transaction: ${error.message}`);
           }
           domElements.confirmDelete.removeEventListener('click', confirmHandler);
         };
         const cancelHandler = () => {
+          console.log('deleteChildTransaction: Cancelled');
           domElements.deleteConfirmModal.classList.add('hidden');
           domElements.cancelDelete.removeEventListener('click', cancelHandler);
         };
         domElements.confirmDelete.addEventListener('click', confirmHandler, { once: true });
         domElements.cancelDelete.addEventListener('click', cancelHandler, { once: true });
       }
-    }
-  });
+    });
 
-  childUserId.addEventListener('change', () => {
-    console.log('Child user selected:', childUserId.value);
-    currentChildUserId = childUserId.value || currentUser.uid;
-    console.log('Child user updated:', { currentChildUserId });
-    loadChildTransactions();
-  });
+    childUserId.addEventListener('change', () => {
+      console.log('childUserId: Changed', { value: childUserId.value });
+      currentChildUserId = childUserId.value || null;
+      if (currentChildUserId) {
+        loadChildTransactions();
+      } else {
+        console.log('childUserId: No child selected');
+        domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No child selected</td></tr>';
+        domElements.childBalance.textContent = formatCurrency(0, 'INR');
+      }
+    });
 }
 
 // Dashboard Updates
 async function updateDashboard() {
-  console.log('Updating dashboard');
+  console.log('updateDashboard: Starting');
   if (!db) {
-    console.error('Firestore not available');
+    console.error('updateDashboard: Firestore not available');
     return;
   }
   try {
-    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || '');
+    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
+    console.log('updateDashboard: Date range', { start: start.toISOString(), end: end.toISOString() });
     let totalBalance = 0;
     let totalBudgetAmount = 0;
     await Promise.all([
       retryFirestoreOperation(async () => {
         const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
         const snapshot = await getDocs(transactionsQuery);
+        console.log('updateDashboard: Transactions fetched', { count: snapshot.size });
         snapshot.forEach(doc => {
           const transaction = doc.data();
           const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
@@ -1603,11 +1641,17 @@ async function updateDashboard() {
             totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
           }
         });
-        document.getElementById('balance').textContent = formatCurrency(totalBalance, 'INR');
+        const balanceElement = document.getElementById('balance');
+        if (balanceElement) {
+          balanceElement.textContent = formatCurrency(totalBalance, 'INR');
+        } else {
+          console.error('updateDashboard: Balance element not found');
+        }
       }),
       retryFirestoreOperation(async () => {
         const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
         const snapshot = await getDocs(budgetsQuery);
+        console.log('updateDashboard: Budgets fetched', { count: snapshot.size });
         snapshot.forEach(doc => {
           const budget = doc.data();
           const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
@@ -1617,11 +1661,17 @@ async function updateDashboard() {
         });
       })
     ]);
-    document.getElementById('after-budget').textContent = formatCurrency(totalBalance - totalBudgetAmount, 'INR');
+    const afterBudgetElement = document.getElementById('after-budget');
+    if (afterBudgetElement) {
+      afterBudgetElement.textContent = formatCurrency(totalBalance - totalBudgetAmount, 'INR');
+    } else {
+      console.error('updateDashboard: After-budget element not found');
+    }
     await loadChildTiles();
+    console.log('updateDashboard: Complete');
   } catch (error) {
-    console.error('Error updating dashboard:', error);
-    showError('balance', 'Failed to update dashboard.');
+    console.error('updateDashboard error:', error);
+    showError('balance', `Failed to update dashboard: ${error.message}`);
   }
 }
 
