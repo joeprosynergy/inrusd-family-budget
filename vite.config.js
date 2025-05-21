@@ -7,12 +7,12 @@ export default defineConfig({
     assetsDir: 'assets', // Subdirectory for CSS
     rollupOptions: {
       input: {
-        index: 'src/index.html', // HTML entry point
-        js: 'src/js/index.js', // JavaScript entry point
-        tailwind: 'src/css/tailwind.css' // Tailwind CSS entry point
+        js: 'src/js/index.js', // JavaScript entry point, outputs js.js
+        tailwind: 'src/css/tailwind.css', // Tailwind CSS entry point
+        index: 'src/index.html' // HTML entry point
       },
       output: {
-        entryFileNames: '[name].js', // Output JS as index.js
+        entryFileNames: '[name].js', // Output JS as js.js
         assetFileNames: 'assets/[name].[ext]' // Output CSS to assets/tailwind.css
       }
     },
