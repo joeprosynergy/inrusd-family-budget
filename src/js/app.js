@@ -1100,32 +1100,24 @@ async function loadTransactions() {
   try {
     // Verify DOM elements
     const transactionTable = document.getElementById('transaction-table');
-    const dateHeader = document.getElementById('transaction-date-header');
-    if (!transactionTable || !dateHeader) {
-      console.error('loadTransactions: Missing DOM elements', {
-        transactionTable: !!transactionTable,
-        dateHeader: !!dateHeader
-      });
-      showError('category', 'Transaction table or date header not found');
+    if (!transactionTable) {
+      console.error('loadTransactions: Transaction table not found');
+      showError('category', 'Transaction table not found');
       return;
     }
-    transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">Loading...</td></tr>';
+    transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
 
     // Verify Firestore and familyCode
     if (!db || !familyCode) {
       console.error('loadTransactions: Firestore or familyCode not available', { db: !!db, familyCode });
       showError('category', 'Database service not available');
-      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Database unavailable</td></tr>';
+      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Database unavailable</td></tr>';
       return;
     }
 
     // Use a broad date range to avoid over-filtering
     const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'allTime');
     console.log('loadTransactions: Date range', { start: start.toISOString(), end: end.toISOString() });
-
-    // Set date header to abbreviated month
-    dateHeader.textContent = formatTransactionDate({ toDate: () => start }, true);
-    console.log('loadTransactions: Date header set', { month: dateHeader.textContent });
 
     // Pre-fetch categories
     console.log('loadTransactions: Fetching categories');
@@ -1158,7 +1150,7 @@ async function loadTransactions() {
         message: error.message,
         stack: error.stack
       });
-      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Failed to load transactions</td></tr>';
+      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Failed to load transactions</td></tr>';
       showError('category', `Failed to load transactions: ${error.message}`);
       return;
     }
@@ -1166,7 +1158,7 @@ async function loadTransactions() {
 
     transactionTable.innerHTML = '';
     if (snapshot.empty) {
-      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found</td></tr>';
+      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found</td></tr>';
       console.log('loadTransactions: No transactions in Firestore');
       return;
     }
@@ -1182,7 +1174,7 @@ async function loadTransactions() {
     console.log('loadTransactions: Transactions after date filter', { count: transactions.length });
 
     if (transactions.length === 0) {
-      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found for this period</td></tr>';
+      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
       console.log('loadTransactions: No transactions in date range');
       return;
     }
@@ -1192,7 +1184,6 @@ async function loadTransactions() {
       tr.classList.add('table-row');
       const categoryName = transaction.categoryId ? categoryMap.get(transaction.categoryId) || 'Unknown' : 'None';
       tr.innerHTML = `
-        <td class="w-12 px-2 sm:px-4 py-3 text-center text-xs sm:text-sm text-gray-900">${formatTransactionDate(transaction.createdAt)}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formatCurrency(transaction.amount || 0, 'INR')}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${categoryName}</td>
@@ -1214,7 +1205,7 @@ async function loadTransactions() {
     showError('category', `Failed to load transactions: ${error.message}`);
     const transactionTable = document.getElementById('transaction-table');
     if (transactionTable) {
-      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
     }
   }
 }
