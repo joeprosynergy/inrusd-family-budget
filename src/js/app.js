@@ -1946,7 +1946,7 @@ function setupChildAccounts() {
                 console.log('editChildTransaction: Updating transaction', { id, type, amount, description });
                 await retryFirestoreOperation(() => 
                   updateDoc(doc(db, 'childTransactions', id), {
-                    typeynchronization
+                    type,
                     amount,
                     description
                   })
@@ -2058,60 +2058,125 @@ function setupChildAccounts() {
   }
 }
 
+// Helper function to calculate child balance
+async function calculateChildBalance(userId) {
+  console.log('calculateChildBalance: Starting for user:', userId);
+  try {
+    if (!db || !userId) {
+      console.error('calculateChildBalance: Firestore or user ID not available', { db: !!db, userId });
+      return 0;
+    }
+    let totalBalance = 0;
+    await retryFirestoreOperation(async () => {
+      const transactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', userId));
+      const snapshot = await getDocs(transactionsQuery);
+      console.log('calculateChildBalance: Child transactions fetched', { count: snapshot.size });
+      snapshot.forEach(doc => {
+        const transaction = doc.data();
+        totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+      });
+    });
+    console.log('calculateChildBalance: Balance calculated', { totalBalance });
+    return totalBalance;
+  } catch (error) {
+    console.error('calculateChildBalance error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    return 0;
+  }
+}
+
 // Dashboard Updates
 async function updateDashboard() {
-  console.log('updateDashboard: Starting');
-  if (!db) {
-    console.error('updateDashboard: Firestore not available');
-    return;
-  }
+  console.log('updateDashboard: Starting', { accountType: currentAccountType });
   try {
+    if (!db) {
+      console.error('updateDashboard: Firestore not available');
+      showError('balance', 'Database service not available');
+      return;
+    }
+
+    // Verify DOM elements
+    const balanceElement = document.getElementById('balance');
+    const afterBudgetElement = document.getElementById('after-budget');
+    const childBalanceElement = document.getElementById('child-balance');
+    if (!balanceElement || !afterBudgetElement) {
+      console.error('updateDashboard: Missing DOM elements', {
+        balanceElement: !!balanceElement,
+        afterBudgetElement: !!afterBudgetElement
+      });
+      showError('balance', 'Dashboard elements not found');
+      return;
+    }
+
     const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
     console.log('updateDashboard: Date range', { start: start.toISOString(), end: end.toISOString() });
-    let totalBalance = 0;
-    let totalBudgetAmount = 0;
-    await Promise.all([
-      retryFirestoreOperation(async () => {
-        const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
-        const snapshot = await getDocs(transactionsQuery);
-        console.log('updateDashboard: Transactions fetched', { count: snapshot.size });
-        snapshot.forEach(doc => {
-          const transaction = doc.data();
-          const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
-          if (createdAt >= start && createdAt <= end) {
-            totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
-          }
-        });
-        const balanceElement = document.getElementById('balance');
-        if (balanceElement) {
-          balanceElement.textContent = formatCurrency(totalBalance, 'INR');
-        } else {
-          console.error('updateDashboard: Balance element not found');
-        }
-      }),
-      retryFirestoreOperation(async () => {
-        const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
-        const snapshot = await getDocs(budgetsQuery);
-        console.log('updateDashboard: Budgets fetched', { count: snapshot.size });
-        snapshot.forEach(doc => {
-          const budget = doc.data();
-          const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
-          if (createdAt >= start && createdAt <= end) {
-            totalBudgetAmount += budget.amount;
-          }
-        });
-      })
-    ]);
-    const afterBudgetElement = document.getElementById('after-budget');
-    if (afterBudgetElement) {
-      afterBudgetElement.textContent = formatCurrency(totalBalance - totalBudgetAmount, 'INR');
+
+    if (currentAccountType === 'child') {
+      // Child user: Show only their childTransactions balance
+      console.log('updateDashboard: Child mode, calculating child balance');
+      const childBalance = await calculateChildBalance(currentUser.uid);
+      if (childBalanceElement) {
+        childBalanceElement.textContent = formatCurrency(childBalance, 'INR');
+        childBalanceElement.classList.remove('hidden');
+      } else {
+        console.warn('updateDashboard: Child balance element not found');
+      }
+      // Hide family balance and after-budget for child users
+      balanceElement.textContent = 'N/A';
+      balanceElement.classList.add('hidden');
+      afterBudgetElement.textContent = 'N/A';
+      afterBudgetElement.classList.add('hidden');
+      await loadChildTiles(); // Optional, if tiles are used
     } else {
-      console.error('updateDashboard: After-budget element not found');
+      // Admin user: Show family-wide balance
+      console.log('updateDashboard: Admin mode, calculating family balance');
+      let totalBalance = 0;
+      let totalBudgetAmount = 0;
+      await Promise.all([
+        retryFirestoreOperation(async () => {
+          const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
+          const snapshot = await getDocs(transactionsQuery);
+          console.log('updateDashboard: Transactions fetched', { count: snapshot.size });
+          snapshot.forEach(doc => {
+            const transaction = doc.data();
+            const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
+            if (createdAt >= start && createdAt <= end) {
+              totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+            }
+          });
+          balanceElement.textContent = formatCurrency(totalBalance, 'INR');
+          balanceElement.classList.remove('hidden');
+        }),
+        retryFirestoreOperation(async () => {
+          const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
+          const snapshot = await getDocs(budgetsQuery);
+          console.log('updateDashboard: Budgets fetched', { count: snapshot.size });
+          snapshot.forEach(doc => {
+            const budget = doc.data();
+            const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
+            if (createdAt >= start && createdAt <= end) {
+              totalBudgetAmount += budget.amount;
+            }
+          });
+        })
+      ]);
+      afterBudgetElement.textContent = formatCurrency(totalBalance - totalBudgetAmount, 'INR');
+      afterBudgetElement.classList.remove('hidden');
+      if (childBalanceElement) {
+        childBalanceElement.classList.add('hidden');
+      }
+      await loadChildTiles();
     }
-    await loadChildTiles();
     console.log('updateDashboard: Complete');
   } catch (error) {
-    console.error('updateDashboard error:', error);
+    console.error('updateDashboard error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
     showError('balance', `Failed to update dashboard: ${error.message}`);
   }
 }
