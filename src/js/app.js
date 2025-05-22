@@ -919,17 +919,30 @@ async function loadTransactions() {
   console.log('loadTransactions: Starting');
   if (!db || !familyCode) {
     console.error('loadTransactions: Firestore or familyCode not available');
+    showError('category', 'Database service not available');
     return;
   }
   try {
     const transactionTable = document.getElementById('transaction-table');
     if (!transactionTable) {
       console.error('loadTransactions: Transaction table not found');
+      showError('category', 'Transaction table not found');
       return;
     }
     transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
     console.log('loadTransactions: Date range', { start: start.toISOString(), end: end.toISOString() });
+
+    // Fetch categories upfront to avoid per-transaction queries
+    console.log('loadTransactions: Fetching categories');
+    const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
+    const categoriesSnapshot = await getDocs(categoriesQuery);
+    const categoryMap = new Map();
+    categoriesSnapshot.forEach(doc => {
+      categoryMap.set(doc.id, doc.data().name);
+    });
+    console.log('loadTransactions: Categories loaded', { count: categoriesSnapshot.size });
+
     await retryFirestoreOperation(async () => {
       const transactionsQuery = query(
         collection(db, 'transactions'),
@@ -938,44 +951,54 @@ async function loadTransactions() {
       );
       const snapshot = await getDocs(transactionsQuery);
       console.log('loadTransactions: Transactions fetched', { count: snapshot.size });
+
       transactionTable.innerHTML = '';
       if (snapshot.empty) {
         transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found</td></tr>';
+        console.log('loadTransactions: No transactions found');
         return;
       }
-      for (const doc of snapshot.docs) {
+
+      const filteredTransactions = [];
+      snapshot.forEach(doc => {
         const transaction = doc.data();
         const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
         if (createdAt >= start && createdAt <= end) {
-          const tr = document.createElement('tr');
-          tr.classList.add('table-row');
-          let categoryName = 'Unknown';
-          if (transaction.categoryId) {
-            try {
-              const categoryDoc = await getDoc(doc(db, 'categories', transaction.categoryId));
-              categoryName = categoryDoc.exists() ? categoryDoc.data().name : 'Unknown';
-            } catch (error) {
-              console.error('loadTransactions: Error fetching category:', { categoryId: transaction.categoryId, error });
-              categoryName = 'Error';
-            }
-          }
-          tr.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">
-              <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
-              <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
-            </td>
-          `;
-          transactionTable.appendChild(tr);
+          filteredTransactions.push({ id: doc.id, ...transaction });
         }
+      });
+      console.log('loadTransactions: Transactions after date filter', { count: filteredTransactions.length });
+
+      if (filteredTransactions.length === 0) {
+        transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
+        console.log('loadTransactions: No transactions in date range');
+        return;
       }
-      console.log('loadTransactions: Table updated');
+
+      filteredTransactions.forEach(transaction => {
+        const tr = document.createElement('tr');
+        tr.classList.add('table-row');
+        const categoryName = transaction.categoryId ? categoryMap.get(transaction.categoryId) || 'Unknown' : 'None';
+        tr.innerHTML = `
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description || ''}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm">
+            <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${transaction.id}">Edit</button>
+            <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${transaction.id}">Delete</button>
+          </td>
+        `;
+        transactionTable.appendChild(tr);
+      });
+      console.log('loadTransactions: Table updated', { rendered: filteredTransactions.length });
     });
   } catch (error) {
-    console.error('loadTransactions error:', error);
+    console.error('loadTransactions error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
     showError('category', `Failed to load transactions: ${error.message}`);
     const transactionTable = document.getElementById('transaction-table');
     if (transactionTable) {
@@ -990,18 +1013,39 @@ function setupTransactions() {
   const transactionTable = document.getElementById('transaction-table');
 
   if (!addTransaction || !transactionTable) {
-    console.error('setupTransactions: Missing DOM elements', { addTransaction: !!addTransaction, transactionTable: !!transactionTable });
+    console.error('setupTransactions: Missing DOM elements', {
+      addTransaction: !!addTransaction,
+      transactionTable: !!transactionTable
+    });
+    showError('category', 'Transaction form or table not found');
     return;
   }
 
   addTransaction.addEventListener('click', async () => {
-    console.log('Add Transaction clicked', { isEditing: isEditing.transaction });
-    if (isEditing.transaction) return;
+    console.log('addTransaction: Clicked', { isEditing: isEditing.transaction });
+    if (isEditing.transaction) {
+      console.log('addTransaction: Skipped, in edit mode');
+      return;
+    }
     clearErrors();
-    const type = document.getElementById('type')?.value;
-    const amount = parseFloat(document.getElementById('amount')?.value);
-    const categoryId = document.getElementById('category')?.value;
-    const description = document.getElementById('description')?.value.trim();
+    const typeInput = document.getElementById('type');
+    const amountInput = document.getElementById('amount');
+    const categoryInput = document.getElementById('category');
+    const descriptionInput = document.getElementById('description');
+    if (!typeInput || !amountInput || !categoryInput || !descriptionInput) {
+      console.error('addTransaction: Missing form elements', {
+        typeInput: !!typeInput,
+        amountInput: !!amountInput,
+        categoryInput: !!categoryInput,
+        descriptionInput: !!descriptionInput
+      });
+      showError('category', 'Form elements not found');
+      return;
+    }
+    const type = typeInput.value;
+    const amount = parseFloat(amountInput.value);
+    const categoryId = categoryInput.value;
+    const description = descriptionInput.value.trim();
     if (!amount || amount <= 0) {
       showError('amount', 'Valid amount is required');
       return;
@@ -1017,6 +1061,7 @@ function setupTransactions() {
     try {
       addTransaction.disabled = true;
       addTransaction.textContent = 'Adding...';
+      console.log('addTransaction: Adding transaction', { type, amount, categoryId, description });
       const docRef = await retryFirestoreOperation(() => 
         addDoc(collection(db, 'transactions'), {
           type,
@@ -1038,16 +1083,20 @@ function setupTransactions() {
           await loadBudgets();
         }
       }
-      console.log('Transaction added:', { id: docRef.id, type, amount, categoryId });
-      document.getElementById('type').value = 'debit';
-      document.getElementById('amount').value = '';
-      document.getElementById('category').value = '';
-      document.getElementById('description').value = '';
+      console.log('addTransaction: Transaction added', { id: docRef.id, type, amount, categoryId });
+      typeInput.value = 'debit';
+      amountInput.value = '';
+      categoryInput.value = '';
+      descriptionInput.value = '';
       addTransaction.innerHTML = 'Add Transaction';
       await loadTransactions();
       await updateDashboard();
     } catch (error) {
-      console.error('Error adding transaction:', error);
+      console.error('addTransaction error:', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
       showError('category', `Failed to add transaction: ${error.message}`);
     } finally {
       addTransaction.disabled = false;
@@ -1057,9 +1106,10 @@ function setupTransactions() {
 
   transactionTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-transaction')) {
-      console.log('Edit Transaction clicked:', e.target.dataset.id);
+      console.log('editTransaction: Clicked', { id: e.target.dataset.id });
       const id = e.target.dataset.id;
       if (!db) {
+        console.error('editTransaction: Firestore not available');
         showError('category', 'Database service not available');
         return;
       }
@@ -1072,7 +1122,12 @@ function setupTransactions() {
           const categoryInput = document.getElementById('category');
           const descriptionInput = document.getElementById('description');
           if (!typeInput || !amountInput || !categoryInput || !descriptionInput) {
-            console.error('setupTransactions: Missing edit form elements');
+            console.error('editTransaction: Missing form elements', {
+              typeInput: !!typeInput,
+              amountInput: !!amountInput,
+              categoryInput: !!categoryInput,
+              descriptionInput: !!descriptionInput
+            });
             showError('category', 'Form elements not found');
             return;
           }
@@ -1082,7 +1137,7 @@ function setupTransactions() {
           descriptionInput.value = oldData.description;
           addTransaction.innerHTML = 'Update Transaction';
           isEditing.transaction = true;
-          console.log('Entered edit mode for transaction:', id);
+          console.log('editTransaction: Entered edit mode', { id });
           const updateHandler = async () => {
             const type = typeInput.value;
             const amount = parseFloat(amountInput.value);
@@ -1146,7 +1201,7 @@ function setupTransactions() {
                   description
                 })
               );
-              console.log('Transaction updated:', { id, type, amount, categoryId });
+              console.log('editTransaction: Transaction updated', { id, type, amount, categoryId });
               typeInput.value = 'debit';
               amountInput.value = '';
               categoryInput.value = '';
@@ -1157,7 +1212,11 @@ function setupTransactions() {
               await loadTransactions();
               await updateDashboard();
             } catch (error) {
-              console.error('Error updating transaction:', error);
+              console.error('editTransaction error:', {
+                code: error.code,
+                message: error.message,
+                stack: error.stack
+              });
               showError('category', `Failed to update transaction: ${error.message}`);
             } finally {
               addTransaction.disabled = false;
@@ -1168,53 +1227,74 @@ function setupTransactions() {
           addTransaction.removeEventListener('click', addTransaction._updateHandler);
           addTransaction._updateHandler = updateHandler;
           addTransaction.addEventListener('click', updateHandler, { once: true });
+        } else {
+          console.error('editTransaction: Transaction not found', { id });
+          showError('category', 'Transaction not found');
         }
       } catch (error) {
-        console.error('Error fetching transaction:', error);
+        console.error('editTransaction error:', {
+          code: error.code,
+          message: error.message,
+          stack: error.stack
+        });
         showError('category', `Failed to fetch transaction: ${error.message}`);
       }
     }
     if (e.target.classList.contains('delete-transaction')) {
-      console.log('Delete Transaction clicked:', e.target.dataset.id);
+      console.log('deleteTransaction: Clicked', { id: e.target.dataset.id });
       const id = e.target.dataset.id;
-      if (domElements.deleteConfirmModal && db) {
-        domElements.deleteConfirmMessage.textContent = 'Are you sure you want to delete this transaction?';
-        domElements.deleteConfirmModal.classList.remove('hidden');
-        const confirmHandler = async () => {
-          try {
-            const docSnap = await getDoc(doc(db, 'transactions', id));
-            if (docSnap.exists()) {
-              const transaction = docSnap.data();
-              if (transaction.type === 'debit' && transaction.categoryId) {
-                const categoryDoc = await getDoc(doc(db, 'categories', transaction.categoryId));
-                if (categoryDoc.exists() && categoryDoc.data().budgetId) {
-                  await retryFirestoreOperation(() => 
-                    updateDoc(doc(db, 'budgets', categoryDoc.data().budgetId), {
-                      spent: increment(-transaction.amount)
-                    })
-                  );
-                  await loadBudgets();
-                }
-              }
-              await retryFirestoreOperation(() => deleteDoc(doc(db, 'transactions', id)));
-              console.log('Transaction deleted:', { id });
-              await loadTransactions();
-              await updateDashboard();
-              domElements.deleteConfirmModal.classList.add('hidden');
-            }
-          } catch (error) {
-            console.error('Error deleting transaction:', error);
-            showError('category', `Failed to delete transaction: ${error.message}`);
-          }
-          domElements.confirmDelete.removeEventListener('click', confirmHandler);
-        };
-        const cancelHandler = () => {
-          domElements.deleteConfirmModal.classList.add('hidden');
-          domElements.cancelDelete.removeEventListener('click', cancelHandler);
-        };
-        domElements.confirmDelete.addEventListener('click', confirmHandler, { once: true });
-        domElements.cancelDelete.addEventListener('click', cancelHandler, { once: true });
+      if (!domElements.deleteConfirmModal || !db) {
+        console.error('deleteTransaction: Missing modal or Firestore', {
+          deleteConfirmModal: !!domElements.deleteConfirmModal,
+          db: !!db
+        });
+        showError('category', 'Cannot delete: Missing components');
+        return;
       }
+      domElements.deleteConfirmMessage.textContent = 'Are you sure you want to delete this transaction?';
+      domElements.deleteConfirmModal.classList.remove('hidden');
+      const confirmHandler = async () => {
+        try {
+          const docSnap = await getDoc(doc(db, 'transactions', id));
+          if (docSnap.exists()) {
+            const transaction = docSnap.data();
+            if (transaction.type === 'debit' && transaction.categoryId) {
+              const categoryDoc = await getDoc(doc(db, 'categories', transaction.categoryId));
+              if (categoryDoc.exists() && categoryDoc.data().budgetId) {
+                await retryFirestoreOperation(() => 
+                  updateDoc(doc(db, 'budgets', categoryDoc.data().budgetId), {
+                    spent: increment(-transaction.amount)
+                  })
+                );
+                await loadBudgets();
+              }
+            }
+            await retryFirestoreOperation(() => deleteDoc(doc(db, 'transactions', id)));
+            console.log('deleteTransaction: Transaction deleted', { id });
+            await loadTransactions();
+            await updateDashboard();
+            domElements.deleteConfirmModal.classList.add('hidden');
+          } else {
+            console.error('deleteTransaction: Transaction not found', { id });
+            showError('category', 'Transaction not found');
+          }
+        } catch (error) {
+          console.error('deleteTransaction error:', {
+            code: error.code,
+            message: error.message,
+            stack: error.stack
+          });
+          showError('category', `Failed to delete transaction: ${error.message}`);
+        }
+        domElements.confirmDelete.removeEventListener('click', confirmHandler);
+      };
+      const cancelHandler = () => {
+        console.log('deleteTransaction: Cancelled');
+        domElements.deleteConfirmModal.classList.add('hidden');
+        domElements.cancelDelete.removeEventListener('click', cancelHandler);
+      };
+      domElements.confirmDelete.addEventListener('click', confirmHandler, { once: true });
+      domElements.cancelDelete.addEventListener('click', cancelHandler, { once: true });
     }
   });
 }
