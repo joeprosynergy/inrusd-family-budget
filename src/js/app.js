@@ -2068,16 +2068,23 @@ async function calculateChildBalance(userId) {
       return 0;
     }
     let totalBalance = 0;
+    let transactionCount = 0;
     await retryFirestoreOperation(async () => {
       const transactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', userId));
       const snapshot = await getDocs(transactionsQuery);
       console.log('calculateChildBalance: Child transactions fetched', { count: snapshot.size });
       snapshot.forEach(doc => {
         const transaction = doc.data();
+        console.log('calculateChildBalance: Processing transaction', {
+          txId: transaction.txId,
+          type: transaction.type,
+          amount: transaction.amount
+        });
         totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+        transactionCount++;
       });
     });
-    console.log('calculateChildBalance: Balance calculated', { totalBalance });
+    console.log('calculateChildBalance: Balance calculated', { totalBalance, transactionCount });
     return totalBalance;
   } catch (error) {
     console.error('calculateChildBalance error:', {
@@ -2140,7 +2147,7 @@ async function updateDashboard() {
       // Force DOM update
       childTilesElement.style.display = 'block'; // Ensure visibility
       childTilesElement.offsetHeight; // Trigger reflow
-      console.log('updateDashboard: Child tiles element updated', { display: childTilesElement.style.display });
+      console.log('updateDashboard: Child tiles element updated', { display: childTilesElement.style.display, childCount: childTilesElement.children.length });
 
       // Hide family-wide summary tiles for child users
       if (balanceElement.parentElement) {
