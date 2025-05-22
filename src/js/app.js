@@ -2203,107 +2203,117 @@ async function updateDashboard() {
 
 
 
+
 // Logout Setup
 function setupLogout() {
   console.log('setupLogout: Starting');
-  // Wait for DOM to be fully loaded
-  document.addEventListener('DOMContentLoaded', () => {
-    console.log('setupLogout: DOMContentLoaded');
-    try {
-      const logoutButton = document.getElementById('logout-button');
-      if (!logoutButton) {
-        console.error('setupLogout: Logout button not found');
-        return;
-      }
+  // Poll for logout button to handle dynamic DOM
+  const maxAttempts = 10;
+  let attempts = 0;
+  const pollInterval = setInterval(() => {
+    attempts++;
+    console.log('setupLogout: Polling for logout button', { attempt: attempts });
+    const logoutButton = document.getElementById('logout-button');
+    if (logoutButton) {
+      clearInterval(pollInterval);
+      console.log('setupLogout: Logout button found');
+      try {
+        logoutButton.addEventListener('click', async () => {
+          console.log('logoutButton: Clicked', { authAvailable: !!auth });
+          try {
+            if (!auth) {
+              console.error('logoutButton: Firebase auth not available', { auth });
+              showError('page-title', 'Authentication service not available');
+              return;
+            }
+            logoutButton.disabled = true;
+            logoutButton.textContent = 'Logging out...';
 
-      logoutButton.addEventListener('click', async () => {
-        console.log('logoutButton: Clicked');
-        try {
-          if (!auth) {
-            console.error('logoutButton: Firebase auth not available', { auth });
-            showError('page-title', 'Authentication service not available');
-            return;
-          }
-          logoutButton.disabled = true;
-          logoutButton.textContent = 'Logging out...';
-
-          // Retry signOut to handle connectivity issues
-          let signOutSuccess = false;
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-              console.log('logoutButton: Sign out attempt', { attempt });
-              await signOut(auth);
-              signOutSuccess = true;
-              break;
-            } catch (error) {
-              console.error('logoutButton: Sign out attempt failed', {
-                attempt,
-                code: error.code,
-                message: error.message,
-                stack: error.stack
-              });
-              if (attempt < 3) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
+            // Retry signOut to handle connectivity issues
+            let signOutSuccess = false;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              try {
+                console.log('logoutButton: Sign out attempt', { attempt });
+                await signOut(auth);
+                signOutSuccess = true;
+                break;
+              } catch (error) {
+                console.error('logoutButton: Sign out attempt failed', {
+                  attempt,
+                  code: error.code,
+                  message: error.message,
+                  stack: error.stack
+                });
+                if (attempt < 3) {
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                }
               }
             }
+
+            if (signOutSuccess) {
+              console.log('logoutButton: Sign out successful');
+              // Reset local state
+              currentChildUserId = null;
+              currentAccountType = null;
+
+              // Update UI to show login screen
+              const loginSection = document.getElementById('login-section');
+              const appSection = document.getElementById('app-section');
+              const pageTitle = document.getElementById('page-title');
+
+              if (loginSection) {
+                loginSection.classList.remove('hidden');
+                console.log('logoutButton: login-section shown');
+              } else {
+                console.warn('logoutButton: login-section not found');
+              }
+              if (appSection) {
+                appSection.classList.add('hidden');
+                console.log('logoutButton: app-section hidden');
+              } else {
+                console.warn('logoutButton: app-section not found');
+              }
+              if (pageTitle) {
+                pageTitle.textContent = 'Login';
+                console.log('logoutButton: page-title updated to Login');
+              } else {
+                console.warn('logoutButton: page-title not found');
+              }
+              if (logoutButton) {
+                logoutButton.classList.add('hidden');
+                console.log('logoutButton: logout-button hidden');
+              }
+
+              console.log('logoutButton: UI reset to login screen');
+            } else {
+              console.error('logoutButton: All sign out attempts failed');
+              showError('page-title', 'Failed to log out: Connectivity issue');
+            }
+          } catch (error) {
+            console.error('logoutButton: Error', {
+              code: error.code,
+              message: error.message,
+              stack: error.stack
+            });
+            showError('page-title', `Failed to log out: ${error.message}`);
+          } finally {
+            logoutButton.disabled = false;
+            logoutButton.textContent = 'Logout';
           }
-
-          if (signOutSuccess) {
-            console.log('logoutButton: Sign out successful');
-            // Reset local state
-            currentChildUserId = null;
-            currentAccountType = null;
-
-            // Update UI to show login screen
-            const loginSection = document.getElementById('login-section');
-            const appSection = document.getElementById('app-section');
-            const pageTitle = document.getElementById('page-title');
-
-            if (loginSection) {
-              loginSection.classList.remove('hidden');
-            } else {
-              console.warn('logoutButton: login-section not found');
-            }
-            if (appSection) {
-              appSection.classList.add('hidden');
-            } else {
-              console.warn('logoutButton: app-section not found');
-            }
-            if (pageTitle) {
-              pageTitle.textContent = 'Login';
-            } else {
-              console.warn('logoutButton: page-title not found');
-            }
-            if (logoutButton) {
-              logoutButton.classList.add('hidden');
-            }
-
-            console.log('logoutButton: UI reset to login screen');
-          } else {
-            console.error('logoutButton: All sign out attempts failed');
-            showError('page-title', 'Failed to log out: Connectivity issue');
-          }
-        } catch (error) {
-          console.error('logoutButton: Error', {
-            code: error.code,
-            message: error.message,
-            stack: error.stack
-          });
-          showError('page-title', `Failed to log out: ${error.message}`);
-        } finally {
-          logoutButton.disabled = false;
-          logoutButton.textContent = 'Logout';
-        }
-      });
-      console.log('setupLogout: Event listener added');
-    } catch (error) {
-      console.error('setupLogout error:', {
-        code: error.code,
-        message: error.message,
-        stack: error.stack
-      });
+        });
+        console.log('setupLogout: Event listener added');
+      } catch (error) {
+        console.error('setupLogout: Error attaching listener', {
+          code: error.code,
+          message: error.message,
+          stack: error.stack
+        });
+      }
+    } else if (attempts >= maxAttempts) {
+      clearInterval(pollInterval);
+      console.error('setupLogout: Gave up after', { maxAttempts });
     }
-  }, { once: true });
+  }, 500); // Poll every 500ms
 }
 
 // Initialize App
