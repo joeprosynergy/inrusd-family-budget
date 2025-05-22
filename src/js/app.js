@@ -1477,143 +1477,249 @@ function setupTransactions() {
 // Child Accounts
 async function loadChildAccounts() {
   console.log('loadChildAccounts: Starting', { familyCode, accountType: currentAccountType });
-  if (!currentUser || !db || !familyCode) {
-    console.error('loadChildAccounts: Missing user, Firestore, or familyCode');
-    showError('child-user-id', 'Unable to load child accounts.');
-    return;
-  }
   try {
+    // Verify prerequisites
+    if (!currentUser || !db || !familyCode) {
+      console.error('loadChildAccounts: Missing user, Firestore, or familyCode', {
+        currentUser: !!currentUser,
+        db: !!db,
+        familyCode
+      });
+      showError('child-user-id', 'Unable to load child accounts.');
+      return;
+    }
+
+    // Verify DOM elements
+    const childSelector = document.getElementById('child-selector');
+    const childUserIdSelect = document.getElementById('child-user-id');
+    if (!childSelector || !childUserIdSelect) {
+      console.error('loadChildAccounts: Missing DOM elements', {
+        childSelector: !!childSelector,
+        childUserIdSelect: !!childUserIdSelect
+      });
+      showError('child-user-id', 'Child selector not found');
+      return;
+    }
+
     if (currentAccountType === 'admin') {
       console.log('loadChildAccounts: Admin mode, loading child users');
-      const childSelector = domElements.childSelector;
-      const childUserIdSelect = domElements.childUserId;
-      if (!childSelector || !childUserIdSelect) {
-        console.error('loadChildAccounts: Missing DOM elements', { childSelector: !!childSelector, childUserIdSelect: !!childUserIdSelect });
-        return;
-      }
       childSelector.classList.remove('hidden');
       childUserIdSelect.innerHTML = '<option value="">Select a Child</option>';
-      await retryFirestoreOperation(async () => {
-        const usersQuery = query(
-          collection(db, 'users'),
-          where('familyCode', '==', familyCode),
-          where('accountType', '==', 'child')
-        );
-        const snapshot = await getDocs(usersQuery);
-        console.log('loadChildAccounts: Child users fetched', { count: snapshot.size });
-        if (snapshot.empty) {
-          childUserIdSelect.innerHTML = '<option value="">No children found</option>';
-        } else {
-          snapshot.forEach(doc => {
-            const data = doc.data();
-            const displayName = data.email && data.email.trim() !== '' ? data.email : `Child Account ${doc.id.substring(0, 8)}`;
-            const option = document.createElement('option');
-            option.value = doc.id;
-            option.textContent = displayName;
-            childUserIdSelect.appendChild(option);
-          });
-        }
-      });
+      try {
+        await retryFirestoreOperation(async () => {
+          const usersQuery = query(
+            collection(db, 'users'),
+            where('familyCode', '==', familyCode),
+            where('accountType', '==', 'child')
+          );
+          const snapshot = await getDocs(usersQuery);
+          console.log('loadChildAccounts: Child users fetched', { count: snapshot.size });
+          if (snapshot.empty) {
+            childUserIdSelect.innerHTML = '<option value="">No children found</option>';
+            console.log('loadChildAccounts: No child users found');
+          } else {
+            snapshot.forEach(doc => {
+              const data = doc.data();
+              const displayName = data.email && data.email.trim() !== '' ? data.email : `Child Account ${doc.id.substring(0, 8)}`;
+              const option = document.createElement('option');
+              option.value = doc.id;
+              option.textContent = displayName;
+              childUserIdSelect.appendChild(option);
+            });
+          }
+        });
+      } catch (error) {
+        console.error('loadChildAccounts: Failed to fetch child users', {
+          code: error.code,
+          message: error.message,
+          stack: error.stack
+        });
+        childUserIdSelect.innerHTML = '<option value="">Error loading children</option>';
+        showError('child-user-id', `Failed to load child accounts: ${error.message}`);
+        return;
+      }
       currentChildUserId = childUserIdSelect.value || null;
     } else {
       console.log('loadChildAccounts: Non-admin mode, using current user');
-      domElements.childSelector?.classList.add('hidden');
+      childSelector.classList.add('hidden');
       currentChildUserId = currentUser.uid;
     }
+
     console.log('loadChildAccounts: Loading child transactions for user:', currentChildUserId);
     await loadChildTransactions();
   } catch (error) {
-    console.error('loadChildAccounts error:', error);
+    console.error('loadChildAccounts error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
     showError('child-user-id', `Failed to load child accounts: ${error.message}`);
-    domElements.childUserId.innerHTML = '<option value="">Error loading children</option>';
+    const childUserIdSelect = document.getElementById('child-user-id');
+    if (childUserIdSelect) {
+      childUserIdSelect.innerHTML = '<option value="">Error loading children</option>';
+    }
   }
 }
 
 async function loadChildTransactions() {
   console.log('loadChildTransactions: Starting for user:', currentChildUserId);
-  if (!db || !currentChildUserId) {
-    console.error('loadChildTransactions: Firestore or user ID not available');
-    domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No user selected</td></tr>';
-    domElements.childBalance.textContent = formatCurrency(0, 'INR');
-    return;
-  }
   try {
-    domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
-    let totalBalance = 0;
-    await retryFirestoreOperation(async () => {
-      const transactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', currentChildUserId));
-      const snapshot = await getDocs(transactionsQuery);
-      console.log('loadChildTransactions: Transactions fetched', { count: snapshot.size });
-      domElements.childTransactionTable.innerHTML = '';
-      if (snapshot.empty) {
-        domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No transactions found</td></tr>';
-      } else {
-        snapshot.forEach(doc => {
-          const transaction = doc.data();
-          totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
-          const tr = document.createElement('tr');
-          tr.classList.add('table-row');
-          tr.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">
-              <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${doc.id}" data-user-id="${transaction.userId}">Edit</button>
-              <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${doc.id}" data-user-id="${transaction.userId}">Delete</button>
-            </td>
-          `;
-          domElements.childTransactionTable.appendChild(tr);
-        });
+    // Verify Firestore and user ID
+    if (!db || !currentChildUserId) {
+      console.error('loadChildTransactions: Firestore or user ID not available', {
+        db: !!db,
+        currentChildUserId
+      });
+      showError('child-transaction-description', 'No user selected');
+      const table = document.getElementById('child-transaction-table');
+      if (table) {
+        table.innerHTML = '<tr><td colspan="4" class="text-center py-4">No user selected</td></tr>';
       }
-      domElements.childBalance.textContent = formatCurrency(totalBalance, 'INR');
-    });
+      const balance = document.getElementById('child-balance');
+      if (balance) {
+        balance.textContent = formatCurrency(0, 'INR');
+      }
+      return;
+    }
+
+    // Verify DOM elements
+    const childTransactionTable = document.getElementById('child-transaction-table');
+    const childBalance = document.getElementById('child-balance');
+    if (!childTransactionTable || !childBalance) {
+      console.error('loadChildTransactions: Missing DOM elements', {
+        childTransactionTable: !!childTransactionTable,
+        childBalance: !!childBalance
+      });
+      showError('child-transaction-description', 'Transaction table or balance not found');
+      return;
+    }
+
+    childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
+    let totalBalance = 0;
+    try {
+      await retryFirestoreOperation(async () => {
+        const transactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', currentChildUserId));
+        const snapshot = await getDocs(transactionsQuery);
+        console.log('loadChildTransactions: Transactions fetched', { count: snapshot.size });
+        childTransactionTable.innerHTML = '';
+        if (snapshot.empty) {
+          childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No transactions found</td></tr>';
+          console.log('loadChildTransactions: No transactions found');
+        } else {
+          snapshot.forEach(doc => {
+            const transaction = doc.data();
+            totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+            const tr = document.createElement('tr');
+            tr.classList.add('table-row');
+            tr.innerHTML = `
+              <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
+              <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formatCurrency(transaction.amount || 0, 'INR')}</td>
+              <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
+              <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
+                <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${doc.id}" data-user-id="${transaction.userId}">Edit</button>
+                <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${doc.id}" data-user-id="${transaction.userId}">Delete</button>
+              </td>
+            `;
+            childTransactionTable.appendChild(tr);
+          });
+        }
+        childBalance.textContent = formatCurrency(totalBalance, 'INR');
+      });
+    } catch (error) {
+      console.error('loadChildTransactions error:', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
+      childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+      childBalance.textContent = formatCurrency(0, 'INR');
+    }
   } catch (error) {
-    console.error('loadChildTransactions error:', error);
+    console.error('loadChildTransactions error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
     showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
-    domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-    domElements.childBalance.textContent = formatCurrency(0, 'INR');
+    const table = document.getElementById('child-transaction-table');
+    if (table) {
+      table.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+    }
+    const balance = document.getElementById('child-balance');
+    if (balance) {
+      balance.textContent = formatCurrency(0, 'INR');
+    }
   }
 }
 
 async function loadChildTiles() {
-  console.log('Loading child tiles');
-  if (!db || !familyCode) {
-    console.error('Firestore or familyCode not available');
-    domElements.childTiles.innerHTML = '<div class="text-center py-4">No family data</div>';
-    return;
-  }
+  console.log('loadChildTiles: Starting');
   try {
-    domElements.childTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
+    // Verify Firestore and familyCode
+    if (!db || !familyCode) {
+      console.error('loadChildTiles: Firestore or familyCode not available', { db: !!db, familyCode });
+      showError('child-tiles', 'No family data');
+      return;
+    }
+
+    // Verify DOM element
+    const childTiles = document.getElementById('child-tiles');
+    if (!childTiles) {
+      console.warn('loadChildTiles: Child tiles element not found, skipping');
+      return; // Skip if missing, as it's not critical
+    }
+
+    childTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
     const childBalances = new Map();
-    await retryFirestoreOperation(async () => {
-      const usersQuery = query(collection(db, 'users'), where('familyCode', '==', familyCode), where('accountType', '==', 'child'));
-      const snapshot = await getDocs(usersQuery);
-      if (snapshot.empty) {
-        domElements.childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
-        return [];
-      }
-      const promises = snapshot.docs.map(async doc => {
-        const userId = doc.id;
-        const email = doc.data().email && doc.data().email.trim() !== '' ? doc.data().email : `Child Account ${userId.substring(0, 8)}`;
-        try {
-          const transQuery = query(collection(db, 'childTransactions'), where('userId', '==', userId));
-          const transSnapshot = await getDocs(transQuery);
-          let balance = 0;
-          transSnapshot.forEach(transDoc => {
-            const trans = transDoc.data();
-            balance += trans.type === 'credit' ? trans.amount : -trans.amount;
-          });
-          childBalances.set(userId, { email, balance });
-        } catch (error) {
-          console.warn('No transactions for child:', { userId, email, error: error.message });
-          childBalances.set(userId, { email, balance: 0 });
+    try {
+      await retryFirestoreOperation(async () => {
+        const usersQuery = query(collection(db, 'users'), where('familyCode', '==', familyCode), where('accountType', '==', 'child'));
+        const snapshot = await getDocs(usersQuery);
+        console.log('loadChildTiles: Child users fetched', { count: snapshot.size });
+        if (snapshot.empty) {
+          childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
+          console.log('loadChildTiles: No child accounts found');
+          return [];
         }
+        const promises = snapshot.docs.map(async doc => {
+          const userId = doc.id;
+          const email = doc.data().email && doc.data().email.trim() !== '' ? doc.data().email : `Child Account ${userId.substring(0, 8)}`;
+          try {
+            const transQuery = query(collection(db, 'childTransactions'), where('userId', '==', userId));
+            const transSnapshot = await getDocs(transQuery);
+            let balance = 0;
+            transSnapshot.forEach(transDoc => {
+              const trans = transDoc.data();
+              balance += trans.type === 'credit' ? trans.amount : -trans.amount;
+            });
+            childBalances.set(userId, { email, balance });
+          } catch (error) {
+            console.warn('loadChildTiles: No transactions for child', {
+              userId,
+              email,
+              error: error.message
+            });
+            childBalances.set(userId, { email, balance: 0 });
+          }
+        });
+        return Promise.all(promises);
       });
-      return Promise.all(promises);
-    });
-    domElements.childTiles.innerHTML = '';
+    } catch (error) {
+      console.error('loadChildTiles: Failed to fetch child users', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      childTiles.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
+      showError('child-tiles', `Failed to load child balances: ${error.message}`);
+      return;
+    }
+
+    childTiles.innerHTML = '';
     if (childBalances.size === 0) {
-      domElements.childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
+      childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
+      console.log('loadChildTiles: No child balances to display');
     } else {
       childBalances.forEach(({ email, balance }, userId) => {
         const tile = document.createElement('div');
@@ -1624,32 +1730,41 @@ async function loadChildTiles() {
             Balance: <span id="child-${userId}-balance">${formatCurrency(balance, 'INR')}</span>
           </p>
         `;
-        domElements.childTiles.appendChild(tile);
+        childTiles.appendChild(tile);
       });
+      console.log('loadChildTiles: Tiles updated', { rendered: childBalances.size });
     }
   } catch (error) {
-    console.error('Error loading child tiles:', error);
-    domElements.childTiles.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
+    console.error('loadChildTiles error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    const childTiles = document.getElementById('child-tiles');
+    if (childTiles) {
+      childTiles.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
+    }
   }
 }
 
 function setupChildAccounts() {
   console.log('setupChildAccounts: Starting');
-  const addChildTransaction = domElements.addChildTransaction;
-  const childTransactionTable = domElements.childTransactionTable;
-  const childUserId = domElements.childUserId;
+  try {
+    // Verify DOM elements
+    const addChildTransaction = document.getElementById('add-child-transaction');
+    const childTransactionTable = document.getElementById('child-transaction-table');
+    const childUserId = document.getElementById('child-user-id');
+    if (!addChildTransaction || !childTransactionTable || !childUserId) {
+      console.error('setupChildAccounts: Missing DOM elements', {
+        addChildTransaction: !!addChildTransaction,
+        childTransactionTable: !!childTransactionTable,
+        childUserId: !!childUserId
+      });
+      showError('child-transaction-description', 'Child transaction form or table not found');
+      return;
+    }
 
-  if (!addChildTransaction || !childTransactionTable || !childUserId) {
-    console.error('setupChildAccounts: Missing DOM elements', {
-      addChildTransaction: !!addChildTransaction,
-      childTransactionTable: !!childTransactionTable,
-      childUserId: !!childUserId
-    });
-    return;
-  }
-
-
-     // Add Child Transaction (with idempotency)
+    // Add Child Transaction (with idempotency)
     if (!addChildTransaction._listenerBound) {
       let isProcessing = false;
       const DEBOUNCE_MS = 5000;
@@ -1660,24 +1775,35 @@ function setupChildAccounts() {
         event.stopPropagation();
         const now = Date.now();
         if (now - lastAddClickTime < DEBOUNCE_MS || isProcessing) {
-          console.log('addChildTransaction: Ignored due to debounce or processing', { timeSinceLastClick: now - lastAddClickTime, isProcessing });
+          console.log('addChildTransaction: Ignored due to debounce or processing', {
+            timeSinceLastClick: now - lastAddClickTime,
+            isProcessing
+          });
           return;
         }
         lastAddClickTime = now;
         isProcessing = true;
 
-        console.log('addChildTransaction: Clicked', { isEditing: isEditing.childTransaction, currentChildUserId, currentAccountType });
+        console.log('addChildTransaction: Clicked', {
+          isEditing: isEditing.childTransaction,
+          currentChildUserId,
+          currentAccountType
+        });
         if (isEditing.childTransaction) {
-          console.log('addChildTransaction: Skipped, already in edit mode');
+          console.log('addChildTransaction: Skipped, in edit mode');
           isProcessing = false;
           return;
         }
         clearErrors();
-        const typeInput = domElements.childTransactionType;
-        const amountInput = domElements.childTransactionAmount;
-        const descriptionInput = domElements.childTransactionDescription;
+        const typeInput = document.getElementById('child-transaction-type');
+        const amountInput = document.getElementById('child-transaction-amount');
+        const descriptionInput = document.getElementById('child-transaction-description');
         if (!typeInput || !amountInput || !descriptionInput) {
-          console.error('addChildTransaction: Missing form elements', { typeInput: !!typeInput, amountInput: !!amountInput, descriptionInput: !!descriptionInput });
+          console.error('addChildTransaction: Missing form elements', {
+            typeInput: !!typeInput,
+            amountInput: !!amountInput,
+            descriptionInput: !!descriptionInput
+          });
           showError('child-transaction-description', 'Form elements not found');
           isProcessing = false;
           return;
@@ -1700,7 +1826,10 @@ function setupChildAccounts() {
           return;
         }
         if (!currentUser || !db) {
-          console.error('addChildTransaction: Missing user or Firestore');
+          console.error('addChildTransaction: Missing user or Firestore', {
+            currentUser: !!currentUser,
+            db: !!db
+          });
           showError('child-transaction-description', 'Database service not available');
           isProcessing = false;
           return;
@@ -1745,6 +1874,7 @@ function setupChildAccounts() {
       addChildTransaction._listenerBound = true;
     }
 
+    // Table Actions (Edit/Delete)
     childTransactionTable.addEventListener('click', async (e) => {
       if (e.target.classList.contains('edit-child-transaction')) {
         console.log('editChildTransaction: Clicked', { id: e.target.dataset.id });
@@ -1758,9 +1888,10 @@ function setupChildAccounts() {
           const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'childTransactions', id)));
           if (docSnap.exists()) {
             const data = docSnap.data();
-            const typeInput = domElements.childTransactionType;
-            const amountInput = domElements.childTransactionAmount;
-            const descriptionInput = domElements.childTransactionDescription;
+            console.log('editChildTransaction: Transaction data fetched', { id, data });
+            const typeInput = document.getElementById('child-transaction-type');
+            const amountInput = document.getElementById('child-transaction-amount');
+            const descriptionInput = document.getElementById('child-transaction-description');
             if (!typeInput || !amountInput || !descriptionInput) {
               console.error('editChildTransaction: Missing form elements', {
                 typeInput: !!typeInput,
@@ -1770,9 +1901,9 @@ function setupChildAccounts() {
               showError('child-transaction-description', 'Form elements not found');
               return;
             }
-            typeInput.value = data.type;
-            amountInput.value = data.amount;
-            descriptionInput.value = data.description;
+            typeInput.value = data.type || 'debit';
+            amountInput.value = data.amount || '';
+            descriptionInput.value = data.description || '';
             addChildTransaction.innerHTML = 'Update Transaction';
             isEditing.childTransaction = true;
             console.log('editChildTransaction: Entered edit mode', { id });
@@ -1787,6 +1918,7 @@ function setupChildAccounts() {
               try {
                 addChildTransaction.disabled = true;
                 addChildTransaction.textContent = 'Updating...';
+                console.log('editChildTransaction: Updating transaction', { id, type, amount, description });
                 await retryFirestoreOperation(() => 
                   updateDoc(doc(db, 'childTransactions', id), {
                     type,
@@ -1803,7 +1935,11 @@ function setupChildAccounts() {
                 await loadChildTransactions();
                 await loadChildTiles();
               } catch (error) {
-                console.error('editChildTransaction error:', error);
+                console.error('editChildTransaction error:', {
+                  code: error.code,
+                  message: error.message,
+                  stack: error.stack
+                });
                 showError('child-transaction-description', `Failed to update transaction: ${error.message}`);
               } finally {
                 addChildTransaction.disabled = false;
@@ -1819,7 +1955,11 @@ function setupChildAccounts() {
             showError('child-transaction-description', 'Transaction not found');
           }
         } catch (error) {
-          console.error('editChildTransaction error:', error);
+          console.error('editChildTransaction error:', {
+            code: error.code,
+            message: error.message,
+            stack: error.stack
+          });
           showError('child-transaction-description', `Failed to fetch transaction: ${error.message}`);
         }
       }
@@ -1838,13 +1978,18 @@ function setupChildAccounts() {
         domElements.deleteConfirmModal.classList.remove('hidden');
         const confirmHandler = async () => {
           try {
+            console.log('deleteChildTransaction: Deleting transaction', { id });
             await retryFirestoreOperation(() => deleteDoc(doc(db, 'childTransactions', id)));
             console.log('deleteChildTransaction: Transaction deleted', { id });
             await loadChildTransactions();
             await loadChildTiles();
             domElements.deleteConfirmModal.classList.add('hidden');
           } catch (error) {
-            console.error('deleteChildTransaction error:', error);
+            console.error('deleteChildTransaction error:', {
+              code: error.code,
+              message: error.message,
+              stack: error.stack
+            });
             showError('child-transaction-description', `Failed to delete transaction: ${error.message}`);
           }
           domElements.confirmDelete.removeEventListener('click', confirmHandler);
@@ -1859,17 +2004,33 @@ function setupChildAccounts() {
       }
     });
 
+    // Child User Selection
     childUserId.addEventListener('change', () => {
       console.log('childUserId: Changed', { value: childUserId.value });
       currentChildUserId = childUserId.value || null;
       if (currentChildUserId) {
+        console.log('childUserId: Loading transactions for child', { currentChildUserId });
         loadChildTransactions();
       } else {
         console.log('childUserId: No child selected');
-        domElements.childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No child selected</td></tr>';
-        domElements.childBalance.textContent = formatCurrency(0, 'INR');
+        const table = document.getElementById('child-transaction-table');
+        if (table) {
+          table.innerHTML = '<tr><td colspan="4" class="text-center py-4">No child selected</td></tr>';
+        }
+        const balance = document.getElementById('child-balance');
+        if (balance) {
+          balance.textContent = formatCurrency(0, 'INR');
+        }
       }
     });
+  } catch (error) {
+    console.error('setupChildAccounts error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    showError('child-transaction-description', 'Failed to initialize child accounts');
+  }
 }
 
 // Dashboard Updates
