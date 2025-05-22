@@ -918,7 +918,7 @@ function setupBudgets() {
 async function loadTransactions() {
   console.log('loadTransactions: Starting');
   if (!db || !familyCode) {
-    console.error('loadTransactions: Firestore or familyCode not available');
+    console.error('loadTransactions: Firestore or familyCode not available', { db: !!db, familyCode });
     showError('category', 'Database service not available');
     return;
   }
@@ -930,10 +930,12 @@ async function loadTransactions() {
       return;
     }
     transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
-    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
+
+    // Use a broader date range to avoid over-filtering
+    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisYear');
     console.log('loadTransactions: Date range', { start: start.toISOString(), end: end.toISOString() });
 
-    // Fetch categories upfront to avoid per-transaction queries
+    // Pre-fetch categories to avoid per-transaction queries
     console.log('loadTransactions: Fetching categories');
     const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
     const categoriesSnapshot = await getDocs(categoriesQuery);
@@ -955,43 +957,43 @@ async function loadTransactions() {
       transactionTable.innerHTML = '';
       if (snapshot.empty) {
         transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found</td></tr>';
-        console.log('loadTransactions: No transactions found');
+        console.log('loadTransactions: No transactions in Firestore');
         return;
       }
 
-      const filteredTransactions = [];
+      const transactions = [];
       snapshot.forEach(doc => {
         const transaction = doc.data();
         const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
         if (createdAt >= start && createdAt <= end) {
-          filteredTransactions.push({ id: doc.id, ...transaction });
+          transactions.push({ id: doc.id, ...transaction });
         }
       });
-      console.log('loadTransactions: Transactions after date filter', { count: filteredTransactions.length });
+      console.log('loadTransactions: Transactions after date filter', { count: transactions.length });
 
-      if (filteredTransactions.length === 0) {
+      if (transactions.length === 0) {
         transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
         console.log('loadTransactions: No transactions in date range');
         return;
       }
 
-      filteredTransactions.forEach(transaction => {
+      transactions.forEach(transaction => {
         const tr = document.createElement('tr');
         tr.classList.add('table-row');
         const categoryName = transaction.categoryId ? categoryMap.get(transaction.categoryId) || 'Unknown' : 'None';
         tr.innerHTML = `
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(transaction.amount, 'INR')}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryName}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description || ''}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm">
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formatCurrency(transaction.amount || 0, 'INR')}</td>
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${categoryName}</td>
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
             <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${transaction.id}">Edit</button>
             <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${transaction.id}">Delete</button>
           </td>
         `;
         transactionTable.appendChild(tr);
       });
-      console.log('loadTransactions: Table updated', { rendered: filteredTransactions.length });
+      console.log('loadTransactions: Table updated', { rendered: transactions.length });
     });
   } catch (error) {
     console.error('loadTransactions error:', {
@@ -1080,6 +1082,7 @@ function setupTransactions() {
               spent: increment(amount)
             })
           );
+          console.log('addTransaction: Updated budget spent', { budgetId: categoryDoc.data().budgetId, amount });
           await loadBudgets();
         }
       }
@@ -1134,7 +1137,7 @@ function setupTransactions() {
           typeInput.value = oldData.type;
           amountInput.value = oldData.amount;
           categoryInput.value = oldData.categoryId;
-          descriptionInput.value = oldData.description;
+          descriptionInput.value = oldData.description || '';
           addTransaction.innerHTML = 'Update Transaction';
           isEditing.transaction = true;
           console.log('editTransaction: Entered edit mode', { id });
@@ -1176,6 +1179,7 @@ function setupTransactions() {
                       spent: increment(amountDiff)
                     })
                   );
+                  console.log('editTransaction: Updated budget spent', { budgetId: oldBudgetId, amountDiff });
                 }
               } else {
                 if (oldBudgetId && oldData.type === 'debit') {
@@ -1184,6 +1188,7 @@ function setupTransactions() {
                       spent: increment(-oldData.amount)
                     })
                   );
+                  console.log('editTransaction: Reverted budget spent', { budgetId: oldBudgetId, amount: oldData.amount });
                 }
                 if (newBudgetId && type === 'debit') {
                   await retryFirestoreOperation(() => 
@@ -1191,6 +1196,7 @@ function setupTransactions() {
                       spent: increment(amount)
                     })
                   );
+                  console.log('editTransaction: Updated budget spent', { budgetId: newBudgetId, amount });
                 }
               }
               await retryFirestoreOperation(() => 
@@ -1266,6 +1272,7 @@ function setupTransactions() {
                     spent: increment(-transaction.amount)
                   })
                 );
+                console.log('deleteTransaction: Reverted budget spent', { budgetId: categoryDoc.data().budgetId, amount: transaction.amount });
                 await loadBudgets();
               }
             }
