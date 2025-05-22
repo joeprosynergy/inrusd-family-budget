@@ -2078,7 +2078,8 @@ async function calculateChildBalance(userId) {
         console.log('calculateChildBalance: Processing transaction', {
           txId: transaction.txId,
           type: transaction.type,
-          amount: transaction.amount
+          amount: transaction.amount,
+          familyCode: transaction.familyCode
         });
         totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
         transactionCount++;
@@ -2098,11 +2099,20 @@ async function calculateChildBalance(userId) {
 
 // Dashboard Updates
 async function updateDashboard() {
-  console.log('updateDashboard: Starting', { accountType: currentAccountType, userId: currentUser?.uid });
+  console.log('updateDashboard: Starting', {
+    accountType: currentAccountType,
+    userId: currentUser?.uid,
+    userEmail: currentUser?.email
+  });
   try {
     if (!db) {
       console.error('updateDashboard: Firestore not available');
       showError('balance', 'Database service not available');
+      return;
+    }
+    if (!currentUser || !currentUser.uid) {
+      console.error('updateDashboard: Current user not available', { currentUser });
+      showError('balance', 'User not authenticated');
       return;
     }
 
@@ -2147,7 +2157,11 @@ async function updateDashboard() {
       // Force DOM update
       childTilesElement.style.display = 'block'; // Ensure visibility
       childTilesElement.offsetHeight; // Trigger reflow
-      console.log('updateDashboard: Child tiles element updated', { display: childTilesElement.style.display, childCount: childTilesElement.children.length });
+      console.log('updateDashboard: Child tiles element updated', {
+        display: childTilesElement.style.display,
+        childCount: childTilesElement.children.length,
+        innerHTML: childTilesElement.innerHTML.substring(0, 100) + '...'
+      });
 
       // Hide family-wide summary tiles for child users
       if (balanceElement.parentElement) {
