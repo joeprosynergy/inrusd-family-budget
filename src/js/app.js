@@ -792,24 +792,41 @@ function setupCategories() {
     
 // Budgets
 async function loadBudgets() {
-  console.log('Loading budgets');
+  console.log('loadBudgets: Starting', { familyCode });
   if (!db) {
-    console.error('Firestore not available');
+    console.error('loadBudgets: Firestore not available');
+    showError('budget-name', 'Database service not available');
     return;
   }
   try {
     const budgetTable = document.getElementById('budget-table');
     const budgetTiles = document.getElementById('budget-tiles');
+    if (!budgetTable || !budgetTiles) {
+      console.error('loadBudgets: Missing DOM elements', {
+        budgetTable: !!budgetTable,
+        budgetTiles: !!budgetTiles
+      });
+      showError('budget-name', 'Budget table or tiles not found');
+      return;
+    }
     budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
-    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || '');
+    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
+    console.log('loadBudgets: Date range', { start: start.toISOString(), end: end.toISOString() });
     let totalBudgetAmount = 0;
     let totalRemainingAmount = 0;
     await retryFirestoreOperation(async () => {
       const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
       const snapshot = await getDocs(budgetsQuery);
+      console.log('loadBudgets: Budgets fetched', { count: snapshot.size });
       budgetTable.innerHTML = '';
       budgetTiles.innerHTML = '';
+      if (snapshot.empty) {
+        budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No budgets found</td></tr>';
+        budgetTiles.innerHTML = '<div class="text-center py-4">No budgets found</div>';
+        console.log('loadBudgets: No budgets found');
+        return;
+      }
       snapshot.forEach(doc => {
         const budget = doc.data();
         const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
@@ -847,14 +864,38 @@ async function loadBudgets() {
           budgetTiles.appendChild(tile);
         }
       });
-      document.getElementById('total-budget').textContent = formatCurrency(totalBudgetAmount, 'INR');
-      document.getElementById('total-remaining').textContent = formatCurrency(totalRemainingAmount, 'INR');
+      console.log('loadBudgets: Tiles and table updated', {
+        totalBudgetAmount,
+        totalRemainingAmount,
+        budgetCount: snapshot.size
+      });
+      const totalBudgetElement = document.getElementById('total-budget');
+      const totalRemainingElement = document.getElementById('total-remaining');
+      if (totalBudgetElement && totalRemainingElement) {
+        totalBudgetElement.textContent = formatCurrency(totalBudgetAmount, 'INR');
+        totalRemainingElement.textContent = formatCurrency(totalRemainingAmount, 'INR');
+      }
     });
   } catch (error) {
-    console.error('Error loading budgets:', error);
-    showError('budget-name', 'Failed to load budgets.');
+    console.error('loadBudgets error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    showError('budget-name', `Failed to load budgets: ${error.message}`);
+    const budgetTable = document.getElementById('budget-table');
+    const budgetTiles = document.getElementById('budget-tiles');
+    if (budgetTable) {
+      budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading budgets</td></tr>';
+    }
+    if (budgetTiles) {
+      budgetTiles.innerHTML = '<div class="text-center py-4 text-red-600">Error loading budgets</div>';
+    }
   }
 }
+
+
+
 
 function setupBudgets() {
   console.log('Setting up budget event listeners');
@@ -1236,7 +1277,7 @@ function setupTransactions() {
           })
         );
         if (type === 'debit') {
-          const categoryDoc = await getDoc(doc(db, 'categories', categoryId));
+          const categoryDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', categoryId)));
           if (categoryDoc.exists() && categoryDoc.data().budgetId) {
             await retryFirestoreOperation(() => 
               updateDoc(doc(db, 'budgets', categoryDoc.data().budgetId), {
@@ -1244,7 +1285,9 @@ function setupTransactions() {
               })
             );
             console.log('addTransaction: Updated budget spent', { budgetId: categoryDoc.data().budgetId, amount });
-            await loadBudgets();
+            await loadBudgets(); // Refresh budget tiles
+          } else {
+            console.log('addTransaction: No budget linked to category', { categoryId });
           }
         }
         console.log('addTransaction: Transaction added', { id: docRef.id, type, amount, categoryId });
@@ -1321,13 +1364,13 @@ function setupTransactions() {
                 let oldBudgetId = null;
                 let newBudgetId = null;
                 if (oldData.type === 'debit') {
-                  const oldCategoryDoc = await getDoc(doc(db, 'categories', oldData.categoryId));
+                  const oldCategoryDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', oldData.categoryId)));
                   if (oldCategoryDoc.exists() && oldCategoryDoc.data().budgetId) {
                     oldBudgetId = oldCategoryDoc.data().budgetId;
                   }
                 }
                 if (type === 'debit') {
-                  const newCategoryDoc = await getDoc(doc(db, 'categories', categoryId));
+                  const newCategoryDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', categoryId)));
                   if (newCategoryDoc.exists() && newCategoryDoc.data().budgetId) {
                     newBudgetId = newCategoryDoc.data().budgetId;
                   }
@@ -1422,11 +1465,11 @@ function setupTransactions() {
         domElements.deleteConfirmModal.classList.remove('hidden');
         const confirmHandler = async () => {
           try {
-            const docSnap = await getDoc(doc(db, 'transactions', id));
+            const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'transactions', id)));
             if (docSnap.exists()) {
               const transaction = docSnap.data();
               if (transaction.type === 'debit' && transaction.categoryId) {
-                const categoryDoc = await getDoc(doc(db, 'categories', transaction.categoryId));
+                const categoryDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', transaction.categoryId)));
                 if (categoryDoc.exists() && categoryDoc.data().budgetId) {
                   await retryFirestoreOperation(() => 
                     updateDoc(doc(db, 'budgets', categoryDoc.data().budgetId), {
@@ -1435,10 +1478,13 @@ function setupTransactions() {
                   );
                   console.log('deleteTransaction: Reverted budget spent', { budgetId: categoryDoc.data().budgetId, amount: transaction.amount });
                   await loadBudgets();
+                } else {
+                  console.log('deleteTransaction: No budget linked to category', { categoryId: transaction.categoryId });
                 }
               }
               await retryFirestoreOperation(() => deleteDoc(doc(db, 'transactions', id)));
               console.log('deleteTransaction: Transaction deleted', { id });
+              await loadBudgets();
               await loadTransactions();
               await updateDashboard();
               domElements.deleteConfirmModal.classList.add('hidden');
@@ -2235,6 +2281,7 @@ async function updateDashboard() {
         afterBudget
       });
 
+      await loadBudgets(); // Ensure budget tiles are updated
       childTilesElement.innerHTML = ''; // Clear child tiles before admin load
       await loadChildTiles(); // Load admin child tiles
       console.log('updateDashboard: Admin child tiles loaded');
