@@ -2201,7 +2201,7 @@ async function updateDashboard() {
 
 
 
-import { signOut } from 'firebase/auth';
+
 
 // Logout Setup
 function setupLogout() {
