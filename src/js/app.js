@@ -2199,6 +2199,8 @@ async function updateDashboard() {
 }
 
 
+
+
 // Logout Setup
 async function setupLogout() {
   console.log('setupLogout: Starting');
@@ -2243,9 +2245,7 @@ async function setupLogout() {
 
         if (signOutSuccess) {
           console.log('logoutButton: Sign out successful');
-          // Reset state
-          currentUser = null;
-          familyCode = null;
+          // Reset local state
           currentChildUserId = null;
           currentAccountType = null;
 
