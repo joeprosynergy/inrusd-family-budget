@@ -2186,42 +2186,55 @@ async function updateDashboard() {
       let totalBalance = 0;
       let totalBudgetAmount = 0;
       let totalSpent = 0;
-      await Promise.all([
-        retryFirestoreOperation(async () => {
-          const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
-          const snapshot = await getDocs(transactionsQuery);
-          console.log('updateDashboard: Transactions fetched', { count: snapshot.size });
-          snapshot.forEach(doc => {
-            const transaction = doc.data();
-            const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
-            if (createdAt >= start && createdAt <= end) {
-              totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
-            }
-          });
-          balanceElement.textContent = formatCurrency(totalBalance, 'INR');
-          balanceElement.parentElement.classList.remove('hidden');
-          console.log('updateDashboard: Balance tile updated', { totalBalance });
-        }),
-        retryFirestoreOperation(async () => {
-          const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
-          const snapshot = await getDocs(budgetsQuery);
-          console.log('updateDashboard: Budgets fetched', { count: snapshot.size });
-          snapshot.forEach(doc => {
-            const budget = doc.data();
-            const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
-            if (createdAt >= start && createdAt <= end) {
-              totalBudgetAmount += budget.amount;
-              totalSpent += budget.spent || 0;
-            }
-          });
-          totalBudgetElement.textContent = formatCurrency(totalBudgetAmount, 'INR');
-          totalRemainingElement.textContent = formatCurrency(totalBudgetAmount - totalSpent, 'INR');
-          totalBudgetElement.parentElement.classList.remove('hidden');
-          afterBudgetElement.textContent = formatCurrency(totalBalance - totalBudgetAmount, 'INR');
-          balanceElement.parentElement.classList.remove('hidden');
-          console.log('updateDashboard: Budget tiles updated', { totalBudgetAmount, totalSpent, unspent: totalBudgetAmount - totalSpent });
-        })
-      ]);
+
+      // Calculate transactions first
+      await retryFirestoreOperation(async () => {
+        const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
+        const snapshot = await getDocs(transactionsQuery);
+        console.log('updateDashboard: Transactions fetched', { count: snapshot.size });
+        snapshot.forEach(doc => {
+          const transaction = doc.data();
+          const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
+          if (createdAt >= start && createdAt <= end) {
+            totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+          }
+        });
+        console.log('updateDashboard: Total balance calculated', { totalBalance });
+      });
+
+      // Then calculate budgets
+      await retryFirestoreOperation(async () => {
+        const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
+        const snapshot = await getDocs(budgetsQuery);
+        console.log('updateDashboard: Budgets fetched', { count: snapshot.size });
+        snapshot.forEach(doc => {
+          const budget = doc.data();
+          const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
+          if (createdAt >= start && createdAt <= end) {
+            totalBudgetAmount += budget.amount;
+            totalSpent += budget.spent || 0;
+          }
+        });
+        console.log('updateDashboard: Budgets calculated', { totalBudgetAmount, totalSpent });
+      });
+
+      // Update DOM elements
+      balanceElement.textContent = formatCurrency(totalBalance, 'INR');
+      balanceElement.parentElement.classList.remove('hidden');
+      totalBudgetElement.textContent = formatCurrency(totalBudgetAmount, 'INR');
+      totalRemainingElement.textContent = formatCurrency(totalBudgetAmount - totalSpent, 'INR');
+      totalBudgetElement.parentElement.classList.remove('hidden');
+      const afterBudget = totalBalance - totalBudgetAmount;
+      afterBudgetElement.textContent = formatCurrency(afterBudget, 'INR');
+      balanceElement.parentElement.classList.remove('hidden');
+      console.log('updateDashboard: Tiles updated', {
+        totalBalance,
+        totalBudgetAmount,
+        totalSpent,
+        unspent: totalBudgetAmount - totalSpent,
+        afterBudget
+      });
+
       childTilesElement.innerHTML = ''; // Clear child tiles before admin load
       await loadChildTiles(); // Load admin child tiles
       console.log('updateDashboard: Admin child tiles loaded');
