@@ -2101,11 +2101,16 @@ async function updateDashboard() {
     // Verify DOM elements
     const balanceElement = document.getElementById('balance');
     const afterBudgetElement = document.getElementById('after-budget');
-    const childBalanceElement = document.getElementById('child-balance');
-    if (!balanceElement || !afterBudgetElement) {
+    const totalBudgetElement = document.getElementById('total-budget');
+    const totalRemainingElement = document.getElementById('total-remaining');
+    const childTilesElement = document.getElementById('child-tiles');
+    if (!balanceElement || !afterBudgetElement || !totalBudgetElement || !totalRemainingElement || !childTilesElement) {
       console.error('updateDashboard: Missing DOM elements', {
         balanceElement: !!balanceElement,
-        afterBudgetElement: !!afterBudgetElement
+        afterBudgetElement: !!afterBudgetElement,
+        totalBudgetElement: !!totalBudgetElement,
+        totalRemainingElement: !!totalRemainingElement,
+        childTilesElement: !!childTilesElement
       });
       showError('balance', 'Dashboard elements not found');
       return;
@@ -2115,26 +2120,34 @@ async function updateDashboard() {
     console.log('updateDashboard: Date range', { start: start.toISOString(), end: end.toISOString() });
 
     if (currentAccountType === 'child') {
-      // Child user: Show only their childTransactions balance
+      // Child user: Show only their childTransactions balance in a tile
       console.log('updateDashboard: Child mode, calculating child balance');
       const childBalance = await calculateChildBalance(currentUser.uid);
-      if (childBalanceElement) {
-        childBalanceElement.textContent = formatCurrency(childBalance, 'INR');
-        childBalanceElement.classList.remove('hidden');
-      } else {
-        console.warn('updateDashboard: Child balance element not found');
-      }
-      // Hide family balance and after-budget for child users
+      childTilesElement.innerHTML = ''; // Clear any existing tiles
+      const tile = document.createElement('div');
+      tile.classList.add('bg-white', 'p-4', 'sm:p-6', 'rounded-lg', 'shadow-md');
+      tile.innerHTML = `
+        <h3 class="text-base sm:text-lg font-semibold text-gray-700">Your Balance</h3>
+        <p class="text-lg sm:text-2xl font-bold text-gray-900">${formatCurrency(childBalance, 'INR')}</p>
+      `;
+      childTilesElement.appendChild(tile);
+      console.log('updateDashboard: Child balance tile added', { balance: childBalance });
+
+      // Hide family-wide summary tiles for child users
       balanceElement.textContent = 'N/A';
-      balanceElement.classList.add('hidden');
+      balanceElement.parentElement.classList.add('hidden');
       afterBudgetElement.textContent = 'N/A';
-      afterBudgetElement.classList.add('hidden');
-      await loadChildTiles(); // Optional, if tiles are used
+      afterBudgetElement.parentElement.classList.add('hidden');
+      totalBudgetElement.textContent = 'N/A';
+      totalBudgetElement.parentElement.classList.add('hidden');
+      totalRemainingElement.textContent = 'N/A';
+      totalRemainingElement.parentElement.classList.add('hidden');
     } else {
-      // Admin user: Show family-wide balance
+      // Admin user: Show family-wide balance and budgets
       console.log('updateDashboard: Admin mode, calculating family balance');
       let totalBalance = 0;
       let totalBudgetAmount = 0;
+      let totalSpent = 0;
       await Promise.all([
         retryFirestoreOperation(async () => {
           const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
@@ -2148,7 +2161,7 @@ async function updateDashboard() {
             }
           });
           balanceElement.textContent = formatCurrency(totalBalance, 'INR');
-          balanceElement.classList.remove('hidden');
+          balanceElement.parentElement.classList.remove('hidden');
         }),
         retryFirestoreOperation(async () => {
           const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
@@ -2159,16 +2172,19 @@ async function updateDashboard() {
             const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
             if (createdAt >= start && createdAt <= end) {
               totalBudgetAmount += budget.amount;
+              totalSpent += budget.spent || 0;
             }
           });
+          totalBudgetElement.textContent = formatCurrency(totalBudgetAmount, 'INR');
+          totalBudgetElement.parentElement.classList.remove('hidden');
+          totalRemainingElement.textContent = formatCurrency(totalBudgetAmount - totalSpent, 'INR');
+          totalRemainingElement.parentElement.classList.remove('hidden');
+          afterBudgetElement.textContent = formatCurrency(totalBalance - totalBudgetAmount, 'INR');
+          afterBudgetElement.parentElement.classList.remove('hidden');
         })
       ]);
-      afterBudgetElement.textContent = formatCurrency(totalBalance - totalBudgetAmount, 'INR');
-      afterBudgetElement.classList.remove('hidden');
-      if (childBalanceElement) {
-        childBalanceElement.classList.add('hidden');
-      }
-      await loadChildTiles();
+      childTilesElement.innerHTML = ''; // Clear child tiles before admin load
+      await loadChildTiles(); // Load admin child tiles
     }
     console.log('updateDashboard: Complete');
   } catch (error) {
