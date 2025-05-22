@@ -2224,7 +2224,7 @@ async function updateDashboard() {
       totalBudgetElement.textContent = formatCurrency(totalBudgetAmount, 'INR');
       totalRemainingElement.textContent = formatCurrency(totalBudgetAmount - totalSpent, 'INR');
       totalBudgetElement.parentElement.classList.remove('hidden');
-      const afterBudget = totalBalance - totalBudgetAmount;
+      const afterBudget = totalBalance - (totalBudgetAmount - totalSpent);
       afterBudgetElement.textContent = formatCurrency(afterBudget, 'INR');
       balanceElement.parentElement.classList.remove('hidden');
       console.log('updateDashboard: Tiles updated', {
