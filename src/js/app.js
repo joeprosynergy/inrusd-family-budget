@@ -2177,12 +2177,8 @@ async function updateDashboard() {
       if (totalBudgetElement.parentElement) {
         totalBudgetElement.parentElement.classList.add('hidden');
         totalBudgetElement.textContent = 'N/A';
-        console.log('updateDashboard: Total budget tile hidden');
-      }
-      if (totalRemainingElement.parentElement) {
-        totalRemainingElement.parentElement.classList.add('hidden');
         totalRemainingElement.textContent = 'N/A';
-        console.log('updateDashboard: Total remaining tile hidden');
+        console.log('updateDashboard: Total budget tile hidden');
       }
     } else {
       // Admin user: Show family-wide balance and budgets
@@ -2219,12 +2215,11 @@ async function updateDashboard() {
             }
           });
           totalBudgetElement.textContent = formatCurrency(totalBudgetAmount, 'INR');
-          totalBudgetElement.parentElement.classList.remove('hidden');
           totalRemainingElement.textContent = formatCurrency(totalBudgetAmount - totalSpent, 'INR');
-          totalRemainingElement.parentElement.classList.remove('hidden');
+          totalBudgetElement.parentElement.classList.remove('hidden');
           afterBudgetElement.textContent = formatCurrency(totalBalance - totalBudgetAmount, 'INR');
-          afterBudgetElement.parentElement.classList.remove('hidden');
-          console.log('updateDashboard: Budget tiles updated', { totalBudgetAmount, totalSpent });
+          balanceElement.parentElement.classList.remove('hidden');
+          console.log('updateDashboard: Budget tiles updated', { totalBudgetAmount, totalSpent, unspent: totalBudgetAmount - totalSpent });
         })
       ]);
       childTilesElement.innerHTML = ''; // Clear child tiles before admin load
