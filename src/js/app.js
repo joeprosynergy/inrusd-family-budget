@@ -2091,7 +2091,7 @@ async function calculateChildBalance(userId) {
 
 // Dashboard Updates
 async function updateDashboard() {
-  console.log('updateDashboard: Starting', { accountType: currentAccountType });
+  console.log('updateDashboard: Starting', { accountType: currentAccountType, userId: currentUser?.uid });
   try {
     if (!db) {
       console.error('updateDashboard: Firestore not available');
@@ -2124,6 +2124,9 @@ async function updateDashboard() {
       // Child user: Show only their childTransactions balance in a tile
       console.log('updateDashboard: Child mode, calculating child balance');
       const childBalance = await calculateChildBalance(currentUser.uid);
+      console.log('updateDashboard: Child balance computed', { childBalance });
+
+      // Clear and add child balance tile
       childTilesElement.innerHTML = ''; // Clear any existing tiles
       const tile = document.createElement('div');
       tile.classList.add('bg-white', 'p-4', 'sm:p-6', 'rounded-lg', 'shadow-md');
@@ -2132,17 +2135,34 @@ async function updateDashboard() {
         <p class="text-lg sm:text-2xl font-bold text-gray-900">${formatCurrency(childBalance, 'INR')}</p>
       `;
       childTilesElement.appendChild(tile);
-      console.log('updateDashboard: Child balance tile added', { balance: childBalance });
+      console.log('updateDashboard: Child balance tile added', { childBalance });
+
+      // Force DOM update
+      childTilesElement.style.display = 'block'; // Ensure visibility
+      childTilesElement.offsetHeight; // Trigger reflow
+      console.log('updateDashboard: Child tiles element updated', { display: childTilesElement.style.display });
 
       // Hide family-wide summary tiles for child users
-      balanceElement.textContent = 'N/A';
-      balanceElement.parentElement.classList.add('hidden');
-      afterBudgetElement.textContent = 'N/A';
-      afterBudgetElement.parentElement.classList.add('hidden');
-      totalBudgetElement.textContent = 'N/A';
-      totalBudgetElement.parentElement.classList.add('hidden');
-      totalRemainingElement.textContent = 'N/A';
-      totalRemainingElement.parentElement.classList.add('hidden');
+      if (balanceElement.parentElement) {
+        balanceElement.parentElement.classList.add('hidden');
+        balanceElement.textContent = 'N/A';
+        console.log('updateDashboard: Balance tile hidden');
+      }
+      if (afterBudgetElement.parentElement) {
+        afterBudgetElement.parentElement.classList.add('hidden');
+        afterBudgetElement.textContent = 'N/A';
+        console.log('updateDashboard: After-budget tile hidden');
+      }
+      if (totalBudgetElement.parentElement) {
+        totalBudgetElement.parentElement.classList.add('hidden');
+        totalBudgetElement.textContent = 'N/A';
+        console.log('updateDashboard: Total budget tile hidden');
+      }
+      if (totalRemainingElement.parentElement) {
+        totalRemainingElement.parentElement.classList.add('hidden');
+        totalRemainingElement.textContent = 'N/A';
+        console.log('updateDashboard: Total remaining tile hidden');
+      }
     } else {
       // Admin user: Show family-wide balance and budgets
       console.log('updateDashboard: Admin mode, calculating family balance');
@@ -2163,6 +2183,7 @@ async function updateDashboard() {
           });
           balanceElement.textContent = formatCurrency(totalBalance, 'INR');
           balanceElement.parentElement.classList.remove('hidden');
+          console.log('updateDashboard: Balance tile updated', { totalBalance });
         }),
         retryFirestoreOperation(async () => {
           const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
@@ -2182,10 +2203,12 @@ async function updateDashboard() {
           totalRemainingElement.parentElement.classList.remove('hidden');
           afterBudgetElement.textContent = formatCurrency(totalBalance - totalBudgetAmount, 'INR');
           afterBudgetElement.parentElement.classList.remove('hidden');
+          console.log('updateDashboard: Budget tiles updated', { totalBudgetAmount, totalSpent });
         })
       ]);
       childTilesElement.innerHTML = ''; // Clear child tiles before admin load
       await loadChildTiles(); // Load admin child tiles
+      console.log('updateDashboard: Admin child tiles loaded');
     }
     console.log('updateDashboard: Complete');
   } catch (error) {
