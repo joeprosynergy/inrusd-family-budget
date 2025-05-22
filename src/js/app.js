@@ -1787,7 +1787,8 @@ function setupChildAccounts() {
         console.log('addChildTransaction: Clicked', {
           isEditing: isEditing.childTransaction,
           currentChildUserId,
-          currentAccountType
+          currentAccountType,
+          authState: !!currentUser
         });
         if (isEditing.childTransaction) {
           console.log('addChildTransaction: Skipped, in edit mode');
@@ -1834,40 +1835,64 @@ function setupChildAccounts() {
           isProcessing = false;
           return;
         }
-        try {
-          addChildTransaction.disabled = true;
-          addChildTransaction.textContent = 'Adding...';
-          console.log('addChildTransaction: Adding transaction', { txId, type, amount, transactionUserId, description });
-          await retryFirestoreOperation(() => 
-            setDoc(doc(db, 'childTransactions', txId), {
+
+        // Retry transaction write with auth validation
+        let writeSuccess = false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            addChildTransaction.disabled = true;
+            addChildTransaction.textContent = `Adding (Attempt ${attempt}/3)...`;
+            console.log('addChildTransaction: Adding transaction', {
+              attempt,
+              txId,
               type,
               amount,
+              transactionUserId,
               description,
-              userId: transactionUserId,
-              familyCode,
-              txId,
-              createdAt: serverTimestamp()
-            })
-          );
-          console.log('addChildTransaction: Transaction added', { type, amount, userId: transactionUserId, txId });
+              familyCode
+            });
+            await retryFirestoreOperation(() => 
+              setDoc(doc(db, 'childTransactions', txId), {
+                type,
+                amount,
+                description,
+                userId: transactionUserId,
+                familyCode,
+                txId,
+                createdAt: serverTimestamp()
+              })
+            );
+            console.log('addChildTransaction: Transaction added', { type, amount, userId: transactionUserId, txId });
+            writeSuccess = true;
+            break;
+          } catch (error) {
+            console.error('addChildTransaction: Write attempt failed', {
+              attempt,
+              code: error.code,
+              message: error.message,
+              stack: error.stack
+            });
+            if (attempt < 3) {
+              console.log('addChildTransaction: Retrying after delay');
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          }
+        }
+
+        if (writeSuccess) {
           typeInput.value = 'debit';
           amountInput.value = '';
           descriptionInput.value = '';
           addChildTransaction.innerHTML = 'Add Transaction';
           await loadChildTransactions();
           await loadChildTiles();
-        } catch (error) {
-          console.error('addChildTransaction error:', {
-            code: error.code,
-            message: error.message,
-            stack: error.stack
-          });
-          showError('child-transaction-description', `Failed to add transaction: ${error.message}`);
-        } finally {
-          addChildTransaction.disabled = false;
-          addChildTransaction.textContent = 'Add Transaction';
-          isProcessing = false;
+        } else {
+          showError('child-transaction-description', 'Failed to add transaction: Permission denied or connectivity issue');
         }
+
+        addChildTransaction.disabled = false;
+        addChildTransaction.textContent = 'Add Transaction';
+        isProcessing = false;
       };
 
       addChildTransaction.addEventListener('click', addChildTransactionHandler);
@@ -1921,7 +1946,7 @@ function setupChildAccounts() {
                 console.log('editChildTransaction: Updating transaction', { id, type, amount, description });
                 await retryFirestoreOperation(() => 
                   updateDoc(doc(db, 'childTransactions', id), {
-                    type,
+                    typeynchronization
                     amount,
                     description
                   })
