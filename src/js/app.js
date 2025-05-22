@@ -2197,7 +2197,7 @@ async function updateDashboard() {
     showError('balance', `Failed to update dashboard: ${error.message}`);
   }
 }
-import { signOut } from 'firebase/auth';
+
 
 // Logout Setup
 async function setupLogout() {
