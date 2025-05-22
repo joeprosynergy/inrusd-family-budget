@@ -12,6 +12,7 @@ import {
   setUserCurrency,
   setFamilyCode
 } from './core.js';
+import { signOut } from 'firebase/auth';
 import { retryFirestoreOperation, fetchExchangeRate, getDateRange } from './utils.js';
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, serverTimestamp, increment } from 'firebase/firestore';
 
@@ -2196,6 +2197,103 @@ async function updateDashboard() {
     showError('balance', `Failed to update dashboard: ${error.message}`);
   }
 }
+import { signOut } from 'firebase/auth';
+
+// Logout Setup
+async function setupLogout() {
+  console.log('setupLogout: Starting');
+  try {
+    const logoutButton = document.getElementById('logout-button');
+    if (!logoutButton) {
+      console.error('setupLogout: Logout button not found');
+      return;
+    }
+
+    logoutButton.addEventListener('click', async () => {
+      console.log('logoutButton: Clicked');
+      try {
+        if (!auth) {
+          console.error('logoutButton: Firebase auth not available');
+          showError('page-title', 'Authentication service not available');
+          return;
+        }
+        logoutButton.disabled = true;
+        logoutButton.textContent = 'Logging out...';
+
+        // Retry signOut to handle connectivity issues
+        let signOutSuccess = false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            console.log('logoutButton: Sign out attempt', { attempt });
+            await signOut(auth);
+            signOutSuccess = true;
+            break;
+          } catch (error) {
+            console.error('logoutButton: Sign out attempt failed', {
+              attempt,
+              code: error.code,
+              message: error.message,
+              stack: error.stack
+            });
+            if (attempt < 3) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          }
+        }
+
+        if (signOutSuccess) {
+          console.log('logoutButton: Sign out successful');
+          // Reset state
+          currentUser = null;
+          familyCode = null;
+          currentChildUserId = null;
+          currentAccountType = null;
+
+          // Update UI to show login screen
+          const loginSection = document.getElementById('login-section');
+          const dashboardSection = document.getElementById('dashboard-section');
+          const transactionsSection = document.getElementById('transactions-section');
+          const budgetsSection = document.getElementById('budgets-section');
+          const categoriesSection = document.getElementById('categories-section');
+          const childAccountsSection = document.getElementById('child-accounts-section');
+          const profileSection = document.getElementById('profile-section');
+          const pageTitle = document.getElementById('page-title');
+
+          if (loginSection) loginSection.classList.remove('hidden');
+          if (dashboardSection) dashboardSection.classList.add('hidden');
+          if (transactionsSection) transactionsSection.classList.add('hidden');
+          if (budgetsSection) budgetsSection.classList.add('hidden');
+          if (categoriesSection) categoriesSection.classList.add('hidden');
+          if (childAccountsSection) childAccountsSection.classList.add('hidden');
+          if (profileSection) profileSection.classList.add('hidden');
+          if (pageTitle) pageTitle.textContent = 'Login';
+          if (logoutButton) logoutButton.classList.add('hidden');
+
+          console.log('logoutButton: UI reset to login screen');
+        } else {
+          showError('page-title', 'Failed to log out: Connectivity issue');
+        }
+      } catch (error) {
+        console.error('logoutButton: Error', {
+          code: error.code,
+          message: error.message,
+          stack: error.stack
+        });
+        showError('page-title', `Failed to log out: ${error.message}`);
+      } finally {
+        logoutButton.disabled = false;
+        logoutButton.textContent = 'Logout';
+      }
+    });
+    console.log('setupLogout: Event listener added');
+  } catch (error) {
+    console.error('setupLogout error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+  }
+}
 
 // Initialize App
 async function initApp() {
@@ -2207,6 +2305,7 @@ async function initApp() {
     setupBudgets();
     setupTransactions();
     setupChildAccounts();
+    setupLogout();
     console.log('initApp: Complete');
   } catch (error) {
     console.error('initApp error:', {
