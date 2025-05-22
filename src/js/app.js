@@ -332,323 +332,460 @@ async function loadProfileData() {
 // Categories
 async function loadCategories() {
   console.log('loadCategories: Starting');
-  if (!db || !familyCode) {
-    console.error('loadCategories: Firestore or familyCode not available');
-    return;
-  }
   try {
-    const categorySelect = document.getElementById('category');
-    const categoryBudgetSelect = domElements.categoryBudgetSelect;
-    const newCategoryBudgetSelect = document.getElementById('new-category-budget');
-
-    if (!categorySelect || !categoryBudgetSelect) {
-      console.error('loadCategories: Missing DOM elements', { categorySelect: !!categorySelect, categoryBudgetSelect: !!categoryBudgetSelect });
+    // Verify Firestore and familyCode
+    if (!db || !familyCode) {
+      console.error('loadCategories: Firestore or familyCode not available', { db: !!db, familyCode });
+      showError('category-name', 'Database service not available');
       return;
     }
 
+    // Verify DOM elements
+    const categorySelect = document.getElementById('category');
+    const categoryBudgetSelect = domElements.categoryBudgetSelect;
+    const newCategoryBudgetSelect = document.getElementById('new-category-budget');
+    const categoryTable = document.getElementById('category-table');
+    if (!categorySelect || !categoryBudgetSelect || !categoryTable) {
+      console.error('loadCategories: Missing DOM elements', {
+        categorySelect: !!categorySelect,
+        categoryBudgetSelect: !!categoryBudgetSelect,
+        categoryTable: !!categoryTable
+      });
+      showError('category-name', 'Category form or table not found');
+      return;
+    }
+
+    // Initialize DOM
     categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
     categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
     if (newCategoryBudgetSelect) {
       newCategoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
     }
+    categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
 
+    // Pre-fetch budgets
     console.log('loadCategories: Fetching budgets');
-    await retryFirestoreOperation(async () => {
-      const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
-      const budgetsSnapshot = await getDocs(budgetsQuery);
-      budgetsSnapshot.forEach(doc => {
-        const budget = doc.data();
-        const option = document.createElement('option');
-        option.value = doc.id;
-        option.textContent = budget.name;
-        categoryBudgetSelect.insertBefore(option, categoryBudgetSelect.querySelector('option[value="add-new"]'));
-        if (newCategoryBudgetSelect) {
-          const newOption = document.createElement('option');
-          newOption.value = doc.id;
-          newOption.textContent = budget.name;
-          newCategoryBudgetSelect.insertBefore(newOption, newCategoryBudgetSelect.querySelector('option[value="add-new"]'));
-        }
+    const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
+    let budgetsSnapshot;
+    try {
+      budgetsSnapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
+    } catch (error) {
+      console.warn('loadCategories: Failed to fetch budgets, proceeding with fallback', {
+        code: error.code,
+        message: error.message
       });
-      console.log('loadCategories: Budgets loaded', { count: budgetsSnapshot.size });
-    });
-
-    console.log('loadCategories: Fetching categories');
-    await retryFirestoreOperation(async () => {
-      const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
-      const categoriesSnapshot = await getDocs(categoriesQuery);
-      categoriesSnapshot.forEach(doc => {
-        const category = doc.data();
-        const option = document.createElement('option');
-        option.value = doc.id;
-        option.textContent = category.name;
-        categorySelect.insertBefore(option, categorySelect.querySelector('option[value="add-new"]'));
-      });
-
-      const categoryTable = document.getElementById('category-table');
-      if (!categoryTable) {
-        console.error('loadCategories: Category table not found');
-        return;
+      budgetsSnapshot = { docs: [] }; // Fallback to empty budgets
+    }
+    const budgetMap = new Map();
+    budgetsSnapshot.forEach(doc => {
+      budgetMap.set(doc.id, doc.data().name);
+      const option = document.createElement('option');
+      option.value = doc.id;
+      option.textContent = doc.data().name;
+      categoryBudgetSelect.insertBefore(option, categoryBudgetSelect.querySelector('option[value="add-new"]'));
+      if (newCategoryBudgetSelect) {
+        const newOption = document.createElement('option');
+        newOption.value = doc.id;
+        newOption.textContent = doc.data().name;
+        newCategoryBudgetSelect.insertBefore(newOption, newCategoryBudgetSelect.querySelector('option[value="add-new"]'));
       }
-      categoryTable.innerHTML = '';
-      categoriesSnapshot.forEach(async doc => {
-        const category = doc.data();
-        const tr = document.createElement('tr');
-        tr.classList.add('table-row');
-        const budgetName = category.budgetId ? 'Loading...' : 'None';
-        tr.innerHTML = `
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${category.name}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${category.type}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budgetName}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm">
-            <button class="text-blue-600 hover:text-blue-800 mr-2 edit-category" data-id="${doc.id}">Edit</button>
-            <button class="text-red-600 hover:text-red-800 delete-category" data-id="${doc.id}">Delete</button>
-          </td>
-        `;
-        categoryTable.appendChild(tr);
-        if (category.budgetId) {
-          try {
-            const budgetDoc = await getDoc(doc(db, 'budgets', category.budgetId));
-            tr.children[2].textContent = budgetDoc.exists() ? budgetDoc.data().name : 'None';
-          } catch (error) {
-            console.error('loadCategories: Error fetching budget for category:', error);
-            tr.children[2].textContent = 'Error';
-          }
-        }
-      });
-      console.log('loadCategories: Categories loaded', { count: categoriesSnapshot.size });
     });
+    console.log('loadCategories: Budgets loaded', { count: budgetsSnapshot.size });
+
+    // Fetch categories
+    console.log('loadCategories: Fetching categories');
+    const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
+    let categoriesSnapshot;
+    try {
+      categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
+    } catch (error) {
+      console.error('loadCategories: Failed to fetch categories', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Failed to load categories</td></tr>';
+      showError('category-name', `Failed to load categories: ${error.message}`);
+      return;
+    }
+    console.log('loadCategories: Categories fetched', { count: categoriesSnapshot.size });
+
+    // Update category select
+    categoriesSnapshot.forEach(doc => {
+      const category = doc.data();
+      const option = document.createElement('option');
+      option.value = doc.id;
+      option.textContent = category.name;
+      categorySelect.insertBefore(option, categorySelect.querySelector('option[value="add-new"]'));
+    });
+
+    // Update category table
+    categoryTable.innerHTML = '';
+    if (categoriesSnapshot.empty) {
+      categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No categories found</td></tr>';
+      console.log('loadCategories: No categories in Firestore');
+      return;
+    }
+
+    categoriesSnapshot.forEach(doc => {
+      const category = doc.data();
+      const tr = document.createElement('tr');
+      tr.classList.add('table-row');
+      const budgetName = category.budgetId ? budgetMap.get(category.budgetId) || 'Unknown' : 'None';
+      tr.innerHTML = `
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${category.name || 'Unknown'}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${category.type || 'Unknown'}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${budgetName}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
+          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-category" data-id="${doc.id}">Edit</button>
+          <button class="text-red-600 hover:text-red-800 delete-category" data-id="${doc.id}">Delete</button>
+        </td>
+      `;
+      categoryTable.appendChild(tr);
+    });
+    console.log('loadCategories: Table updated', { rendered: categoriesSnapshot.size });
   } catch (error) {
-    console.error('loadCategories error:', error);
-    showError('category-name', 'Failed to load categories.');
+    console.error('loadCategories error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    showError('category-name', `Failed to load categories: ${error.message}`);
+    const categoryTable = document.getElementById('category-table');
+    if (categoryTable) {
+      categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
+    }
   }
 }
 
 function setupCategories() {
   console.log('setupCategories: Starting');
-  const addCategory = document.getElementById('add-category');
-  const categorySelect = document.getElementById('category');
-  const saveCategory = document.getElementById('save-category');
-  const cancelCategory = document.getElementById('cancel-category');
-  const categoryTable = document.getElementById('category-table');
-
-  if (!addCategory || !categorySelect || !saveCategory || !cancelCategory || !categoryTable) {
-    console.error('setupCategories: Missing DOM elements', {
-      addCategory: !!addCategory,
-      categorySelect: !!categorySelect,
-      saveCategory: !!saveCategory,
-      cancelCategory: !!cancelCategory,
-      categoryTable: !!categoryTable
-    });
-    return;
-  }
-
-  addCategory.addEventListener('click', async () => {
-    console.log('Add Category clicked', { isEditing: isEditing.category });
-    if (isEditing.category) return;
-    clearErrors();
-    const name = document.getElementById('category-name')?.value.trim();
-    const type = document.getElementById('category-type')?.value;
-    const budgetId = document.getElementById('category-budget')?.value === 'none' ? null : document.getElementById('category-budget').value;
-    if (!name) {
-      showError('category-name', 'Name is required');
+  try {
+    // Verify DOM elements
+    const addCategory = document.getElementById('add-category');
+    const categorySelect = document.getElementById('category');
+    const saveCategory = document.getElementById('save-category');
+    const cancelCategory = document.getElementById('cancel-category');
+    const categoryTable = document.getElementById('category-table');
+    if (!addCategory || !categorySelect || !saveCategory || !cancelCategory || !categoryTable) {
+      console.error('setupCategories: Missing DOM elements', {
+        addCategory: !!addCategory,
+        categorySelect: !!categorySelect,
+        saveCategory: !!saveCategory,
+        cancelCategory: !!cancelCategory,
+        categoryTable: !!categoryTable
+      });
+      showError('category-name', 'Category form or table not found');
       return;
     }
-    if (!type) {
-      showError('category-type', 'Type is required');
-      return;
-    }
-    if (!currentUser || !db) {
-      showError('category-name', 'Database service not available');
-      return;
-    }
-    try {
-      addCategory.disabled = true;
-      addCategory.textContent = 'Adding...';
-      await retryFirestoreOperation(() => 
-        addDoc(collection(db, 'categories'), {
-          name,
-          type,
-          budgetId,
-          familyCode,
-          createdAt: serverTimestamp()
-        })
-      );
-      console.log('Category added:', { name, type, budgetId });
-      document.getElementById('category-name').value = '';
-      document.getElementById('category-type').value = 'income';
-      document.getElementById('category-budget').value = 'none';
-      addCategory.innerHTML = 'Add Category';
-      await loadCategories();
-    } catch (error) {
-      console.error('Error adding category:', error);
-      showError('category-name', `Failed to add category: ${error.message}`);
-    } finally {
-      addCategory.disabled = false;
-      addCategory.textContent = 'Add Category';
-    }
-  });
 
-  categorySelect.addEventListener('change', () => {
-    console.log('Category select changed:', categorySelect.value);
-    if (categorySelect.value === 'add-new') {
-      domElements.addCategoryModal?.classList.remove('hidden');
-      categorySelect.value = '';
-    }
-  });
-
-  saveCategory.addEventListener('click', async () => {
-    console.log('Save Category clicked');
-    clearErrors();
-    const name = document.getElementById('new-category-name')?.value.trim();
-    const type = document.getElementById('new-category-type')?.value;
-    const budgetId = document.getElementById('new-category-budget')?.value === 'none' ? null : document.getElementById('new-category-budget').value;
-    if (!name) {
-      showError('new-category-name', 'Name is required');
-      return;
-    }
-    if (!type) {
-      showError('new-category-type', 'Type is required');
-      return;
-    }
-    if (!currentUser || !db) {
-      showError('new-category-name', 'Database service not available');
-      return;
-    }
-    try {
-      saveCategory.disabled = true;
-      saveCategory.textContent = 'Saving...';
-      await retryFirestoreOperation(() => 
-        addDoc(collection(db, 'categories'), {
-          name,
-          type,
-          budgetId,
-          familyCode,
-          createdAt: serverTimestamp()
-        })
-      );
-      console.log('Category saved:', { name, type, budgetId });
-      domElements.addCategoryModal?.classList.add('hidden');
-      document.getElementById('new-category-name').value = '';
-      document.getElementById('new-category-type').value = 'income';
-      document.getElementById('new-category-budget').value = 'none';
-      await loadCategories();
-    } catch (error) {
-      console.error('Error saving category:', error);
-      showError('new-category-name', `Failed to save category: ${error.message}`);
-    } finally {
-      saveCategory.disabled = false;
-      saveCategory.textContent = 'Save';
-    }
-  });
-
-  cancelCategory.addEventListener('click', () => {
-    console.log('Cancel Category clicked');
-    domElements.addCategoryModal?.classList.add('hidden');
-    document.getElementById('new-category-name').value = '';
-    document.getElementById('new-category-type').value = 'income';
-    document.getElementById('new-category-budget').value = 'none';
-  });
-
-  categoryTable.addEventListener('click', async (e) => {
-    if (e.target.classList.contains('edit-category')) {
-      console.log('Edit Category clicked:', e.target.dataset.id);
-      const id = e.target.dataset.id;
-      if (!db) {
+    // Add Category
+    addCategory.addEventListener('click', async () => {
+      console.log('addCategory: Clicked', { isEditing: isEditing.category });
+      if (isEditing.category) {
+        console.log('addCategory: Skipped, in edit mode');
+        return;
+      }
+      clearErrors();
+      const nameInput = document.getElementById('category-name');
+      const typeSelect = document.getElementById('category-type');
+      const budgetSelect = document.getElementById('category-budget');
+      if (!nameInput || !typeSelect || !budgetSelect) {
+        console.error('addCategory: Missing form elements', {
+          nameInput: !!nameInput,
+          typeSelect: !!typeSelect,
+          budgetSelect: !!budgetSelect
+        });
+        showError('category-name', 'Form elements not found');
+        return;
+      }
+      const name = nameInput.value.trim();
+      const type = typeSelect.value;
+      const budgetId = budgetSelect.value === 'none' ? null : budgetSelect.value;
+      if (!name) {
+        showError('category-name', 'Name is required');
+        return;
+      }
+      if (!type) {
+        showError('category-type', 'Type is required');
+        return;
+      }
+      if (!currentUser || !db) {
+        console.error('addCategory: Missing user or Firestore');
         showError('category-name', 'Database service not available');
         return;
       }
       try {
-        const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', id)));
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          console.log('Category data fetched for edit:', data);
-          const categoryNameInput = document.getElementById('category-name');
-          const categoryTypeSelect = document.getElementById('category-type');
-          const categoryBudgetSelect = document.getElementById('category-budget');
-          if (!categoryNameInput || !categoryTypeSelect || !categoryBudgetSelect) {
-            console.error('setupCategories: Missing edit form elements');
-            showError('category-name', 'Form elements not found');
-            return;
-          }
-          categoryNameInput.value = data.name;
-          categoryTypeSelect.value = data.type;
-          categoryBudgetSelect.value = data.budgetId || 'none';
-          addCategory.innerHTML = 'Update Category';
-          isEditing.category = true;
-          console.log('Entered edit mode for category:', id);
-          const updateHandler = async () => {
-            const name = categoryNameInput.value.trim();
-            const type = categoryTypeSelect.value;
-            const budgetId = categoryBudgetSelect.value === 'none' ? null : categoryBudgetSelect.value;
-            if (!name) {
-              showError('category-name', 'Name is required');
-              return;
-            }
-            if (!type) {
-              showError('category-type', 'Type is required');
-              return;
-            }
-            try {
-              addCategory.disabled = true;
-              addCategory.textContent = 'Updating...';
-              await retryFirestoreOperation(() => 
-                updateDoc(doc(db, 'categories', id), { name, type, budgetId })
-              );
-              console.log('Category updated:', { id, name, type, budgetId });
-              categoryNameInput.value = '';
-              categoryTypeSelect.value = 'income';
-              categoryBudgetSelect.value = 'none';
-              addCategory.innerHTML = 'Add Category';
-              isEditing.category = false;
-              await loadCategories();
-            } catch (error) {
-              console.error('Error updating category:', error);
-              showError('category-name', `Failed to update category: ${error.message}`);
-            } finally {
-              addCategory.disabled = false;
-              addCategory.textContent = 'Add Category';
-              isEditing.category = false;
-            }
-          };
-          addCategory.removeEventListener('click', addCategory._updateHandler);
-          addCategory._updateHandler = updateHandler;
-          addCategory.addEventListener('click', updateHandler, { once: true });
-        } else {
-          console.error('Category document not found:', id);
-          showError('category-name', 'Category not found');
-        }
+        addCategory.disabled = true;
+        addCategory.textContent = 'Adding...';
+        console.log('addCategory: Adding category', { name, type, budgetId });
+        await retryFirestoreOperation(() => 
+          addDoc(collection(db, 'categories'), {
+            name,
+            type,
+            budgetId,
+            familyCode,
+            createdAt: serverTimestamp()
+          })
+        );
+        console.log('addCategory: Category added', { name, type, budgetId });
+        nameInput.value = '';
+        typeSelect.value = 'income';
+        budgetSelect.value = 'none';
+        addCategory.innerHTML = 'Add Category';
+        await loadCategories();
       } catch (error) {
-        console.error('Error fetching category:', error);
-        showError('category-name', `Failed to fetch category: ${error.message}`);
+        console.error('addCategory error:', {
+          code: error.code,
+          message: error.message,
+          stack: error.stack
+        });
+        showError('category-name', `Failed to add category: ${error.message}`);
+      } finally {
+        addCategory.disabled = false;
+        addCategory.textContent = 'Add Category';
       }
-    }
-    if (e.target.classList.contains('delete-category')) {
-      console.log('Delete Category clicked:', e.target.dataset.id);
-      const id = e.target.dataset.id;
-      if (domElements.deleteConfirmModal && db) {
+    });
+
+    // Category Select Change
+    categorySelect.addEventListener('change', () => {
+      console.log('categorySelect: Changed', { value: categorySelect.value });
+      if (categorySelect.value === 'add-new') {
+        if (domElements.addCategoryModal) {
+          domElements.addCategoryModal.classList.remove('hidden');
+          categorySelect.value = '';
+          console.log('categorySelect: Opened add category modal');
+        } else {
+          console.error('categorySelect: Add category modal not found');
+          showError('category', 'Add category modal not found');
+        }
+      }
+    });
+
+    // Save Category (Modal)
+    saveCategory.addEventListener('click', async () => {
+      console.log('saveCategory: Clicked');
+      clearErrors();
+      const nameInput = document.getElementById('new-category-name');
+      const typeSelect = document.getElementById('new-category-type');
+      const budgetSelect = document.getElementById('new-category-budget');
+      if (!nameInput || !typeSelect || !budgetSelect) {
+        console.error('saveCategory: Missing modal form elements', {
+          nameInput: !!nameInput,
+          typeSelect: !!typeSelect,
+          budgetSelect: !!budgetSelect
+        });
+        showError('new-category-name', 'Modal form elements not found');
+        return;
+      }
+      const name = nameInput.value.trim();
+      const type = typeSelect.value;
+      const budgetId = budgetSelect.value === 'none' ? null : budgetSelect.value;
+      if (!name) {
+        showError('new-category-name', 'Name is required');
+        return;
+      }
+      if (!type) {
+        showError('new-category-type', 'Type is required');
+        return;
+      }
+      if (!currentUser || !db) {
+        console.error('saveCategory: Missing user or Firestore');
+        showError('new-category-name', 'Database service not available');
+        return;
+      }
+      try {
+        saveCategory.disabled = true;
+        saveCategory.textContent = 'Saving...';
+        console.log('saveCategory: Saving category', { name, type, budgetId });
+        await retryFirestoreOperation(() => 
+          addDoc(collection(db, 'categories'), {
+            name,
+            type,
+            budgetId,
+            familyCode,
+            createdAt: serverTimestamp()
+          })
+        );
+        console.log('saveCategory: Category saved', { name, type, budgetId });
+        if (domElements.addCategoryModal) {
+          domElements.addCategoryModal.classList.add('hidden');
+        }
+        nameInput.value = '';
+        typeSelect.value = 'income';
+        budgetSelect.value = 'none';
+        await loadCategories();
+      } catch (error) {
+        console.error('saveCategory error:', {
+          code: error.code,
+          message: error.message,
+          stack: error.stack
+        });
+        showError('new-category-name', `Failed to save category: ${error.message}`);
+      } finally {
+        saveCategory.disabled = false;
+        saveCategory.textContent = 'Save';
+      }
+    });
+
+    // Cancel Category (Modal)
+    cancelCategory.addEventListener('click', () => {
+      console.log('cancelCategory: Clicked');
+      try {
+        if (domElements.addCategoryModal) {
+          domElements.addCategoryModal.classList.add('hidden');
+        }
+        const nameInput = document.getElementById('new-category-name');
+        const typeSelect = document.getElementById('new-category-type');
+        const budgetSelect = document.getElementById('new-category-budget');
+        if (nameInput) nameInput.value = '';
+        if (typeSelect) typeSelect.value = 'income';
+        if (budgetSelect) budgetSelect.value = 'none';
+        console.log('cancelCategory: Modal closed and inputs cleared');
+      } catch (error) {
+        console.error('cancelCategory error:', {
+          code: error.code,
+          message: error.message,
+          stack: error.stack
+        });
+      }
+    });
+
+    // Table Actions (Edit/Delete)
+    categoryTable.addEventListener('click', async (e) => {
+      if (e.target.classList.contains('edit-category')) {
+        console.log('editCategory: Clicked', { id: e.target.dataset.id });
+        const id = e.target.dataset.id;
+        if (!db) {
+          console.error('editCategory: Firestore not available');
+          showError('category-name', 'Database service not available');
+          return;
+        }
+        try {
+          const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', id)));
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            console.log('editCategory: Category data fetched', { id, data });
+            const nameInput = document.getElementById('category-name');
+            const typeSelect = document.getElementById('category-type');
+            const budgetSelect = document.getElementById('category-budget');
+            if (!nameInput || !typeSelect || !budgetSelect) {
+              console.error('editCategory: Missing form elements', {
+                nameInput: !!nameInput,
+                typeSelect: !!typeSelect,
+                budgetSelect: !!budgetSelect
+              });
+              showError('category-name', 'Form elements not found');
+              return;
+            }
+            nameInput.value = data.name || '';
+            typeSelect.value = data.type || 'income';
+            budgetSelect.value = data.budgetId || 'none';
+            addCategory.innerHTML = 'Update Category';
+            isEditing.category = true;
+            console.log('editCategory: Entered edit mode', { id });
+            const updateHandler = async () => {
+              const name = nameInput.value.trim();
+              const type = typeSelect.value;
+              const budgetId = budgetSelect.value === 'none' ? null : budgetSelect.value;
+              if (!name) {
+                showError('category-name', 'Name is required');
+                return;
+              }
+              if (!type) {
+                showError('category-type', 'Type is required');
+                return;
+              }
+              try {
+                addCategory.disabled = true;
+                addCategory.textContent = 'Updating...';
+                console.log('editCategory: Updating category', { id, name, type, budgetId });
+                await retryFirestoreOperation(() => 
+                  updateDoc(doc(db, 'categories', id), { name, type, budgetId })
+                );
+                console.log('editCategory: Category updated', { id, name, type, budgetId });
+                nameInput.value = '';
+                typeSelect.value = 'income';
+                budgetSelect.value = 'none';
+                addCategory.innerHTML = 'Add Category';
+                isEditing.category = false;
+                await loadCategories();
+              } catch (error) {
+                console.error('editCategory error:', {
+                  code: error.code,
+                  message: error.message,
+                  stack: error.stack
+                });
+                showError('category-name', `Failed to update category: ${error.message}`);
+              } finally {
+                addCategory.disabled = false;
+                addCategory.textContent = 'Add Category';
+                isEditing.category = false;
+              }
+            };
+            addCategory.removeEventListener('click', addCategory._updateHandler);
+            addCategory._updateHandler = updateHandler;
+            addCategory.addEventListener('click', updateHandler, { once: true });
+          } else {
+            console.error('editCategory: Category not found', { id });
+            showError('category-name', 'Category not found');
+          }
+        } catch (error) {
+          console.error('editCategory error:', {
+            code: error.code,
+            message: error.message,
+            stack: error.stack
+          });
+          showError('category-name', `Failed to fetch category: ${error.message}`);
+        }
+      }
+      if (e.target.classList.contains('delete-category')) {
+        console.log('deleteCategory: Clicked', { id: e.target.dataset.id });
+        const id = e.target.dataset.id;
+        if (!domElements.deleteConfirmModal || !db) {
+          console.error('deleteCategory: Missing modal or Firestore', {
+            deleteConfirmModal: !!domElements.deleteConfirmModal,
+            db: !!db
+          });
+          showError('category-name', 'Cannot delete: Missing components');
+          return;
+        }
         domElements.deleteConfirmMessage.textContent = 'Are you sure you want to delete this category?';
         domElements.deleteConfirmModal.classList.remove('hidden');
         const confirmHandler = async () => {
           try {
+            console.log('deleteCategory: Deleting category', { id });
             await retryFirestoreOperation(() => deleteDoc(doc(db, 'categories', id)));
-            console.log('Category deleted:', { id });
+            console.log('deleteCategory: Category deleted', { id });
             await loadCategories();
             domElements.deleteConfirmModal.classList.add('hidden');
           } catch (error) {
-            console.error('Error deleting category:', error);
+            console.error('deleteCategory error:', {
+              code: error.code,
+              message: error.message,
+              stack: error.stack
+            });
             showError('category-name', `Failed to delete category: ${error.message}`);
           }
           domElements.confirmDelete.removeEventListener('click', confirmHandler);
         };
         const cancelHandler = () => {
+          console.log('deleteCategory: Cancelled');
           domElements.deleteConfirmModal.classList.add('hidden');
           domElements.cancelDelete.removeEventListener('click', cancelHandler);
         };
         domElements.confirmDelete.addEventListener('click', confirmHandler, { once: true });
         domElements.cancelDelete.addEventListener('click', cancelHandler, { once: true });
       }
-    }
-  });
+    });
+  } catch (error) {
+    console.error('setupCategories error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    showError('category-name', 'Failed to initialize categories');
+  }
 }
 
 // Budgets
