@@ -240,7 +240,7 @@ export function setupAuth(loadAppDataCallback) {
   const resetButton = checkElement('reset-button');
   if (resetButton) {
     resetButton.removeEventListener('click', handleReset); // Prevent duplicates
-    loginButton.addEventListener('click', handleReset);
+    resetButton.addEventListener('click', handleReset);
     async function handleReset() {
       console.log('Reset button clicked');
       clearErrors();
