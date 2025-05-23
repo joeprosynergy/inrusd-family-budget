@@ -54,6 +54,8 @@ export function setupAuth(loadAppDataCallback) {
         return;
       }
       try {
+        loginButton.disabled = true;
+        loginButton.textContent = 'Logging in...';
         console.log('Attempting signInWithEmailAndPassword');
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         console.log('Login successful:', userCredential.user.uid);
@@ -63,6 +65,9 @@ export function setupAuth(loadAppDataCallback) {
           message: error.message
         });
         showError('login-email', error.message);
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = 'Login';
       }
     }
   } else {
