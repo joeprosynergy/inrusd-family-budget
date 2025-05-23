@@ -86,7 +86,7 @@ export function setupAuth(loadAppDataCallback) {
       const accountType = document.getElementById('signup-account-type')?.value;
       const useExisting = document.getElementById('use-existing-family-code')?.checked ?? false;
 
-      console.log('Signup inputs:', { email, currency, accountType, familyCode: familyCodeInput, familyCodeRaw: familyCodeInputRaw, useExisting, authState: auth.currentUser });
+      console.log('Signup inputs:', { email, currency, accountType, familyCode: familyCodeInput, familyCodeRaw: familyCodeInputRaw, useExisting, authState: auth.currentUser ? auth.currentUser.uid : null });
 
       // Validate inputs
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -110,107 +110,80 @@ export function setupAuth(loadAppDataCallback) {
         return;
       }
 
-      // Wait for auth state to ensure user is authenticated
+      let userCredential;
       try {
-        console.log('Checking auth state before family code validation');
-        await new Promise((resolve, reject) => {
-          const unsubscribe = auth.onAuthStateChanged(user => {
-            unsubscribe();
-            console.log('Auth state checked:', { user: user ? user.uid : null });
-            resolve();
-          }, reject);
-        });
+        signupButton.disabled = true;
+        signupButton.textContent = 'Signing up...';
+        console.log('Attempting createUserWithEmailAndPassword', { email });
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        console.log('Signup successful:', userCredential.user.uid);
       } catch (error) {
-        console.error('Failed to verify auth state:', {
+        console.error('Signup failed:', {
           code: error.code,
           message: error.message
         });
-        showError('signup-email', 'Authentication error. Please try again.');
+        let errorMessage = error.message || 'Failed to sign up.';
+        if (error.code === 'auth/email-already-in-use') {
+          errorMessage = 'This email is already in use.';
+        } else if (error.code === 'auth/invalid-email') {
+          errorMessage = 'Invalid email format.';
+        }
+        showError('signup-email', errorMessage);
+        signupButton.disabled = false;
+        signupButton.textContent = 'Sign Up';
         return;
       }
 
+      // Validate family code after user creation
       let finalFamilyCode;
-      if (accountType === 'child') {
-        if (!familyCodeInput) {
-          console.log('Child signup: Missing family code');
-          showError('signup-family-code', 'Family code is required for child accounts');
-          return;
-        }
-        console.log('Child signup: Validating family code format', { familyCodeInput });
-        if (!isValidFamilyCode(familyCodeInput)) {
-          console.log('Child signup: Invalid family code format', { familyCodeInput });
-          showError('signup-family-code', 'Family code must be 6 uppercase alphanumeric characters (A-Z, 0-9)');
-          return;
-        }
-        try {
+      try {
+        console.log('Checking auth state after signup', { user: auth.currentUser ? auth.currentUser.uid : null });
+        if (accountType === 'child') {
+          if (!familyCodeInput) {
+            console.log('Child signup: Missing family code');
+            showError('signup-family-code', 'Family code is required for child accounts');
+            throw new Error('Missing family code');
+          }
+          console.log('Child signup: Validating family code format', { familyCodeInput });
+          if (!isValidFamilyCode(familyCodeInput)) {
+            console.log('Child signup: Invalid family code format', { familyCodeInput });
+            showError('signup-family-code', 'Family code must be 6 uppercase alphanumeric characters (A-Z, 0-9)');
+            throw new Error('Invalid family code format');
+          }
           console.log('Child signup: Checking family code existence', { familyCodeInput });
           const exists = await familyCodeExists(db, familyCodeInput);
           console.log('Child signup: Existence check result', { exists });
           if (!exists) {
             console.log('Child signup: Family code does not exist', { familyCodeInput });
             showError('signup-family-code', 'Family code does not exist');
-            return;
+            throw new Error('Family code does not exist');
           }
           finalFamilyCode = familyCodeInput;
-        } catch (error) {
-          console.error('Child signup: Failed to validate family code', {
-            code: error.code,
-            message: error.message,
-            stack: error.stack
-          });
-          showError('signup-family-code', `Failed to validate family code: ${error.message}`);
-          return;
-        }
-      } else {
-        if (useExisting && familyCodeInput) {
-          console.log('Admin signup: Validating provided family code format', { familyCodeInput });
-          if (!isValidFamilyCode(familyCodeInput)) {
-            console.log('Admin signup: Invalid family code format', { familyCodeInput });
-            showError('signup-family-code', 'Family code must be 6 uppercase alphanumeric characters (A-Z, 0-9)');
-            return;
-          }
-          try {
+        } else {
+          if (useExisting && familyCodeInput) {
+            console.log('Admin signup: Validating provided family code format', { familyCodeInput });
+            if (!isValidFamilyCode(familyCodeInput)) {
+              console.log('Admin signup: Invalid family code format', { familyCodeInput });
+              showError('signup-family-code', 'Family code must be 6 uppercase alphanumeric characters (A-Z, 0-9)');
+              throw new Error('Invalid family code format');
+            }
             console.log('Admin signup: Checking family code uniqueness', { familyCodeInput });
             const exists = await familyCodeExists(db, familyCodeInput);
             console.log('Admin signup: Uniqueness check result', { exists });
             if (exists) {
               console.log('Admin signup: Family code already in use', { familyCodeInput });
               showError('signup-family-code', 'Family code already in use');
-              return;
+              throw new Error('Family code already in use');
             }
             finalFamilyCode = familyCodeInput;
-          } catch (error) {
-            console.error('Admin signup: Failed to validate family code', {
-              code: error.code,
-              message: error.message,
-              stack: error.stack
-            });
-            showError('signup-family-code', `Failed to validate family code: ${error.message}`);
-            return;
-          }
-        } else {
-          try {
+          } else {
             console.log('Admin signup: Generating new family code');
             finalFamilyCode = await generateFamilyCode(db);
             console.log('Admin signup: Generated family code', { finalFamilyCode });
-          } catch (error) {
-            console.error('Admin signup: Failed to generate family code', {
-              code: error.code,
-              message: error.message,
-              stack: error.stack
-            });
-            showError('signup-family-code', `Failed to generate family code: ${error.message}`);
-            return;
           }
         }
-      }
 
-      try {
-        signupButton.disabled = true;
-        signupButton.textContent = 'Signing up...';
-        console.log('Attempting createUserWithEmailAndPassword', { email });
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        console.log('Signup successful:', userCredential.user.uid);
+        // Create user document
         console.log('Creating user document', { uid: userCredential.user.uid, familyCode: finalFamilyCode });
         await setDoc(doc(db, 'users', userCredential.user.uid), {
           email,
@@ -220,6 +193,8 @@ export function setupAuth(loadAppDataCallback) {
           createdAt: serverTimestamp()
         });
         console.log('User document created:', { uid: userCredential.user.uid, familyCode: finalFamilyCode });
+
+        // Update app state
         setUserCurrency(currency);
         setFamilyCode(finalFamilyCode);
         document.getElementById('signup-email').value = '';
@@ -235,17 +210,22 @@ export function setupAuth(loadAppDataCallback) {
         document.getElementById('page-title').textContent = 'Budget Dashboard';
         await loadAppDataCallback();
       } catch (error) {
-        console.error('Signup failed:', {
+        console.error('Post-signup error:', {
           code: error.code,
-          message: error.message
+          message: error.message,
+          stack: error.stack
         });
-        let errorMessage = error.message || 'Failed to sign up.';
-        if (error.code === 'auth/email-already-in-use') {
-          errorMessage = 'This email is already in use.';
-        } else if (error.code === 'auth/invalid-email') {
-          errorMessage = 'Invalid email format.';
+        showError('signup-family-code', error.message || 'Failed to complete signup');
+        // Delete the user if document creation fails
+        try {
+          await userCredential.user.delete();
+          console.log('Deleted incomplete user:', userCredential.user.uid);
+        } catch (deleteError) {
+          console.error('Failed to delete incomplete user:', {
+            code: deleteError.code,
+            message: deleteError.message
+          });
         }
-        showError('signup-email', errorMessage);
       } finally {
         signupButton.disabled = false;
         signupButton.textContent = 'Sign Up';
