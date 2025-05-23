@@ -1100,24 +1100,35 @@ async function loadTransactions() {
   try {
     // Verify DOM elements
     const transactionTable = document.getElementById('transaction-table');
-    if (!transactionTable) {
-      console.error('loadTransactions: Transaction table not found');
-      showError('category', 'Transaction table not found');
+    const dateHeader = document.getElementById('transaction-date-header');
+    if (!transactionTable || !dateHeader) {
+      console.error('loadTransactions: Missing DOM elements', {
+        transactionTable: !!transactionTable,
+        dateHeader: !!dateHeader
+      });
+      showError('category', 'Transaction table or date header not found');
       return;
     }
-    transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
+    transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">Loading...</td></tr>';
 
     // Verify Firestore and familyCode
     if (!db || !familyCode) {
       console.error('loadTransactions: Firestore or familyCode not available', { db: !!db, familyCode });
       showError('category', 'Database service not available');
-      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Database unavailable</td></tr>';
+      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Database unavailable</td></tr>';
       return;
     }
 
-    // Use a broad date range to avoid over-filtering
+    // Get date range from filter
     const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'allTime');
     console.log('loadTransactions: Date range', { start: start.toISOString(), end: end.toISOString() });
+
+    // Determine month for header (use filter's start date or fallback to current month)
+    const filterMonth = domElements.dashboardFilter?.value && domElements.dashboardFilter.value !== 'allTime'
+      ? start.toLocaleString('en-US', { month: 'short' })
+      : new Date().toLocaleString('en-US', { month: 'short' });
+    dateHeader.textContent = filterMonth;
+    console.log('loadTransactions: Set date header', { month: filterMonth });
 
     // Pre-fetch categories
     console.log('loadTransactions: Fetching categories');
@@ -1150,7 +1161,7 @@ async function loadTransactions() {
         message: error.message,
         stack: error.stack
       });
-      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Failed to load transactions</td></tr>';
+      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Failed to load transactions</td></tr>';
       showError('category', `Failed to load transactions: ${error.message}`);
       return;
     }
@@ -1158,7 +1169,7 @@ async function loadTransactions() {
 
     transactionTable.innerHTML = '';
     if (snapshot.empty) {
-      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found</td></tr>';
+      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found</td></tr>';
       console.log('loadTransactions: No transactions in Firestore');
       return;
     }
@@ -1168,13 +1179,13 @@ async function loadTransactions() {
       const transaction = doc.data();
       const createdAt = transaction.createdAt && transaction.createdAt.toDate ? new Date(transaction.createdAt.toDate()) : new Date();
       if (createdAt >= start && createdAt <= end) {
-        transactions.push({ id: doc.id, ...transaction });
+        transactions.push({ id: doc.id, ...transaction, createdAt });
       }
     });
     console.log('loadTransactions: Transactions after date filter', { count: transactions.length });
 
     if (transactions.length === 0) {
-      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
+      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found for this period</td></tr>';
       console.log('loadTransactions: No transactions in date range');
       return;
     }
@@ -1183,11 +1194,13 @@ async function loadTransactions() {
       const tr = document.createElement('tr');
       tr.classList.add('table-row');
       const categoryName = transaction.categoryId ? categoryMap.get(transaction.categoryId) || 'Unknown' : 'None';
+      const day = transaction.createdAt.toLocaleString('en-US', { day: 'numeric' });
       tr.innerHTML = `
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formatCurrency(transaction.amount || 0, 'INR')}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${categoryName}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
+        <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${day}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
           <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${transaction.id}">Edit</button>
           <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${transaction.id}">Delete</button>
@@ -1205,7 +1218,7 @@ async function loadTransactions() {
     showError('category', `Failed to load transactions: ${error.message}`);
     const transactionTable = document.getElementById('transaction-table');
     if (transactionTable) {
-      transactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
     }
   }
 }
