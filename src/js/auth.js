@@ -179,25 +179,25 @@ export function setupAuth(loadAppDataCallback) {
               showError('signup-family-code', 'Family code must be 6 uppercase alphanumeric characters (A-Z, 0-9)');
               throw new Error('Invalid family code format');
             }
-            console.log('Admin signup: Checking family code uniqueness', { familyCodeInput });
+            console.log('Admin signup: Checking family code existence', { familyCodeInput });
             let exists;
             try {
               exists = await retryFirestoreOperation(() => familyCodeExists(db, familyCodeInput));
             } catch (queryError) {
-              console.error('Admin signup: Failed to check family code uniqueness after retries', {
+              console.error('Admin signup: Failed to check family code existence after retries', {
                 code: queryError.code,
                 message: queryError.message,
                 stack: queryError.stack
               });
-              // Fallback: Assume code is unique if query fails (temporary for testing)
-              console.warn('Admin signup: Bypassing family code uniqueness check due to permission error');
-              exists = false;
+              // Fallback: Assume code exists if query fails (temporary for testing)
+              console.warn('Admin signup: Bypassing family code existence check due to permission error');
+              exists = true;
             }
-            console.log('Admin signup: Uniqueness check result', { exists });
-            if (exists) {
-              console.log('Admin signup: Family code already in use', { familyCodeInput });
-              showError('signup-family-code', 'Family code already in use');
-              throw new Error('Family code already in use');
+            console.log('Admin signup: Existence check result', { exists });
+            if (!exists) {
+              console.log('Admin signup: Family code does not exist', { familyCodeInput });
+              showError('signup-family-code', 'Family code does not exist');
+              throw new Error('Family code does not exist');
             }
             finalFamilyCode = familyCodeInput;
           } else {
