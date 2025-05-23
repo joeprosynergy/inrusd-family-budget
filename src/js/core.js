@@ -9,7 +9,11 @@ let db = null;
 let currentUser = null;
 let userCurrency = 'INR';
 let familyCode = '';
-let exchangeRateCache = { rate: null, timestamp: null };
+let exchangeRateCache = {
+  INR_USD: { rate: null, timestamp: null },
+  INR_ZAR: { rate: null, timestamp: null },
+  USD_ZAR: { rate: null, timestamp: null }
+};
 const CACHE_TTL = 3600000; // 1 hour in milliseconds
 
 // DOM Elements (exported for use in other modules)
@@ -188,17 +192,46 @@ function setupAuthStateListener(loadAppDataCallback) {
 }
 
 // Utility: Format Currency
-function formatCurrency(amount, currency) {
+async function formatCurrency(amount, currency) {
   try {
     let displayAmount = amount;
-    if (currency === 'INR' && userCurrency === 'USD') {
-      displayAmount = amount * (exchangeRateCache.rate || 0.012);
-    } else if (currency === 'USD' && userCurrency === 'INR') {
-      displayAmount = amount / (exchangeRateCache.rate || 0.012);
+    // Fetch exchange rates if cache is stale or empty
+    if (!exchangeRateCache.INR_USD.rate || Date.now() - exchangeRateCache.INR_USD.timestamp > CACHE_TTL) {
+      exchangeRateCache.INR_USD.rate = await fetchExchangeRate('INR', 'USD') || 0.012; // Fallback rate
+      exchangeRateCache.INR_USD.timestamp = Date.now();
     }
-    return userCurrency === 'USD'
-      ? `$${Number(displayAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      : `₹${Number(displayAmount).toLocaleString('en-IN')}`;
+    if (!exchangeRateCache.INR_ZAR.rate || Date.now() - exchangeRateCache.INR_ZAR.timestamp > CACHE_TTL) {
+      exchangeRateCache.INR_ZAR.rate = await fetchExchangeRate('INR', 'ZAR') || 0.22; // Fallback rate
+      exchangeRateCache.INR_ZAR.timestamp = Date.now();
+    }
+    if (!exchangeRateCache.USD_ZAR.rate || Date.now() - exchangeRateCache.USD_ZAR.timestamp > CACHE_TTL) {
+      exchangeRateCache.USD_ZAR.rate = await fetchExchangeRate('USD', 'ZAR') || 18.0; // Fallback rate
+      exchangeRateCache.USD_ZAR.timestamp = Date.now();
+    }
+
+    // Convert amount based on input and user currency
+    if (currency === 'INR' && userCurrency === 'USD') {
+      displayAmount = amount * exchangeRateCache.INR_USD.rate;
+    } else if (currency === 'USD' && userCurrency === 'INR') {
+      displayAmount = amount / exchangeRateCache.INR_USD.rate;
+    } else if (currency === 'INR' && userCurrency === 'ZAR') {
+      displayAmount = amount * exchangeRateCache.INR_ZAR.rate;
+    } else if (currency === 'ZAR' && userCurrency === 'INR') {
+      displayAmount = amount / exchangeRateCache.INR_ZAR.rate;
+    } else if (currency === 'USD' && userCurrency === 'ZAR') {
+      displayAmount = amount * exchangeRateCache.USD_ZAR.rate;
+    } else if (currency === 'ZAR' && userCurrency === 'USD') {
+      displayAmount = amount / exchangeRateCache.USD_ZAR.rate;
+    }
+
+    // Format based on user currency
+    if (userCurrency === 'USD') {
+      return `$${Number(displayAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    } else if (userCurrency === 'ZAR') {
+      return `R${Number(displayAmount).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    } else {
+      return `₹${Number(displayAmount).toLocaleString('en-IN')}`;
+    }
   } catch (error) {
     console.error('Error formatting currency:', error);
     return amount.toString();
