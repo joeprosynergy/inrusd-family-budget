@@ -180,12 +180,13 @@ async function setupProfile() {
     isEditing.profile = true;
     domElements.profileEmail?.removeAttribute('readonly');
     domElements.profileCurrency?.removeAttribute('disabled');
-    domElements.profileFamilyCode?.removeAttribute('readonly');
     domElements.profileAccountType?.removeAttribute('disabled');
     domElements.profileEmail?.classList.remove('bg-gray-100');
     domElements.profileCurrency?.classList.remove('bg-gray-100');
-    domElements.profileFamilyCode?.classList.remove('bg-gray-100');
     domElements.profileAccountType?.classList.remove('bg-gray-100');
+    // Keep family code read-only
+    domElements.profileFamilyCode?.setAttribute('readonly', 'true');
+    domElements.profileFamilyCode?.classList.add('bg-gray-100');
     domElements.editProfile?.classList.add('hidden');
     domElements.saveProfile?.classList.remove('hidden');
   });
@@ -195,17 +196,12 @@ async function setupProfile() {
     clearErrors();
     const email = domElements.profileEmail?.value.trim();
     const currency = domElements.profileCurrency?.value;
-    const familyCodeInput = domElements.profileFamilyCode?.value.trim();
     const accountType = domElements.profileAccountType?.value;
 
-    console.log('Validating profile inputs:', { email, currency, familyCode: familyCodeInput, accountType });
+    console.log('Validating profile inputs:', { email, currency, accountType });
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       showError('profile-email', 'Valid email is required');
-      return;
-    }
-    if (!familyCodeInput) {
-      showError('profile-family-code', 'Family code is required');
       return;
     }
     if (!currency || !['INR', 'USD'].includes(currency)) {
@@ -227,21 +223,17 @@ async function setupProfile() {
       await retryFirestoreOperation(() => 
         updateDoc(doc(db, 'users', currentUser.uid), {
           currency,
-          familyCode: familyCodeInput,
           accountType
         })
       );
-      console.log('Profile updated:', { email, currency, familyCode: familyCodeInput, accountType });
+      console.log('Profile updated:', { email, currency, accountType });
       setUserCurrency(currency);
-      setFamilyCode(familyCodeInput);
       isEditing.profile = false;
       domElements.profileEmail?.setAttribute('readonly', 'true');
       domElements.profileCurrency?.setAttribute('disabled', 'true');
-      domElements.profileFamilyCode?.setAttribute('readonly', 'true');
       domElements.profileAccountType?.setAttribute('disabled', 'true');
       domElements.profileEmail?.classList.add('bg-gray-100');
       domElements.profileCurrency?.classList.add('bg-gray-100');
-      domElements.profileFamilyCode?.classList.add('bg-gray-100');
       domElements.profileAccountType?.classList.add('bg-gray-100');
       domElements.editProfile?.classList.remove('hidden');
       domElements.saveProfile?.classList.add('hidden');
