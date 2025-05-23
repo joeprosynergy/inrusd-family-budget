@@ -1,4 +1,4 @@
-// Utilities module: Shared functions for Firestore retries, exchange rates, and date ranges
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 // Retry Firestore Operation
 async function retryFirestoreOperation(operation, maxRetries = 3, delay = 1000) {
@@ -105,4 +105,64 @@ function getDateRange(filter, startDateInput, endDateInput) {
   return { start, end };
 }
 
-export { retryFirestoreOperation, fetchExchangeRate, getDateRange };
+async function generateFamilyCode(db) {
+  console.log('generateFamilyCode: Starting');
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code;
+  let isUnique = false;
+  let attempts = 0;
+  const maxAttempts = 10;
+
+  while (!isUnique && attempts < maxAttempts) {
+    code = '';
+    for (let i = 0; i < 6; i++) {
+      code += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    console.log('generateFamilyCode: Generated code', { code, attempt: attempts + 1 });
+
+    try {
+      const usersQuery = query(collection(db, 'users'), where('familyCode', '==', code));
+      const snapshot = await getDocs(usersQuery);
+      if (snapshot.empty) {
+        isUnique = true;
+        console.log('generateFamilyCode: Code is unique', { code });
+      } else {
+        console.log('generateFamilyCode: Code already in use', { code });
+      }
+    } catch (error) {
+      console.error('generateFamilyCode: Error checking code uniqueness', {
+        code: error.code,
+        message: error.message
+      });
+      throw new Error('Failed to validate family code uniqueness');
+    }
+    attempts++;
+  }
+
+  if (!isUnique) {
+    throw new Error('Could not generate a unique family code after maximum attempts');
+  }
+
+  return code;
+}
+
+function isValidFamilyCode(code) {
+  const regex = /^[A-Z0-9]{6}$/;
+  return regex.test(code);
+}
+
+async function familyCodeExists(db, code) {
+  try {
+    const usersQuery = query(collection(db, 'users'), where('familyCode', '==', code));
+    const snapshot = await getDocs(usersQuery);
+    return !snapshot.empty;
+  } catch (error) {
+    console.error('familyCodeExists: Error checking code existence', {
+      code: error.code,
+      message: error.message
+    });
+    throw new Error('Failed to check family code existence');
+  }
+}
+
+export { retryFirestoreOperation, fetchExchangeRate, getDateRange, generateFamilyCode, isValidFamilyCode, familyCodeExists };
