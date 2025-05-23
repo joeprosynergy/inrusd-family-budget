@@ -1297,6 +1297,10 @@ async function loadTransactions() {
       return;
     }
 
+    // Sort transactions by createdAt in descending order (latest first)
+    transactions.sort((a, b) => b.createdAt - a.createdAt);
+    console.log('loadTransactions: Transactions sorted by createdAt', { count: transactions.length });
+
     transactions.forEach(transaction => {
       const tr = document.createElement('tr');
       tr.classList.add('table-row');
