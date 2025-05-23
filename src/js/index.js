@@ -37,7 +37,7 @@ async function init() {
     console.log('init: Calling setupAuthStateListener');
     setupAuthStateListener(loadAppData);
     console.log('init: Calling setupAuth');
-    setupAuth();
+    setupAuth(loadAppData);
     console.log('init: Calling initApp');
     await initApp();
     console.log('init: Initialization complete');
