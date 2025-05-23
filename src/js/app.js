@@ -67,12 +67,12 @@ function setupTabs() {
   
   // Define tabs and their corresponding show functions
   const tabs = [
-    { id: 'dashboard', show: showDashboard },
-    { id: 'transactions', show: showTransactions },
-    { id: 'budgets', show: showBudgets },
-    { id: 'categories', show: showCategories },
-    { id: 'child-accounts', show: showChildAccounts },
-    { id: 'profile', show: showProfile }
+    { id: 'dashboard', name: 'Dashboard', show: showDashboard },
+    { id: 'transactions', name: 'Transactions', show: showTransactions },
+    { id: 'budgets', name: 'Budgets', show: showBudgets },
+    { id: 'categories', name: 'Categories', show: showCategories },
+    { id: 'child-accounts', name: 'Child Accounts', show: showChildAccounts },
+    { id: 'profile', name: 'Profile', show: showProfile }
   ];
   let currentTabIndex = 0; // Start at Dashboard
 
@@ -87,16 +87,30 @@ function setupTabs() {
     tab.show();
     currentTabIndex = tabs.findIndex(t => t.id === tabId);
     
-    // Update ARIA attributes
+    // Update ARIA attributes and menu
     tabs.forEach(t => {
       const tabButton = domElements[`${t.id.replace('-', '')}Tab`];
       if (tabButton) {
         tabButton.setAttribute('aria-selected', t.id === tabId);
       }
     });
+    
+    // Update mobile menu display
+    const currentTabName = document.getElementById('current-tab-name');
+    if (currentTabName) {
+      currentTabName.textContent = tab.name;
+    }
+    
+    // Collapse menu on mobile after selection
+    const menuItems = document.getElementById('menu-items');
+    const menuToggle = document.getElementById('menu-toggle');
+    if (menuItems && menuToggle && window.matchMedia('(max-width: 768px)').matches) {
+      menuItems.classList.add('hidden');
+      menuToggle.setAttribute('aria-expanded', 'false');
+    }
   }
 
-  // Tab show functions (unchanged except for ARIA updates)
+  // Tab show functions (unchanged)
   function showDashboard() {
     console.log('Showing dashboard');
     domElements.dashboardTab?.classList.add('bg-blue-800');
@@ -209,6 +223,18 @@ function setupTabs() {
   domElements.childAccountsTab?.addEventListener('click', () => switchTab('child-accounts'));
   domElements.profileTab?.addEventListener('click', () => switchTab('profile'));
 
+  // Setup mobile menu toggle
+  const menuToggle = document.getElementById('menu-toggle');
+  const menuItems = document.getElementById('menu-items');
+  if (menuToggle && menuItems) {
+    menuToggle.addEventListener('click', () => {
+      const isExpanded = menuItems.classList.contains('hidden');
+      menuItems.classList.toggle('hidden');
+      menuToggle.setAttribute('aria-expanded', isExpanded);
+      console.log('Menu toggled:', { isExpanded });
+    });
+  }
+
   // Swipe detection for mobile
   const swipeContainer = document.getElementById('swipeable-tabs');
   if (swipeContainer && window.matchMedia('(max-width: 768px)').matches) {
@@ -217,12 +243,21 @@ function setupTabs() {
     const minSwipeDistance = 50; // Minimum pixels to consider a swipe
 
     swipeContainer.addEventListener('touchstart', (event) => {
+      // Ignore swipes starting on tables (no-swipe class)
+      if (event.target.closest('.no-swipe')) {
+        console.log('Touch ignored: started on table with no-swipe class');
+        return;
+      }
       touchStartX = event.touches[0].clientX;
       touchStartY = event.touches[0].clientY;
       console.log('Touch start:', { x: touchStartX, y: touchStartY });
     });
 
     swipeContainer.addEventListener('touchend', (event) => {
+      // Ignore if touchstart was on a table
+      if (event.target.closest('.no-swipe')) {
+        return;
+      }
       const touchEndX = event.changedTouches[0].clientX;
       const touchEndY = event.changedTouches[0].clientY;
       const deltaX = touchEndX - touchStartX;
