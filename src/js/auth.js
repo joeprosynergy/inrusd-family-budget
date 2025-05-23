@@ -86,7 +86,7 @@ export function setupAuth(loadAppDataCallback) {
       const accountType = document.getElementById('signup-account-type')?.value;
       const useExisting = document.getElementById('use-existing-family-code')?.checked ?? false;
 
-      console.log('Signup inputs:', { email, currency, accountType, familyCode: familyCodeInput, familyCodeRaw: familyCodeInputRaw, useExisting });
+      console.log('Signup inputs:', { email, currency, accountType, familyCode: familyCodeInput, familyCodeRaw: familyCodeInputRaw, useExisting, authState: auth.currentUser });
 
       // Validate inputs
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -107,6 +107,25 @@ export function setupAuth(loadAppDataCallback) {
       }
       if (!accountType || !['admin', 'child'].includes(accountType)) {
         showError('signup-account-type', 'Valid account type is required');
+        return;
+      }
+
+      // Wait for auth state to ensure user is authenticated
+      try {
+        console.log('Checking auth state before family code validation');
+        await new Promise((resolve, reject) => {
+          const unsubscribe = auth.onAuthStateChanged(user => {
+            unsubscribe();
+            console.log('Auth state checked:', { user: user ? user.uid : null });
+            resolve();
+          }, reject);
+        });
+      } catch (error) {
+        console.error('Failed to verify auth state:', {
+          code: error.code,
+          message: error.message
+        });
+        showError('signup-email', 'Authentication error. Please try again.');
         return;
       }
 
