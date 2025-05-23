@@ -586,7 +586,7 @@ async function loadCategories() {
 
 
 
-function setupCategories() {
+async function setupCategories() {
   console.log('setupCategories: Starting');
   try {
     // Verify DOM elements
@@ -916,7 +916,6 @@ function setupCategories() {
   }
 }
 
-    
 // Budgets
 async function loadBudgets() {
   console.log('loadBudgets: Starting', { familyCode });
@@ -954,7 +953,7 @@ async function loadBudgets() {
         console.log('loadBudgets: No budgets found');
         return;
       }
-      snapshot.forEach(doc => {
+      for (const doc of snapshot.docs) {
         const budget = doc.data();
         const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
         if (createdAt >= start && createdAt <= end) {
@@ -965,9 +964,9 @@ async function loadBudgets() {
           tr.classList.add('table-row');
           tr.innerHTML = `
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, 'INR')}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, 'INR')}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, 'INR')}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(budget.amount, 'INR')}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(spent, 'INR')}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(budget.amount - spent, 'INR')}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm">
               <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
               <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
@@ -979,10 +978,10 @@ async function loadBudgets() {
           const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
           tile.innerHTML = `
             <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
-            <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, 'INR')}</span></p>
-            <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, 'INR')}</span></p>
+            <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${await formatCurrency(budget.amount, 'INR')}</span></p>
+            <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${await formatCurrency(spent, 'INR')}</span></p>
             <p class="text-sm font-semibold text-gray-700 mt-2">
-              Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, 'INR')}</span>
+              Remaining: <span id="${doc.id}-remaining">${await formatCurrency(budget.amount - spent, 'INR')}</span>
             </p>
             <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
               <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
@@ -990,7 +989,7 @@ async function loadBudgets() {
           `;
           budgetTiles.appendChild(tile);
         }
-      });
+      }
       console.log('loadBudgets: Tiles and table updated', {
         totalBudgetAmount,
         totalRemainingAmount,
@@ -999,8 +998,8 @@ async function loadBudgets() {
       const totalBudgetElement = document.getElementById('total-budget');
       const totalRemainingElement = document.getElementById('total-remaining');
       if (totalBudgetElement && totalRemainingElement) {
-        totalBudgetElement.textContent = formatCurrency(totalBudgetAmount, 'INR');
-        totalRemainingElement.textContent = formatCurrency(totalRemainingAmount, 'INR');
+        totalBudgetElement.textContent = await formatCurrency(totalBudgetAmount, 'INR');
+        totalRemainingElement.textContent = await formatCurrency(totalRemainingAmount, 'INR');
       }
     });
   } catch (error) {
@@ -1021,10 +1020,7 @@ async function loadBudgets() {
   }
 }
 
-
-
-
-function setupBudgets() {
+async function setupBudgets() {
   console.log('Setting up budget event listeners');
   const addBudget = document.getElementById('add-budget');
   const saveBudget = document.getElementById('save-budget');
@@ -1321,14 +1317,14 @@ async function loadTransactions() {
     transactions.sort((a, b) => b.createdAt - a.createdAt);
     console.log('loadTransactions: Transactions sorted by createdAt', { count: transactions.length });
 
-    transactions.forEach(transaction => {
+    for (const transaction of transactions) {
       const tr = document.createElement('tr');
       tr.classList.add('table-row');
       const categoryName = transaction.categoryId ? categoryMap.get(transaction.categoryId) || 'Unknown' : 'None';
       const day = transaction.createdAt.toLocaleString('en-US', { day: 'numeric' });
       tr.innerHTML = `
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
-        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formatCurrency(transaction.amount || 0, 'INR')}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${await formatCurrency(transaction.amount || 0, 'INR')}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${categoryName}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
         <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${day}</td>
@@ -1338,7 +1334,7 @@ async function loadTransactions() {
         </td>
       `;
       transactionTable.appendChild(tr);
-    });
+    }
     console.log('loadTransactions: Table updated', { rendered: transactions.length });
   } catch (error) {
     console.error('loadTransactions error:', {
@@ -1354,7 +1350,7 @@ async function loadTransactions() {
   }
 }
 
-function setupTransactions() {
+async function setupTransactions() {
   console.log('setupTransactions: Starting');
   try {
     const addTransaction = document.getElementById('add-transaction');
@@ -1768,7 +1764,7 @@ async function loadChildTransactions() {
       }
       const balance = document.getElementById('child-balance');
       if (balance) {
-        balance.textContent = formatCurrency(0, 'INR');
+        balance.textContent = await formatCurrency(0, 'INR');
       }
       return;
     }
@@ -1829,14 +1825,14 @@ async function loadChildTransactions() {
             transactions.sort((a, b) => b.createdAt - a.createdAt);
             console.log('loadChildTransactions: Transactions sorted by createdAt', { count: transactions.length });
 
-            transactions.forEach(transaction => {
+            for (const transaction of transactions) {
               totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
               const tr = document.createElement('tr');
               tr.classList.add('table-row');
               const day = transaction.createdAt.toLocaleString('en-US', { day: 'numeric' });
               tr.innerHTML = `
                 <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
-                <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formatCurrency(transaction.amount || 0, 'INR')}</td>
+                <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${await formatCurrency(transaction.amount || 0, 'INR')}</td>
                 <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
                 <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${day}</td>
                 <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
@@ -1845,10 +1841,10 @@ async function loadChildTransactions() {
                 </td>
               `;
               childTransactionTable.appendChild(tr);
-            });
+            }
           }
         }
-        childBalance.textContent = formatCurrency(totalBalance, 'INR');
+        childBalance.textContent = await formatCurrency(totalBalance, 'INR');
       });
     } catch (error) {
       console.error('loadChildTransactions error:', {
@@ -1858,7 +1854,7 @@ async function loadChildTransactions() {
       });
       showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
       childTransactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-      childBalance.textContent = formatCurrency(0, 'INR');
+      childBalance.textContent = await formatCurrency(0, 'INR');
     }
   } catch (error) {
     console.error('loadChildTransactions error:', {
@@ -1873,7 +1869,7 @@ async function loadChildTransactions() {
     }
     const balance = document.getElementById('child-balance');
     if (balance) {
-      balance.textContent = formatCurrency(0, 'INR');
+      balance.textContent = await formatCurrency(0, 'INR');
     }
   }
 }
@@ -1946,17 +1942,17 @@ async function loadChildTiles() {
       childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
       console.log('loadChildTiles: No child balances to display');
     } else {
-      childBalances.forEach(({ email, balance }, userId) => {
+      for (const [userId, { email, balance }] of childBalances) {
         const tile = document.createElement('div');
         tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'child-tile');
         tile.innerHTML = `
           <h3 class="text-lg font-semibold text-gray-700">${email}</h3>
           <p class="text-sm font-semibold text-gray-700 mt-2">
-            Balance: <span id="child-${userId}-balance">${formatCurrency(balance, 'INR')}</span>
+            Balance: <span id="child-${userId}-balance">${await formatCurrency(balance, 'INR')}</span>
           </p>
         `;
         childTiles.appendChild(tile);
-      });
+      }
       console.log('loadChildTiles: Tiles updated', { rendered: childBalances.size });
     }
   } catch (error) {
@@ -1972,7 +1968,7 @@ async function loadChildTiles() {
   }
 }
 
-function setupChildAccounts() {
+async function setupChildAccounts() {
   console.log('setupChildAccounts: Starting');
   try {
     // Verify DOM elements
@@ -2269,7 +2265,7 @@ function setupChildAccounts() {
         }
         const balance = document.getElementById('child-balance');
         if (balance) {
-          balance.textContent = formatCurrency(0, 'INR');
+          balance.textContent = formatCurrency(0, 'INR'); // Synchronous fallback for initial render
         }
       }
     });
@@ -2373,7 +2369,7 @@ async function updateDashboard() {
       tile.classList.add('bg-white', 'p-4', 'sm:p-6', 'rounded-lg', 'shadow-md');
       tile.innerHTML = `
         <h3 class="text-base sm:text-lg font-semibold text-gray-700">Your Balance</h3>
-        <p class="text-lg sm:text-2xl font-bold text-gray-900">${formatCurrency(childBalance, 'INR')}</p>
+        <p class="text-lg sm:text-2xl font-bold text-gray-900">${await formatCurrency(childBalance, 'INR')}</p>
       `;
       childTilesElement.appendChild(tile);
       console.log('updateDashboard: Child balance tile added', { childBalance });
@@ -2443,13 +2439,13 @@ async function updateDashboard() {
       });
 
       // Update DOM elements
-      balanceElement.textContent = formatCurrency(totalBalance, 'INR');
+      balanceElement.textContent = await formatCurrency(totalBalance, 'INR');
       balanceElement.parentElement.classList.remove('hidden');
-      totalBudgetElement.textContent = formatCurrency(totalBudgetAmount, 'INR');
-      totalRemainingElement.textContent = formatCurrency(totalBudgetAmount - totalSpent, 'INR');
+      totalBudgetElement.textContent = await formatCurrency(totalBudgetAmount, 'INR');
+      totalRemainingElement.textContent = await formatCurrency(totalBudgetAmount - totalSpent, 'INR');
       totalBudgetElement.parentElement.classList.remove('hidden');
       const afterBudget = totalBalance - (totalBudgetAmount - totalSpent);
-      afterBudgetElement.textContent = formatCurrency(afterBudget, 'INR');
+      afterBudgetElement.textContent = await formatCurrency(afterBudget, 'INR');
       balanceElement.parentElement.classList.remove('hidden');
       console.log('updateDashboard: Tiles updated', {
         totalBalance,
@@ -2475,14 +2471,8 @@ async function updateDashboard() {
   }
 }
 
-
-
-
-
-
-
 // Logout Setup
-function setupLogout() {
+async function setupLogout() {
   console.log('setupLogout: Starting');
   // Poll for logout button to handle dynamic DOM
   const maxAttempts = 10;
