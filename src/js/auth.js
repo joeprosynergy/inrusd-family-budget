@@ -1,7 +1,7 @@
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { showError, clearErrors, setUserCurrency, setFamilyCode, domElements } from './core.js';
-import { generateFamilyCode, isValidFamilyCode, familyCodeExists } from './utils.js';
+import { generateFamilyCode, isValidFamilyCode, familyCodeExists, retryFirestoreOperation } from './utils.js';
 
 let isSetup = false;
 
@@ -151,7 +151,7 @@ export function setupAuth(loadAppDataCallback) {
             throw new Error('Invalid family code format');
           }
           console.log('Child signup: Checking family code existence', { familyCodeInput });
-          const exists = await familyCodeExists(db, familyCodeInput);
+          const exists = await retryFirestoreOperation(() => familyCodeExists(db, familyCodeInput));
           console.log('Child signup: Existence check result', { exists });
           if (!exists) {
             console.log('Child signup: Family code does not exist', { familyCodeInput });
@@ -168,7 +168,7 @@ export function setupAuth(loadAppDataCallback) {
               throw new Error('Invalid family code format');
             }
             console.log('Admin signup: Checking family code uniqueness', { familyCodeInput });
-            const exists = await familyCodeExists(db, familyCodeInput);
+            const exists = await retryFirestoreOperation(() => familyCodeExists(db, familyCodeInput));
             console.log('Admin signup: Uniqueness check result', { exists });
             if (exists) {
               console.log('Admin signup: Family code already in use', { familyCodeInput });
@@ -178,21 +178,30 @@ export function setupAuth(loadAppDataCallback) {
             finalFamilyCode = familyCodeInput;
           } else {
             console.log('Admin signup: Generating new family code');
-            finalFamilyCode = await generateFamilyCode(db);
+            finalFamilyCode = await retryFirestoreOperation(() => generateFamilyCode(db));
             console.log('Admin signup: Generated family code', { finalFamilyCode });
           }
         }
 
         // Create user document
         console.log('Creating user document', { uid: userCredential.user.uid, familyCode: finalFamilyCode });
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
-          email,
-          familyCode: finalFamilyCode,
-          currency,
-          accountType,
-          createdAt: serverTimestamp()
-        });
-        console.log('User document created:', { uid: userCredential.user.uid, familyCode: finalFamilyCode });
+        try {
+          await setDoc(doc(db, 'users', userCredential.user.uid), {
+            email,
+            familyCode: finalFamilyCode,
+            currency,
+            accountType,
+            createdAt: serverTimestamp()
+          });
+          console.log('User document created:', { uid: userCredential.user.uid, familyCode: finalFamilyCode });
+        } catch (setDocError) {
+          console.error('Failed to create user document:', {
+            code: setDocError.code,
+            message: setDocError.message,
+            stack: setDocError.stack
+          });
+          throw new Error(`Failed to create user document: ${setDocError.message}`);
+        }
 
         // Update app state
         setUserCurrency(currency);
