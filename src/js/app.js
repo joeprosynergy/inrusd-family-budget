@@ -1633,7 +1633,7 @@ async function loadChildTransactions() {
       showError('child-transaction-description', 'No user selected');
       const table = document.getElementById('child-transaction-table');
       if (table) {
-        table.innerHTML = '<tr><td colspan="4" class="text-center py-4">No user selected</td></tr>';
+        table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No user selected</td></tr>';
       }
       const balance = document.getElementById('child-balance');
       if (balance) {
@@ -1645,16 +1645,30 @@ async function loadChildTransactions() {
     // Verify DOM elements
     const childTransactionTable = document.getElementById('child-transaction-table');
     const childBalance = document.getElementById('child-balance');
-    if (!childTransactionTable || !childBalance) {
+    const dateHeader = document.getElementById('child-transaction-date-header');
+    if (!childTransactionTable || !childBalance || !dateHeader) {
       console.error('loadChildTransactions: Missing DOM elements', {
         childTransactionTable: !!childTransactionTable,
-        childBalance: !!childBalance
+        childBalance: !!childBalance,
+        dateHeader: !!dateHeader
       });
-      showError('child-transaction-description', 'Transaction table or balance not found');
+      showError('child-transaction-description', 'Transaction table, balance, or date header not found');
       return;
     }
 
-    childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
+    childTransactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
+
+    // Get date range from filter
+    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'allTime');
+    console.log('loadChildTransactions: Date range', { start: start.toISOString(), end: end.toISOString() });
+
+    // Determine month for header (use filter's start date or fallback to current month)
+    const filterMonth = domElements.dashboardFilter?.value && domElements.dashboardFilter.value !== 'allTime'
+      ? start.toLocaleString('en-US', { month: 'short' })
+      : new Date().toLocaleString('en-US', { month: 'short' });
+    dateHeader.textContent = filterMonth;
+    console.log('loadChildTransactions: Set date header', { month: filterMonth });
+
     let totalBalance = 0;
     try {
       await retryFirestoreOperation(async () => {
@@ -1663,25 +1677,41 @@ async function loadChildTransactions() {
         console.log('loadChildTransactions: Transactions fetched', { count: snapshot.size });
         childTransactionTable.innerHTML = '';
         if (snapshot.empty) {
-          childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No transactions found</td></tr>';
+          childTransactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found</td></tr>';
           console.log('loadChildTransactions: No transactions found');
         } else {
+          const transactions = [];
           snapshot.forEach(doc => {
             const transaction = doc.data();
-            totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
-            const tr = document.createElement('tr');
-            tr.classList.add('table-row');
-            tr.innerHTML = `
-              <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
-              <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formatCurrency(transaction.amount || 0, 'INR')}</td>
-              <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
-              <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
-                <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${doc.id}" data-user-id="${transaction.userId}">Edit</button>
-                <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${doc.id}" data-user-id="${transaction.userId}">Delete</button>
-              </td>
-            `;
-            childTransactionTable.appendChild(tr);
+            const createdAt = transaction.createdAt && transaction.createdAt.toDate ? new Date(transaction.createdAt.toDate()) : new Date();
+            if (createdAt >= start && createdAt <= end) {
+              transactions.push({ id: doc.id, ...transaction, createdAt });
+            }
           });
+          console.log('loadChildTransactions: Transactions after date filter', { count: transactions.length });
+
+          if (transactions.length === 0) {
+            childTransactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
+            console.log('loadChildTransactions: No transactions in date range');
+          } else {
+            transactions.forEach(transaction => {
+              totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+              const tr = document.createElement('tr');
+              tr.classList.add('table-row');
+              const day = transaction.createdAt.toLocaleString('en-US', { day: 'numeric' });
+              tr.innerHTML = `
+                <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
+                <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formatCurrency(transaction.amount || 0, 'INR')}</td>
+                <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
+                <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${day}</td>
+                <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
+                  <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${transaction.id}" data-user-id="${transaction.userId}">Edit</button>
+                  <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${transaction.id}" data-user-id="${transaction.userId}">Delete</button>
+                </td>
+              `;
+              childTransactionTable.appendChild(tr);
+            });
+          }
         }
         childBalance.textContent = formatCurrency(totalBalance, 'INR');
       });
@@ -1692,7 +1722,7 @@ async function loadChildTransactions() {
         stack: error.stack
       });
       showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
-      childTransactionTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+      childTransactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
       childBalance.textContent = formatCurrency(0, 'INR');
     }
   } catch (error) {
@@ -1704,7 +1734,7 @@ async function loadChildTransactions() {
     showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
     const table = document.getElementById('child-transaction-table');
     if (table) {
-      table.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+      table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
     }
     const balance = document.getElementById('child-balance');
     if (balance) {
