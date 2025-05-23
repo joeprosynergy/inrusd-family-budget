@@ -1805,6 +1805,10 @@ async function loadChildTransactions() {
             childTransactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
             console.log('loadChildTransactions: No transactions in date range');
           } else {
+            // Sort transactions by createdAt in descending order (latest first)
+            transactions.sort((a, b) => b.createdAt - a.createdAt);
+            console.log('loadChildTransactions: Transactions sorted by createdAt', { count: transactions.length });
+
             transactions.forEach(transaction => {
               totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
               const tr = document.createElement('tr');
@@ -2241,7 +2245,7 @@ function setupChildAccounts() {
         console.log('childUserId: No child selected');
         const table = document.getElementById('child-transaction-table');
         if (table) {
-          table.innerHTML = '<tr><td colspan="4" class="text-center py-4">No child selected</td></tr>';
+          table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No child selected</td></tr>';
         }
         const balance = document.getElementById('child-balance');
         if (balance) {
