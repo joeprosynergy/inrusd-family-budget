@@ -104,13 +104,21 @@
   </header>
   <!-- Navigation -->
   <nav class="bg-gray-800 text-white p-3 sm:p-4">
-    <div class="nav flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4" role="tablist">
-      <button id="dashboard-tab" class="px-3 py-2 rounded-lg bg-blue-800 hover:bg-blue-900 transition text-sm sm:text-base" role="tab" aria-selected="true" aria-controls="dashboard-section">Dashboard</button>
-      <button id="transactions-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base" role="tab" aria-selected="false" aria-controls="transactions-section">Transactions</button>
-      <button id="budgets-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base" role="tab" aria-selected="false" aria-controls="budgets-section">Budgets</button>
-      <button id="categories-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base" role="tab" aria-selected="false" aria-controls="categories-section">Categories</button>
-      <button id="child-accounts-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base" role="tab" aria-selected="false" aria-controls="child-accounts-section">Child Accounts</button>
-      <button id="profile-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base" role="tab" aria-selected="false" aria-controls="profile-section">Profile</button>
+    <div class="relative">
+      <!-- Mobile: Collapsible Menu -->
+      <button id="menu-toggle" class="md:hidden flex items-center px-3 py-2 rounded-lg bg-blue-800 hover:bg-blue-900 transition text-sm sm:text-base w-full text-left" aria-expanded="false" aria-controls="menu-items">
+        <span id="current-tab-name">Dashboard</span>
+        <span class="ml-2">▼</span>
+      </button>
+      <!-- Menu Items -->
+      <div id="menu-items" class="md:flex md:flex-row md:space-x-4 md:space-y-0 hidden md:block bg-gray-800 md:bg-transparent" role="tablist">
+        <button id="dashboard-tab" class="px-3 py-2 rounded-lg bg-blue-800 hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center" role="tab" aria-selected="true" aria-controls="dashboard-section">Dashboard</button>
+        <button id="transactions-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center" role="tab" aria-selected="false" aria-controls="transactions-section">Transactions</button>
+        <button id="budgets-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center" role="tab" aria-selected="false" aria-controls="budgets-section">Budgets</button>
+        <button id="categories-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center" role="tab" aria-selected="false" aria-controls="categories-section">Categories</button>
+        <button id="child-accounts-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center" role="tab" aria-selected="false" aria-controls="child-accounts-section">Child Accounts</button>
+        <button id="profile-tab" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center" role="tab" aria-selected="false" aria-controls="profile-section">Profile</button>
+      </div>
     </div>
   </nav>
   <main class="p-4 sm:p-6">
@@ -172,7 +180,7 @@
           </div>
           <button id="add-transaction" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Transaction</button>
         </div>
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
           <table class="w-full">
             <thead>
               <tr class="bg-gray-200">
@@ -198,7 +206,7 @@
           </div>
           <button id="add-budget" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Budget</button>
         </div>
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
           <table class="w-full">
             <thead>
               <tr class="bg-gray-200">
@@ -230,7 +238,7 @@
           </div>
           <button id="add-category" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Category</button>
         </div>
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
           <table class="w-full">
             <thead>
               <tr class="bg-gray-200">
@@ -272,7 +280,7 @@
           <button id="add-child-transaction" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Transaction</button>
         </div>
         <!-- Transaction Table -->
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto">
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
           <table class="w-full">
             <thead>
               <tr class="bg-gray-200">
