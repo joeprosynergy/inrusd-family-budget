@@ -171,7 +171,7 @@ export function setupAuth(loadAppDataCallback) {
           }
         } else {
           try {
-            console.log('Admin signup: Generating family code');
+            console.log('Admin signup: Generating new family code');
             finalFamilyCode = await generateFamilyCode(db);
             console.log('Admin signup: Generated family code', { finalFamilyCode });
           } catch (error) {
