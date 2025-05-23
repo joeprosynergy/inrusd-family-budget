@@ -57,10 +57,47 @@ function getDateRangeWrapper(filter) {
   return getDateRange(filter, domElements.filterStartDate, domElements.filterEndDate);
 }
 
+// Note: This is a partial update focusing on the tab-switching logic.
+// The full app.js would include other functions (e.g., loadChildAccounts, loadProfileData).
+// Only the relevant tab-switching part is shown and updated.
+
 // Tab Switching
 function setupTabs() {
   console.log('Setting up tab navigation');
-  const showDashboard = () => {
+  
+  // Define tabs and their corresponding show functions
+  const tabs = [
+    { id: 'dashboard', show: showDashboard },
+    { id: 'transactions', show: showTransactions },
+    { id: 'budgets', show: showBudgets },
+    { id: 'categories', show: showCategories },
+    { id: 'child-accounts', show: showChildAccounts },
+    { id: 'profile', show: showProfile }
+  ];
+  let currentTabIndex = 0; // Start at Dashboard
+
+  // Reusable switchTab function
+  function switchTab(tabId) {
+    const tab = tabs.find(t => t.id === tabId);
+    if (!tab) {
+      console.error('Invalid tab ID:', tabId);
+      return;
+    }
+    console.log('Switching to tab:', tabId);
+    tab.show();
+    currentTabIndex = tabs.findIndex(t => t.id === tabId);
+    
+    // Update ARIA attributes
+    tabs.forEach(t => {
+      const tabButton = domElements[`${t.id.replace('-', '')}Tab`];
+      if (tabButton) {
+        tabButton.setAttribute('aria-selected', t.id === tabId);
+      }
+    });
+  }
+
+  // Tab show functions (unchanged except for ARIA updates)
+  function showDashboard() {
     console.log('Showing dashboard');
     domElements.dashboardTab?.classList.add('bg-blue-800');
     domElements.transactionsTab?.classList.remove('bg-blue-800');
@@ -75,9 +112,9 @@ function setupTabs() {
     domElements.childAccountsSection?.classList.add('hidden');
     domElements.profileSection?.classList.add('hidden');
     if (domElements.pageTitle) domElements.pageTitle.textContent = 'Budget Dashboard';
-  };
+  }
 
-  const showTransactions = () => {
+  function showTransactions() {
     console.log('Showing transactions');
     domElements.transactionsTab?.classList.add('bg-blue-800');
     domElements.dashboardTab?.classList.remove('bg-blue-800');
@@ -92,9 +129,9 @@ function setupTabs() {
     domElements.childAccountsSection?.classList.add('hidden');
     domElements.profileSection?.classList.add('hidden');
     if (domElements.pageTitle) domElements.pageTitle.textContent = 'Transactions';
-  };
+  }
 
-  const showBudgets = () => {
+  function showBudgets() {
     console.log('Showing budgets');
     domElements.budgetsTab?.classList.add('bg-blue-800');
     domElements.dashboardTab?.classList.remove('bg-blue-800');
@@ -109,9 +146,9 @@ function setupTabs() {
     domElements.childAccountsSection?.classList.add('hidden');
     domElements.profileSection?.classList.add('hidden');
     if (domElements.pageTitle) domElements.pageTitle.textContent = 'Budgets';
-  };
+  }
 
-  const showCategories = () => {
+  function showCategories() {
     console.log('Showing categories');
     domElements.categoriesTab?.classList.add('bg-blue-800');
     domElements.dashboardTab?.classList.remove('bg-blue-800');
@@ -126,9 +163,9 @@ function setupTabs() {
     domElements.childAccountsSection?.classList.add('hidden');
     domElements.profileSection?.classList.add('hidden');
     if (domElements.pageTitle) domElements.pageTitle.textContent = 'Categories';
-  };
+  }
 
-  const showChildAccounts = () => {
+  function showChildAccounts() {
     console.log('Showing child accounts');
     domElements.childAccountsTab?.classList.add('bg-blue-800');
     domElements.dashboardTab?.classList.remove('bg-blue-800');
@@ -144,9 +181,9 @@ function setupTabs() {
     domElements.profileSection?.classList.add('hidden');
     if (domElements.pageTitle) domElements.pageTitle.textContent = 'Child Accounts';
     loadChildAccounts();
-  };
+  }
 
-  const showProfile = () => {
+  function showProfile() {
     console.log('Showing profile');
     domElements.profileTab?.classList.add('bg-blue-800');
     domElements.dashboardTab?.classList.remove('bg-blue-800');
@@ -162,16 +199,59 @@ function setupTabs() {
     domElements.childAccountsSection?.classList.add('hidden');
     if (domElements.pageTitle) domElements.pageTitle.textContent = 'User Profile';
     loadProfileData();
-  };
+  }
 
-  domElements.dashboardTab?.addEventListener('click', showDashboard);
-  domElements.transactionsTab?.addEventListener('click', showTransactions);
-  domElements.budgetsTab?.addEventListener('click', showBudgets);
-  domElements.categoriesTab?.addEventListener('click', showCategories);
-  domElements.childAccountsTab?.addEventListener('click', showChildAccounts);
-  domElements.profileTab?.addEventListener('click', showProfile);
+  // Attach click event listeners
+  domElements.dashboardTab?.addEventListener('click', () => switchTab('dashboard'));
+  domElements.transactionsTab?.addEventListener('click', () => switchTab('transactions'));
+  domElements.budgetsTab?.addEventListener('click', () => switchTab('budgets'));
+  domElements.categoriesTab?.addEventListener('click', () => switchTab('categories'));
+  domElements.childAccountsTab?.addEventListener('click', () => switchTab('child-accounts'));
+  domElements.profileTab?.addEventListener('click', () => switchTab('profile'));
+
+  // Swipe detection for mobile
+  const swipeContainer = document.getElementById('swipeable-tabs');
+  if (swipeContainer && window.matchMedia('(max-width: 768px)').matches) {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const minSwipeDistance = 50; // Minimum pixels to consider a swipe
+
+    swipeContainer.addEventListener('touchstart', (event) => {
+      touchStartX = event.touches[0].clientX;
+      touchStartY = event.touches[0].clientY;
+      console.log('Touch start:', { x: touchStartX, y: touchStartY });
+    });
+
+    swipeContainer.addEventListener('touchend', (event) => {
+      const touchEndX = event.changedTouches[0].clientX;
+      const touchEndY = event.changedTouches[0].clientY;
+      const deltaX = touchEndX - touchStartX;
+      const deltaY = Math.abs(touchEndY - touchStartY);
+      console.log('Touch end:', { x: touchEndX, y: touchEndY, deltaX, deltaY });
+
+      // Ignore if vertical scroll (deltaY too large) or swipe too small
+      if (deltaY > 50 || Math.abs(deltaX) < minSwipeDistance) {
+        console.log('Ignoring touch: vertical scroll or too small');
+        return;
+      }
+
+      if (deltaX < 0 && currentTabIndex < tabs.length - 1) {
+        // Left swipe: go to next tab
+        console.log('Left swipe detected, moving to next tab');
+        switchTab(tabs[currentTabIndex + 1].id);
+      } else if (deltaX > 0 && currentTabIndex > 0) {
+        // Right swipe: go to previous tab
+        console.log('Right swipe detected, moving to previous tab');
+        switchTab(tabs[currentTabIndex - 1].id);
+      } else {
+        console.log('Swipe ignored: at tab boundary');
+      }
+    });
+  }
+
+  // Initialize with Dashboard
+  switchTab('dashboard');
 }
-
 // Profile Management
 async function setupProfile() {
   console.log('Setting up profile event listeners');
