@@ -17,25 +17,35 @@ async function retryFirestoreOperation(operation, maxRetries = 3, delay = 1000) 
 }
 
 // Fetch Exchange Rate
-async function fetchExchangeRate(cache = { rate: null, timestamp: null }, CACHE_TTL = 3600000) {
+async function fetchExchangeRate(fromCurrency, toCurrency, cache = { rate: null, timestamp: null }, CACHE_TTL = 3600000) {
   try {
     const now = Date.now();
     if (cache.rate && cache.timestamp && (now - cache.timestamp) < CACHE_TTL) {
-      console.log('Using cached exchange rate:', cache.rate);
+      console.log(`Using cached exchange rate for ${fromCurrency} to ${toCurrency}:`, cache.rate);
       return cache.rate;
     }
-    console.log('Fetching exchange rate from API');
-    const response = await fetch('https://v6.exchangerate-api.com/v6/18891e972833c8dd062c1283/latest/INR');
+    console.log(`Fetching exchange rate from API for ${fromCurrency} to ${toCurrency}`);
+    const response = await fetch(`https://v6.exchangerate-api.com/v6/18891e972833c8dd062c1283/latest/${fromCurrency}`);
     const data = await response.json();
-    if (data.result !== 'success') throw new Error('Failed to fetch exchange rate');
-    const rate = data.conversion_rates.USD;
+    if (data.result !== 'success') throw new Error(`Failed to fetch exchange rate for ${fromCurrency} to ${toCurrency}`);
+    const rate = data.conversion_rates[toCurrency];
+    if (!rate) throw new Error(`Conversion rate for ${toCurrency} not found`);
     cache.rate = rate;
     cache.timestamp = now;
-    console.log('Exchange rate fetched:', rate);
+    console.log(`Exchange rate fetched for ${fromCurrency} to ${toCurrency}:`, rate);
     return rate;
   } catch (error) {
-    console.error('Error fetching exchange rate:', error);
-    return 0.012; // Fallback rate
+    console.error(`Error fetching exchange rate for ${fromCurrency} to ${toCurrency}:`, error);
+    // Fallback rates
+    const fallbackRates = {
+      'INR_USD': 0.012,
+      'INR_ZAR': 0.22,
+      'USD_ZAR': 18.0
+    };
+    const key = `${fromCurrency}_${toCurrency}`;
+    const fallbackRate = fallbackRates[key] || 1.0;
+    console.warn(`Using fallback rate for ${key}:`, fallbackRate);
+    return fallbackRate;
   }
 }
 
