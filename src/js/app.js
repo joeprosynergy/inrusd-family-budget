@@ -319,7 +319,7 @@ async function setupProfile() {
       showError('profile-email', 'Valid email is required');
       return;
     }
-    if (!currency || !['INR', 'USD'].includes(currency)) {
+    if (!currency || !['INR', 'USD', 'ZAR'].includes(currency)) {
       showError('profile-currency', 'Valid currency is required');
       return;
     }
