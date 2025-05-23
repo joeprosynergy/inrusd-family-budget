@@ -117,10 +117,10 @@ export function setupAuth(loadAppDataCallback) {
           showError('signup-family-code', 'Family code is required for child accounts');
           return;
         }
-        console.log('Child signup: Validating family code', { familyCodeInput });
+        console.log('Child signup: Validating family code format', { familyCodeInput });
         if (!isValidFamilyCode(familyCodeInput)) {
           console.log('Child signup: Invalid family code format', { familyCodeInput });
-          showError('signup-family-code', 'Family code must be 6 alphanumeric characters');
+          showError('signup-family-code', 'Family code must be 6 uppercase alphanumeric characters (A-Z, 0-9)');
           return;
         }
         try {
@@ -128,6 +128,7 @@ export function setupAuth(loadAppDataCallback) {
           const exists = await familyCodeExists(db, familyCodeInput);
           console.log('Child signup: Existence check result', { exists });
           if (!exists) {
+            console.log('Child signup: Family code does not exist', { familyCodeInput });
             showError('signup-family-code', 'Family code does not exist');
             return;
           }
@@ -135,17 +136,18 @@ export function setupAuth(loadAppDataCallback) {
         } catch (error) {
           console.error('Child signup: Failed to validate family code', {
             code: error.code,
-            message: error.message
+            message: error.message,
+            stack: error.stack
           });
-          showError('signup-family-code', 'Failed to validate family code');
+          showError('signup-family-code', `Failed to validate family code: ${error.message}`);
           return;
         }
       } else {
         if (useExisting && familyCodeInput) {
-          console.log('Admin signup: Validating provided family code', { familyCodeInput });
+          console.log('Admin signup: Validating provided family code format', { familyCodeInput });
           if (!isValidFamilyCode(familyCodeInput)) {
             console.log('Admin signup: Invalid family code format', { familyCodeInput });
-            showError('signup-family-code', 'Family code must be 6 alphanumeric characters');
+            showError('signup-family-code', 'Family code must be 6 uppercase alphanumeric characters (A-Z, 0-9)');
             return;
           }
           try {
@@ -153,6 +155,7 @@ export function setupAuth(loadAppDataCallback) {
             const exists = await familyCodeExists(db, familyCodeInput);
             console.log('Admin signup: Uniqueness check result', { exists });
             if (exists) {
+              console.log('Admin signup: Family code already in use', { familyCodeInput });
               showError('signup-family-code', 'Family code already in use');
               return;
             }
@@ -160,9 +163,10 @@ export function setupAuth(loadAppDataCallback) {
           } catch (error) {
             console.error('Admin signup: Failed to validate family code', {
               code: error.code,
-              message: error.message
+              message: error.message,
+              stack: error.stack
             });
-            showError('signup-family-code', 'Failed to validate family code');
+            showError('signup-family-code', `Failed to validate family code: ${error.message}`);
             return;
           }
         } else {
@@ -173,9 +177,10 @@ export function setupAuth(loadAppDataCallback) {
           } catch (error) {
             console.error('Admin signup: Failed to generate family code', {
               code: error.code,
-              message: error.message
+              message: error.message,
+              stack: error.stack
             });
-            showError('signup-family-code', error.message);
+            showError('signup-family-code', `Failed to generate family code: ${error.message}`);
             return;
           }
         }
@@ -235,7 +240,7 @@ export function setupAuth(loadAppDataCallback) {
   const resetButton = checkElement('reset-button');
   if (resetButton) {
     resetButton.removeEventListener('click', handleReset); // Prevent duplicates
-    resetButton.addEventListener('click', handleReset);
+    loginButton.addEventListener('click', handleReset);
     async function handleReset() {
       console.log('Reset button clicked');
       clearErrors();
