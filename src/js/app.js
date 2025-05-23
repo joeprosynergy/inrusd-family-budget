@@ -373,27 +373,41 @@ async function setupProfile() {
     }
   });
 
-  domElements.currencyToggle?.addEventListener('change', async () => {
-    const newCurrency = domElements.currencyToggle.value;
-    console.log('Currency toggle changed to:', newCurrency);
-    try {
-      if (!currentUser || !db) {
-        throw new Error('Missing user or Firestore');
-      }
-      await retryFirestoreOperation(() => 
-        updateDoc(doc(db, 'users', currentUser.uid), { currency: newCurrency })
-      );
-      setUserCurrency(newCurrency);
-      domElements.profileCurrency.value = newCurrency;
-      await loadBudgets();
-      await loadTransactions();
-      await loadChildAccounts();
-      await updateDashboard();
-    } catch (error) {
-      console.error('Error updating currency:', error);
-      showError('currency-toggle', 'Failed to update currency.');
+// Currency Toggle Event Listener (part of setupProfile)
+domElements.currencyToggle?.addEventListener('change', async () => {
+  const newCurrency = domElements.currencyToggle.value;
+  console.log('Currency toggle changed to:', newCurrency);
+  try {
+    if (!['INR', 'USD', 'ZAR'].includes(newCurrency)) {
+      console.error('Invalid currency selected:', newCurrency);
+      showError('currency-toggle', 'Invalid currency selected.');
+      return;
     }
-  });
+    if (!currentUser || !db) {
+      throw new Error('Missing user or Firestore');
+    }
+    await retryFirestoreOperation(() => 
+      updateDoc(doc(db, 'users', currentUser.uid), { currency: newCurrency })
+    );
+    setUserCurrency(newCurrency);
+    domElements.profileCurrency.value = newCurrency;
+    // Refresh UI with new currency
+    await Promise.all([
+      loadBudgets(),
+      loadTransactions(),
+      loadChildAccounts(),
+      updateDashboard()
+    ]);
+    console.log('Currency updated and UI refreshed:', newCurrency);
+  } catch (error) {
+    console.error('Error updating currency:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    showError('currency-toggle', 'Failed to update currency.');
+  }
+});
 
   domElements.dashboardFilter?.addEventListener('change', () => {
     console.log('Dashboard filter changed:', domElements.dashboardFilter.value);
