@@ -29,7 +29,9 @@ async function loadAppData() {
   }
   try {
     console.log('Fetching exchange rate');
-    await fetchExchangeRate(exchangeRateCache); // Use exchangeRateCache from core.js
+    await fetchExchangeRate('INR', 'USD', exchangeRateCache.INR_USD);
+    await fetchExchangeRate('INR', 'ZAR', exchangeRateCache.INR_ZAR);
+    await fetchExchangeRate('USD', 'ZAR', exchangeRateCache.USD_ZAR);
     if (domElements.currencyToggle) {
       domElements.currencyToggle.value = userCurrency;
     }
@@ -56,10 +58,6 @@ async function loadAppData() {
 function getDateRangeWrapper(filter) {
   return getDateRange(filter, domElements.filterStartDate, domElements.filterEndDate);
 }
-
-// Note: This is a partial update focusing on the tab-switching logic.
-// The full app.js would include other functions (e.g., loadChildAccounts, loadProfileData).
-// Only the relevant tab-switching part is shown and updated.
 
 // Tab Switching
 function setupTabs() {
@@ -110,7 +108,7 @@ function setupTabs() {
     }
   }
 
-  // Tab show functions (unchanged)
+  // Tab show functions
   function showDashboard() {
     console.log('Showing dashboard');
     domElements.dashboardTab?.classList.add('bg-blue-800');
@@ -287,6 +285,7 @@ function setupTabs() {
   // Initialize with Dashboard
   switchTab('dashboard');
 }
+
 // Profile Management
 async function setupProfile() {
   console.log('Setting up profile event listeners');
@@ -353,9 +352,12 @@ async function setupProfile() {
       domElements.editProfile?.classList.remove('hidden');
       domElements.saveProfile?.classList.add('hidden');
       domElements.currencyToggle.value = currency;
-      await loadBudgets();
-      await loadTransactions();
-      await updateDashboard();
+      await Promise.all([
+        loadBudgets(),
+        loadTransactions(),
+        loadChildAccounts(),
+        updateDashboard()
+      ]);
     } catch (error) {
       console.error('Error saving profile:', { code: error.code, message: error.message });
       let errorMessage = error.message || 'Failed to save profile.';
@@ -369,45 +371,44 @@ async function setupProfile() {
       showError('profile-email', errorMessage);
     } finally {
       domElements.saveProfile.disabled = false;
-      domElements.saveProfile.textContent = 'Save';
+      domElements.saveProfile.textContent = 'Save Profile';
     }
   });
 
-// Currency Toggle Event Listener (part of setupProfile)
-domElements.currencyToggle?.addEventListener('change', async () => {
-  const newCurrency = domElements.currencyToggle.value;
-  console.log('Currency toggle changed to:', newCurrency);
-  try {
-    if (!['INR', 'USD', 'ZAR'].includes(newCurrency)) {
-      console.error('Invalid currency selected:', newCurrency);
-      showError('currency-toggle', 'Invalid currency selected.');
-      return;
+  domElements.currencyToggle?.addEventListener('change', async () => {
+    const newCurrency = domElements.currencyToggle.value;
+    console.log('Currency toggle changed to:', newCurrency);
+    try {
+      if (!['INR', 'USD', 'ZAR'].includes(newCurrency)) {
+        console.error('Invalid currency selected:', newCurrency);
+        showError('currency-toggle', 'Invalid currency selected.');
+        return;
+      }
+      if (!currentUser || !db) {
+        throw new Error('Missing user or Firestore');
+      }
+      await retryFirestoreOperation(() => 
+        updateDoc(doc(db, 'users', currentUser.uid), { currency: newCurrency })
+      );
+      setUserCurrency(newCurrency);
+      domElements.profileCurrency.value = newCurrency;
+      // Refresh UI with new currency
+      await Promise.all([
+        loadBudgets(),
+        loadTransactions(),
+        loadChildAccounts(),
+        updateDashboard()
+      ]);
+      console.log('Currency updated and UI refreshed:', newCurrency);
+    } catch (error) {
+      console.error('Error updating currency:', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      showError('currency-toggle', 'Failed to update currency.');
     }
-    if (!currentUser || !db) {
-      throw new Error('Missing user or Firestore');
-    }
-    await retryFirestoreOperation(() => 
-      updateDoc(doc(db, 'users', currentUser.uid), { currency: newCurrency })
-    );
-    setUserCurrency(newCurrency);
-    domElements.profileCurrency.value = newCurrency;
-    // Refresh UI with new currency
-    await Promise.all([
-      loadBudgets(),
-      loadTransactions(),
-      loadChildAccounts(),
-      updateDashboard()
-    ]);
-    console.log('Currency updated and UI refreshed:', newCurrency);
-  } catch (error) {
-    console.error('Error updating currency:', {
-      code: error.code,
-      message: error.message,
-      stack: error.stack
-    });
-    showError('currency-toggle', 'Failed to update currency.');
-  }
-});
+  });
 
   domElements.dashboardFilter?.addEventListener('change', () => {
     console.log('Dashboard filter changed:', domElements.dashboardFilter.value);
@@ -579,6 +580,11 @@ async function loadCategories() {
     }
   }
 }
+
+
+
+
+
 
 function setupCategories() {
   console.log('setupCategories: Starting');
