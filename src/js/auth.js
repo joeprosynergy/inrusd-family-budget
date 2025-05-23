@@ -106,7 +106,7 @@ export function setupAuth(loadAppDataCallback) {
         showError('signup-confirm-password', 'Passwords do not match');
         return;
       }
-      if (!currency || !['INR', 'USD'].includes(currency)) {
+      if (!currency || !['INR', 'USD', 'ZAR'].includes(currency)) {
         showError('signup-currency', 'Valid currency is required');
         return;
       }
