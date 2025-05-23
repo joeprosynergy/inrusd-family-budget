@@ -80,12 +80,13 @@ export function setupAuth(loadAppDataCallback) {
       const email = document.getElementById('signup-email')?.value.trim();
       const password = document.getElementById('signup-password')?.value;
       const confirmPassword = document.getElementById('signup-confirm-password')?.value;
-      const familyCodeInput = document.getElementById('signup-family-code')?.value.trim();
+      const familyCodeInputRaw = document.getElementById('signup-family-code')?.value || '';
+      const familyCodeInput = familyCodeInputRaw.trim().toUpperCase();
       const currency = document.getElementById('signup-currency')?.value;
       const accountType = document.getElementById('signup-account-type')?.value;
-      const useExisting = document.getElementById('use-existing-family-code')?.checked;
+      const useExisting = document.getElementById('use-existing-family-code')?.checked ?? false;
 
-      console.log('Signup inputs:', { email, currency, accountType, familyCode: familyCodeInput, useExisting });
+      console.log('Signup inputs:', { email, currency, accountType, familyCode: familyCodeInput, familyCodeRaw: familyCodeInputRaw, useExisting });
 
       // Validate inputs
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -109,63 +110,72 @@ export function setupAuth(loadAppDataCallback) {
         return;
       }
 
-      let finalFamilyCode = familyCodeInput;
+      let finalFamilyCode;
       if (accountType === 'child') {
         if (!familyCodeInput) {
+          console.log('Child signup: Missing family code');
           showError('signup-family-code', 'Family code is required for child accounts');
           return;
         }
+        console.log('Child signup: Validating family code', { familyCodeInput });
         if (!isValidFamilyCode(familyCodeInput)) {
+          console.log('Child signup: Invalid family code format', { familyCodeInput });
           showError('signup-family-code', 'Family code must be 6 alphanumeric characters');
           return;
         }
         try {
+          console.log('Child signup: Checking family code existence', { familyCodeInput });
           const exists = await familyCodeExists(db, familyCodeInput);
+          console.log('Child signup: Existence check result', { exists });
           if (!exists) {
             showError('signup-family-code', 'Family code does not exist');
             return;
           }
+          finalFamilyCode = familyCodeInput;
         } catch (error) {
+          console.error('Child signup: Failed to validate family code', {
+            code: error.code,
+            message: error.message
+          });
           showError('signup-family-code', 'Failed to validate family code');
           return;
         }
       } else {
         if (useExisting && familyCodeInput) {
+          console.log('Admin signup: Validating provided family code', { familyCodeInput });
           if (!isValidFamilyCode(familyCodeInput)) {
+            console.log('Admin signup: Invalid family code format', { familyCodeInput });
             showError('signup-family-code', 'Family code must be 6 alphanumeric characters');
             return;
           }
           try {
+            console.log('Admin signup: Checking family code uniqueness', { familyCodeInput });
             const exists = await familyCodeExists(db, familyCodeInput);
+            console.log('Admin signup: Uniqueness check result', { exists });
             if (exists) {
               showError('signup-family-code', 'Family code already in use');
               return;
             }
+            finalFamilyCode = familyCodeInput;
           } catch (error) {
+            console.error('Admin signup: Failed to validate family code', {
+              code: error.code,
+              message: error.message
+            });
             showError('signup-family-code', 'Failed to validate family code');
-            return;
-          }
-        } else if (!familyCodeInput) {
-          try {
-            finalFamilyCode = await generateFamilyCode(db);
-            console.log('Generated family code:', finalFamilyCode);
-          } catch (error) {
-            showError('signup-family-code', error.message);
             return;
           }
         } else {
-          if (!isValidFamilyCode(familyCodeInput)) {
-            showError('signup-family-code', 'Family code must be 6 alphanumeric characters');
-            return;
-          }
           try {
-            const exists = await familyCodeExists(db, familyCodeInput);
-            if (exists) {
-              showError('signup-family-code', 'Family code already in use');
-              return;
-            }
+            console.log('Admin signup: Generating family code');
+            finalFamilyCode = await generateFamilyCode(db);
+            console.log('Admin signup: Generated family code', { finalFamilyCode });
           } catch (error) {
-            showError('signup-family-code', 'Failed to validate family code');
+            console.error('Admin signup: Failed to generate family code', {
+              code: error.code,
+              message: error.message
+            });
+            showError('signup-family-code', error.message);
             return;
           }
         }
@@ -174,8 +184,10 @@ export function setupAuth(loadAppDataCallback) {
       try {
         signupButton.disabled = true;
         signupButton.textContent = 'Signing up...';
+        console.log('Attempting createUserWithEmailAndPassword', { email });
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         console.log('Signup successful:', userCredential.user.uid);
+        console.log('Creating user document', { uid: userCredential.user.uid, familyCode: finalFamilyCode });
         await setDoc(doc(db, 'users', userCredential.user.uid), {
           email,
           familyCode: finalFamilyCode,
