@@ -1,8 +1,23 @@
+# Netlify configuration for inrusd-family-budget
 [build]
   command = "npm run build"
   publish = "public"
 
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+# Cache headers for static assets
+[[headers]]
+  for = "/js.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Netlify-CDN-Cache-Control = "public, s-maxage=31536000, durable"
+
+[[headers]]
+  for = "/assets/tailwind.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Netlify-CDN-Cache-Control = "public, s-maxage=31536000, durable"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "public, s-maxage=0, must-revalidate"
