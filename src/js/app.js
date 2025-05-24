@@ -19,7 +19,7 @@ import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
 let isEditing = { transaction: false, budget: false, category: false, profile: false, childTransaction: false };
 let currentChildUserId = null;
 let currentAccountType = null;
-let loadedTabs = { categories: false, budgets: false, transactions: false, childAccounts: false }; // Track loaded tabs
+let loadedTabs = { budgets: false, transactions: false, childAccounts: false }; // Removed categories from lazy-loading
 
 // Load App Data
 async function loadAppData() {
@@ -38,9 +38,10 @@ async function loadAppData() {
     }
     await Promise.all([
       loadProfileData(),
+      loadCategories(), // Added to ensure category list is available for Transactions
       updateDashboard()
     ]);
-    console.log('loadAppData: Complete (Dashboard and Profile loaded)');
+    console.log('loadAppData: Complete (Dashboard, Profile, and Categories loaded)');
   } catch (error) {
     console.error('loadAppData error:', {
       code: error.code,
@@ -165,26 +166,24 @@ function setupTabs() {
     }
   }
 
-  async function showCategories() {
-    console.log('Showing categories');
-    domElements.categoriesTab?.classList.add('bg-blue-800');
-    domElements.dashboardTab?.classList.remove('bg-blue-800');
-    domElements.transactionsTab?.classList.remove('bg-blue-800');
-    domElements.budgetsTab?.classList.remove('bg-blue-800');
-    domElements.childAccountsTab?.classList.remove('bg-blue-800');
-    domElements.profileTab?.classList.remove('bg-blue-800');
-    domElements.categoriesSection?.classList.remove('hidden');
-    domElements.dashboardSection?.classList.add('hidden');
-    domElements.transactionsSection?.classList.add('hidden');
-    domElements.budgetsSection?.classList.add('hidden');
-    domElements.childAccountsSection?.classList.add('hidden');
-    domElements.profileSection?.classList.add('hidden');
-    if (domElements.pageTitle) domElements.pageTitle.textContent = 'Categories';
-    if (!loadedTabs.categories) {
-      await loadCategories();
-      loadedTabs.categories = true;
-    }
-  }
+ // Tab Switching (only showCategories updated)
+async function showCategories() {
+  console.log('Showing categories');
+  domElements.categoriesTab?.classList.add('bg-blue-800');
+  domElements.dashboardTab?.classList.remove('bg-blue-800');
+  domElements.transactionsTab?.classList.remove('bg-blue-800');
+  domElements.budgetsTab?.classList.remove('bg-blue-800');
+  domElements.childAccountsTab?.classList.remove('bg-blue-800');
+  domElements.profileTab?.classList.remove('bg-blue-800');
+  domElements.categoriesSection?.classList.remove('hidden');
+  domElements.dashboardSection?.classList.add('hidden');
+  domElements.transactionsSection?.classList.add('hidden');
+  domElements.budgetsSection?.classList.add('hidden');
+  domElements.childAccountsSection?.classList.add('hidden');
+  domElements.profileSection?.classList.add('hidden');
+  if (domElements.pageTitle) domElements.pageTitle.textContent = 'Categories';
+  // Removed loadCategories call since it's pre-loaded in loadAppData
+}
 
   async function showChildAccounts() {
     console.log('Showing child accounts');
