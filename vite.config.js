@@ -1,24 +1,33 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  root: 'src', // Root is src/ where index.html resides
   build: {
-    outDir: '../public', // Output to public/ relative to src/
-    assetsDir: 'assets', // Subdirectory for CSS
-    rollupOptions: {
-      input: {
-        js: 'src/js/index.js', // JavaScript entry point, outputs js.js
-        tailwind: 'src/css/tailwind.css', // Tailwind CSS entry point
-        index: 'src/index.html' // HTML entry point
+    outDir: 'public',
+    minify: 'terser', // Enable Terser minification
+    terserOptions: {
+      compress: {
+        drop_console: false, // Keep console logs for debugging
+        drop_debugger: true,
+        pure_funcs: ['console.info', 'console.debug'], // Remove non-essential logs
       },
-      output: {
-        entryFileNames: '[name].js', // Output JS as js.js
-        assetFileNames: 'assets/[name].[ext]' // Output CSS to assets/tailwind.css
-      }
+      mangle: true, // Mangle variable names
+      format: {
+        comments: false, // Remove comments
+      },
     },
-    sourcemap: true // Generate sourcemaps
+    rollupOptions: {
+      output: {
+        // Code splitting: Create chunks for non-critical modules
+        manualChunks: {
+          'auth-core': ['./src/js/auth.js', './src/js/core.js'], // Critical: auth and UI init
+          'app-tabs': ['./src/js/app.js'], // Non-critical: tab logic
+          'firebase': ['firebase/auth', 'firebase/firestore'], // Firebase SDK
+        },
+        // Ensure chunk filenames include hashes for caching
+        entryFileNames: '[name].[hash].js',
+        chunkFileNames: '[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash][extname]',
+      },
+    },
   },
-  publicDir: false, // Disable publicDir to avoid overlap
-  envPrefix: 'VITE_', // For Firebase config variables
-  base: '/' // Base URL for Netlify
 });
