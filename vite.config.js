@@ -4,6 +4,7 @@ export default defineConfig({
   root: 'src', // Root is src/ where index.html resides
   build: {
     outDir: '../public', // Output to public/ relative to src/
+    emptyOutDir: true, // Clear public/ to avoid stale files
     assetsDir: 'assets', // Subdirectory for CSS
     minify: 'terser', // Enable Terser minification
     terserOptions: {
@@ -15,12 +16,12 @@ export default defineConfig({
     },
     rollupOptions: {
       input: {
-        js: 'src/js/index.js', // JavaScript entry point, outputs js.js
+        js: 'src/js/index.js', // JavaScript entry point
         tailwind: 'src/css/tailwind.css', // Tailwind CSS entry point
         index: 'src/index.html' // HTML entry point
       },
       output: {
-        entryFileNames: '[name].[hash].js', // Add hash for cache busting
+        entryFileNames: '[name].[hash].js', // Output with hash (e.g., js.12345.js)
         chunkFileNames: 'assets/[name].[hash].js', // Dynamic chunks with hash
         assetFileNames: 'assets/[name].[hash].[ext]', // CSS with hash
         manualChunks(id) {
