@@ -19,11 +19,27 @@ async function retryFirestoreOperation(operation, maxRetries = 3, delay = 1000) 
 // Fetch Exchange Rate
 async function fetchExchangeRate(fromCurrency, toCurrency, cache = { rate: null, timestamp: null }, CACHE_TTL = 3600000) {
   try {
+    const cacheKey = `exchangeRate_${fromCurrency}_${toCurrency}`;
+    const cachedData = localStorage.getItem(cacheKey);
     const now = Date.now();
+
+    // Check localStorage cache
+    if (cachedData) {
+      const { rate, timestamp } = JSON.parse(cachedData);
+      if (timestamp && (now - timestamp) < CACHE_TTL) {
+        console.log(`Using localStorage cached exchange rate for ${fromCurrency} to ${toCurrency}:`, rate);
+        cache.rate = rate;
+        cache.timestamp = timestamp;
+        return rate;
+      }
+    }
+
+    // Check in-memory cache
     if (cache.rate && cache.timestamp && (now - cache.timestamp) < CACHE_TTL) {
-      console.log(`Using cached exchange rate for ${fromCurrency} to ${toCurrency}:`, cache.rate);
+      console.log(`Using in-memory cached exchange rate for ${fromCurrency} to ${toCurrency}:`, cache.rate);
       return cache.rate;
     }
+
     console.log(`Fetching exchange rate from API for ${fromCurrency} to ${toCurrency}`);
     const response = await fetch(`https://v6.exchangerate-api.com/v6/18891e972833c8dd062c1283/latest/${fromCurrency}`);
     const data = await response.json();
@@ -32,7 +48,10 @@ async function fetchExchangeRate(fromCurrency, toCurrency, cache = { rate: null,
     if (!rate) throw new Error(`Conversion rate for ${toCurrency} not found`);
     cache.rate = rate;
     cache.timestamp = now;
-    console.log(`Exchange rate fetched for ${fromCurrency} to ${toCurrency}:`, rate);
+    
+    // Store in localStorage
+    localStorage.setItem(cacheKey, JSON.stringify({ rate, timestamp: now }));
+    console.log(`Exchange rate fetched and cached for ${fromCurrency} to ${toCurrency}:`, rate);
     return rate;
   } catch (error) {
     console.error(`Error fetching exchange rate for ${fromCurrency} to ${toCurrency}:`, error);
