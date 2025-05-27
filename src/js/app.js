@@ -1249,11 +1249,11 @@ async function loadTransactions() {
     }
 
     // Get date range from filter
-    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'allTime');
+    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
     console.log('loadTransactions: Date range', { start: start.toISOString(), end: end.toISOString() });
 
     // Determine month for header (use filter's start date or fallback to current month)
-    const filterMonth = domElements.dashboardFilter?.value && domElements.dashboardFilter.value !== 'allTime'
+    const filterMonth = domElements.dashboardFilter?.value && domElements.dashboardFilter.value !== 'thisMonth'
       ? start.toLocaleString('en-US', { month: 'short' })
       : new Date().toLocaleString('en-US', { month: 'short' });
     dateHeader.textContent = filterMonth;
@@ -1800,10 +1800,10 @@ if (!childTransactionTable || !childBalance || !dateHeader) {
 
 childTransactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
 
-const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'allTime');
+const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
 console.log('loadChildTransactions: Date range', { start: start.toISOString(), end: end.toISOString() });
 
-const filterMonth = domElements.dashboardFilter?.value && domElements.dashboardFilter.value !== 'allTime'
+const filterMonth = domElements.dashboardFilter?.value && domElements.dashboardFilter.value !== 'thisMonth'
   ? start.toLocaleString('en-US', { month: 'short' })
   : new Date().toLocaleString('en-US', { month: 'short' });
 dateHeader.textContent = filterMonth;
