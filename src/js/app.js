@@ -2321,149 +2321,261 @@ return 0;
 }
 }
 
+
+
+
+
+
+
+// Helper function to create/update pie chart
+async function renderSpendingPieChart(spendingByCategory, currency) {
+  console.log('renderSpendingPieChart: Starting', { categories: Object.keys(spendingByCategory).length });
+  const canvas = document.getElementById('spending-pie-chart');
+  if (!canvas) {
+    console.error('renderSpendingPieChart: Canvas element not found');
+    showError('balance', 'Chart container not found');
+    return;
+  }
+
+  // Destroy existing chart instance if it exists
+  if (canvas.chart) {
+    canvas.chart.destroy();
+    console.log('renderSpendingPieChart: Destroyed existing chart');
+  }
+
+  const labels = Object.keys(spendingByCategory);
+  if (labels.length === 0) {
+    canvas.style.display = 'none';
+    const container = canvas.parentElement;
+    if (container) {
+      container.innerHTML += '<p class="text-center py-4">No spending data for this period</p>';
+    }
+    console.log('renderSpendingPieChart: No data to display');
+    return;
+  }
+
+  const data = Object.values(spendingByCategory);
+  const backgroundColors = labels.map((_, index) => {
+    const colors = [
+      '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+      '#FF9F40', '#C9CBCF', '#7BC225', '#FF5733', '#C70039'
+    ];
+    return colors[index % colors.length];
+  });
+
+  canvas.style.display = 'block';
+  const ctx = canvas.getContext('2d');
+  canvas.chart = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: backgroundColors,
+        borderColor: '#fff',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: (context) => `${context.label}: ${formatCurrency(context.parsed, currency)}`
+          }
+        }
+      }
+    }
+  });
+  console.log('renderSpendingPieChart: Chart rendered', { labels, data });
+}
+
+// Updated updateDashboard function
 async function updateDashboard() {
-console.log('updateDashboard: Starting', {
-accountType: currentAccountType,
-userId: currentUser?.uid,
-userEmail: currentUser?.email
-});
-try {
-if (!db) {
-  console.error('updateDashboard: Firestore not available');
-  showError('balance', 'Database service not available');
-  return;
-}
-if (!currentUser || !currentUser.uid) {
-  console.error('updateDashboard: Current user not available', { currentUser });
-  showError('balance', 'User not authenticated');
-  return;
-}
-
-const balanceElement = document.getElementById('balance');
-const afterBudgetElement = document.getElementById('after-budget');
-const totalBudgetElement = document.getElementById('total-budget');
-const totalRemainingElement = document.getElementById('total-remaining');
-const childTilesElement = document.getElementById('child-tiles');
-if (!balanceElement || !afterBudgetElement || !totalBudgetElement || !totalRemainingElement || !childTilesElement) {
-  console.error('updateDashboard: Missing DOM elements', {
-    balanceElement: !!balanceElement,
-    afterBudgetElement: !!afterBudgetElement,
-    totalBudgetElement: !!totalBudgetElement,
-    totalRemainingElement: !!totalRemainingElement,
-    childTilesElement: !!childTilesElement
+  console.log('updateDashboard: Starting', {
+    accountType: currentAccountType,
+    userId: currentUser?.uid,
+    userEmail: currentUser?.email
   });
-  showError('balance', 'Dashboard elements not found');
-  return;
-}
+  try {
+    if (!db) {
+      console.error('updateDashboard: Firestore not available');
+      showError('balance', 'Database service not available');
+      return;
+    }
+    if (!currentUser || !currentUser.uid) {
+      console.error('updateDashboard: Current user not available', { currentUser });
+      showError('balance', 'User not authenticated');
+      return;
+    }
 
-const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
-console.log('updateDashboard: Date range', { start: start.toISOString(), end: end.toISOString() });
+    const balanceElement = document.getElementById('balance');
+    const afterBudgetElement = document.getElementById('after-budget');
+    const totalBudgetElement = document.getElementById('total-budget');
+    const totalRemainingElement = document.getElementById('total-remaining');
+    const childTilesElement = document.getElementById('child-tiles');
+    if (!balanceElement || !afterBudgetElement || !totalBudgetElement || !totalRemainingElement || !childTilesElement) {
+      console.error('updateDashboard: Missing DOM elements', {
+        balanceElement: !!balanceElement,
+        afterBudgetElement: !!afterBudgetElement,
+        totalBudgetElement: !!totalBudgetElement,
+        totalRemainingElement: !!totalRemainingElement,
+        childTilesElement: !!childTilesElement
+      });
+      showError('balance', 'Dashboard elements not found');
+      return;
+    }
 
-if (currentAccountType === 'child') {
-  console.log('updateDashboard: Child mode, calculating child balance');
-  const childBalance = await calculateChildBalance(currentUser.uid);
-  console.log('updateDashboard: Child balance computed', { childBalance });
+    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
+    console.log('updateDashboard: Date range', { start: start.toISOString(), end: end.toISOString() });
 
-  childTilesElement.innerHTML = '';
-  const tile = document.createElement('div');
-  tile.classList.add('bg-white', 'p-4', 'sm:p-6', 'rounded-lg', 'shadow-md');
-  tile.innerHTML = `
-    <h3 class="text-base sm:text-lg font-semibold text-gray-700">Your Balance</h3>
-    <p class="text-lg sm:text-2xl font-bold text-gray-900">${await formatCurrency(childBalance, 'INR')}</p>
-  `;
-  childTilesElement.appendChild(tile);
-  console.log('updateDashboard: Child balance tile added', { childBalance });
+    if (currentAccountType === 'child') {
+      console.log('updateDashboard: Child mode, calculating child balance');
+      const childBalance = await calculateChildBalance(currentUser.uid);
+      console.log('updateDashboard: Child balance computed', { childBalance });
 
-  childTilesElement.style.display = 'block';
-  childTilesElement.offsetHeight;
-  console.log('updateDashboard: Child tiles element updated', {
-    display: childTilesElement.style.display,
-    childCount: childTilesElement.children.length,
-    innerHTML: childTilesElement.innerHTML.substring(0, 100) + '...'
-  });
+      childTilesElement.innerHTML = '';
+      const tile = document.createElement('div');
+      tile.classList.add('bg-white', 'p-4', 'sm:p-6', 'rounded-lg', 'shadow-md');
+      tile.innerHTML = `
+        <h3 class="text-base sm:text-lg font-semibold text-gray-700">Your Balance</h3>
+        <p class="text-lg sm:text-2xl font-bold text-gray-900">${await formatCurrency(childBalance, 'INR')}</p>
+      `;
+      childTilesElement.appendChild(tile);
+      console.log('updateDashboard: Child balance tile added', { childBalance });
 
-  if (balanceElement.parentElement) {
-    balanceElement.parentElement.classList.add('hidden');
-    balanceElement.textContent = 'N/A';
-    console.log('updateDashboard: Balance tile hidden');
-  }
-  if (afterBudgetElement.parentElement) {
-    afterBudgetElement.parentElement.classList.add('hidden');
-    afterBudgetElement.textContent = 'N/A';
-    console.log('updateDashboard: After-budget tile hidden');
-  }
-  if (totalBudgetElement.parentElement) {
-    totalBudgetElement.parentElement.classList.add('hidden');
-    totalBudgetElement.textContent = 'N/A';
-    totalRemainingElement.textContent = 'N/A';
-    console.log('updateDashboard: Total budget tile hidden');
-  }
-} else {
-  console.log('updateDashboard: Admin mode, calculating family balance');
-  let totalBalance = 0;
-  let totalBudgetAmount = 0;
-  let totalSpent = 0;
+      childTilesElement.style.display = 'block';
+      childTilesElement.offsetHeight;
+      console.log('updateDashboard: Child tiles element updated', {
+        display: childTilesElement.style.display,
+        childCount: childTilesElement.children.length,
+        innerHTML: childTilesElement.innerHTML.substring(0, 100) + '...'
+      });
 
-  await retryFirestoreOperation(async () => {
-    const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
-    const snapshot = await getDocs(transactionsQuery);
-    console.log('updateDashboard: Transactions fetched', { count: snapshot.size });
-    snapshot.forEach(doc => {
-      const transaction = doc.data();
-      const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
-      if (createdAt >= start && createdAt <= end) {
-        totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+      if (balanceElement.parentElement) {
+        balanceElement.parentElement.classList.add('hidden');
+        balanceElement.textContent = 'N/A';
+        console.log('updateDashboard: Balance tile hidden');
       }
-    });
-    console.log('updateDashboard: Total balance calculated', { totalBalance });
-  });
-
-  await retryFirestoreOperation(async () => {
-    const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
-    const snapshot = await getDocs(budgetsQuery);
-    console.log('updateDashboard: Budgets fetched', { count: snapshot.size });
-    snapshot.forEach(doc => {
-      const budget = doc.data();
-      const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
-      if (createdAt >= start && createdAt <= end) {
-        totalBudgetAmount += budget.amount;
-        totalSpent += budget.spent || 0;
+      if (afterBudgetElement.parentElement) {
+        afterBudgetElement.parentElement.classList.add('hidden');
+        afterBudgetElement.textContent = 'N/A';
+        console.log('updateDashboard: After-budget tile hidden');
       }
+      if (totalBudgetElement.parentElement) {
+        totalBudgetElement.parentElement.classList.add('hidden');
+        totalBudgetElement.textContent = 'N/A';
+        totalRemainingElement.textContent = 'N/A';
+        console.log('updateDashboard: Total budget tile hidden');
+      }
+
+      // Child accounts don't see the pie chart
+      const chartContainer = document.getElementById('spending-chart-container');
+      if (chartContainer) {
+        chartContainer.classList.add('hidden');
+        console.log('updateDashboard: Pie chart hidden for child account');
+      }
+    } else {
+      console.log('updateDashboard: Admin mode, calculating family balance and spending');
+      let totalBalance = 0;
+      let totalBudgetAmount = 0;
+      let totalSpent = 0;
+      const spendingByCategory = {};
+
+      // Pre-fetch categories for mapping
+      const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
+      const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
+      const categoryMap = new Map();
+      categoriesSnapshot.forEach(doc => {
+        categoryMap.set(doc.id, doc.data().name);
+      });
+      console.log('updateDashboard: Categories loaded', { count: categoriesSnapshot.size });
+
+      // Fetch transactions
+      await retryFirestoreOperation(async () => {
+        const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
+        const snapshot = await getDocs(transactionsQuery);
+        console.log('updateDashboard: Transactions fetched', { count: snapshot.size });
+        snapshot.forEach(doc => {
+          const transaction = doc.data();
+          const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
+          if (createdAt >= start && createdAt <= end) {
+            totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+            if (transaction.type === 'debit' && transaction.categoryId) {
+              const categoryName = categoryMap.get(transaction.categoryId) || 'Uncategorized';
+              spendingByCategory[categoryName] = (spendingByCategory[categoryName] || 0) + transaction.amount;
+            }
+          }
+        });
+        console.log('updateDashboard: Total balance and spending calculated', { totalBalance, categories: Object.keys(spendingByCategory) });
+      });
+
+      // Fetch budgets
+      await retryFirestoreOperation(async () => {
+        const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
+        const snapshot = await getDocs(budgetsQuery);
+        console.log('updateDashboard: Budgets fetched', { count: snapshot.size });
+        snapshot.forEach(doc => {
+          const budget = doc.data();
+          const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
+          if (createdAt >= start && createdAt <= end) {
+            totalBudgetAmount += budget.amount;
+            totalSpent += budget.spent || 0;
+          }
+        });
+        console.log('updateDashboard: Budgets calculated', { totalBudgetAmount, totalSpent });
+      });
+
+      // Update existing tiles
+      balanceElement.textContent = await formatCurrency(totalBalance, 'INR');
+      balanceElement.parentElement.classList.remove('hidden');
+      totalBudgetElement.textContent = await formatCurrency(totalBudgetAmount, 'INR');
+      totalRemainingElement.textContent = await formatCurrency(totalBudgetAmount - totalSpent, 'INR');
+      totalBudgetElement.parentElement.classList.remove('hidden');
+      const afterBudget = totalBalance - (totalBudgetAmount - totalSpent);
+      afterBudgetElement.textContent = await formatCurrency(afterBudget, 'INR');
+      balanceElement.parentElement.classList.remove('hidden');
+      console.log('updateDashboard: Tiles updated', {
+        totalBalance,
+        totalBudgetAmount,
+        totalSpent,
+        unspent: totalBudgetAmount - totalSpent,
+        afterBudget
+      });
+
+      // Render pie chart for admin
+      const chartContainer = document.getElementById('spending-chart-container');
+      if (chartContainer) {
+        chartContainer.classList.remove('hidden');
+        await renderSpendingPieChart(spendingByCategory, userCurrency);
+      } else {
+        console.error('updateDashboard: Chart container not found');
+        showError('balance', 'Chart container not found');
+      }
+
+      await loadBudgets();
+      childTilesElement.innerHTML = '';
+      await loadChildTiles();
+      console.log('updateDashboard: Admin child tiles loaded');
+    }
+    console.log('updateDashboard: Complete');
+  } catch (error) {
+    console.error('updateDashboard error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
     });
-    console.log('updateDashboard: Budgets calculated', { totalBudgetAmount, totalSpent });
-  });
+    showError('balance', `Failed to update dashboard: ${error.message}`);
+  }
+}
 
-  balanceElement.textContent = await formatCurrency(totalBalance, 'INR');
-  balanceElement.parentElement.classList.remove('hidden');
-  totalBudgetElement.textContent = await formatCurrency(totalBudgetAmount, 'INR');
-  totalRemainingElement.textContent = await formatCurrency(totalBudgetAmount - totalSpent, 'INR');
-  totalBudgetElement.parentElement.classList.remove('hidden');
-  const afterBudget = totalBalance - (totalBudgetAmount - totalSpent);
-  afterBudgetElement.textContent = await formatCurrency(afterBudget, 'INR');
-  balanceElement.parentElement.classList.remove('hidden');
-  console.log('updateDashboard: Tiles updated', {
-    totalBalance,
-    totalBudgetAmount,
-    totalSpent,
-    unspent: totalBudgetAmount - totalSpent,
-    afterBudget
-  });
 
-  await loadBudgets();
-  childTilesElement.innerHTML = '';
-  await loadChildTiles();
-  console.log('updateDashboard: Admin child tiles loaded');
-}
-console.log('updateDashboard: Complete');
-} catch (error) {
-console.error('updateDashboard error:', {
-  code: error.code,
-  message: error.message,
-  stack: error.stack
-});
-showError('balance', `Failed to update dashboard: ${error.message}`);
-}
-}
+
+
+
+
+
 
 async function setupLogout() {
 console.log('setupLogout: Starting');
