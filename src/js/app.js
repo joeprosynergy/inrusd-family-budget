@@ -2330,15 +2330,19 @@ return 0;
 // Helper function to render pie chart
 async function renderSpendingPieChart(spendingByCategory, currency) {
   console.log('renderSpendingPieChart: Starting', { categories: Object.keys(spendingByCategory).length });
-  try {
-    const container = document.getElementById('spending-chart-container');
-    const canvas = document.getElementById('spending-pie-chart');
-    if (!canvas || !container) {
-      console.error('renderSpendingPieChart: Missing DOM elements', { canvas: !!canvas, container: !!container });
-      return;
+  const container = document.getElementById('spending-chart-container');
+  const canvas = document.getElementById('spending-pie-chart');
+  
+  if (!container || !canvas) {
+    console.error('renderSpendingPieChart: Missing DOM elements', { container: !!container, canvas: !!canvas });
+    if (container) {
+      container.innerHTML = '<p class="text-center py-4 text-gray-600 text-sm">Chart failed to load</p>';
     }
+    return;
+  }
 
-    // Clear any existing chart
+  try {
+    // Clear existing chart
     if (canvas.chart) {
       canvas.chart.destroy();
       console.log('renderSpendingPieChart: Destroyed existing chart');
@@ -2346,21 +2350,27 @@ async function renderSpendingPieChart(spendingByCategory, currency) {
 
     const labels = Object.keys(spendingByCategory);
     if (labels.length === 0) {
-      container.innerHTML = '<p class="text-center py-4 text-gray-600">No spending data for this period</p>';
+      container.innerHTML = '<p class="text-center py-4 text-gray-600 text-sm">No spending data for this period</p>';
       console.log('renderSpendingPieChart: No data to display');
       return;
     }
 
+    // Ensure canvas is intact
+    canvas.innerHTML = '';
     const data = Object.values(spendingByCategory);
     const backgroundColors = labels.map((_, index) => [
       '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
       '#FF9F40', '#C9CBCF', '#7BC225', '#FF5733', '#C70039'
     ][index % 10]);
 
-    container.innerHTML = '<h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Spending by Category</h3><canvas id="spending-pie-chart" style="max-width: 400px; margin: 0 auto;"></canvas>';
-    const newCanvas = document.getElementById('spending-pie-chart');
-    const ctx = newCanvas.getContext('2d');
-    newCanvas.chart = new Chart(ctx, {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      console.error('renderSpendingPieChart: Failed to get canvas context');
+      container.innerHTML = '<p class="text-center py-4 text-gray-600 text-sm">Chart rendering failed</p>';
+      return;
+    }
+
+    canvas.chart = new Chart(ctx, {
       type: 'pie',
       data: {
         labels,
@@ -2373,6 +2383,7 @@ async function renderSpendingPieChart(spendingByCategory, currency) {
       },
       options: {
         responsive: true,
+        maintainAspectRatio: false,
         plugins: {
           legend: { position: 'top' },
           tooltip: {
@@ -2383,9 +2394,10 @@ async function renderSpendingPieChart(spendingByCategory, currency) {
         }
       }
     });
-    console.log('renderSpendingPieChart: Chart rendered', { labels });
+    console.log('renderSpendingPieChart: Chart rendered successfully', { labels, data });
   } catch (error) {
-    console.error('renderSpendingPieChart error:', { message: error.message });
+    console.error('renderSpendingPieChart: Error', { message: error.message, stack: error.stack });
+    container.innerHTML = '<p class="text-center py-4 text-gray-600 text-sm">Error loading chart</p>';
   }
 }
 
@@ -2460,7 +2472,7 @@ async function updateDashboard() {
         const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
         snapshot.forEach(doc => {
           const transaction = doc.data();
-          const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
+          const createdAt = transaction.createdAt && transaction.createdAt.toDate ? new Date(transaction.createdAt.toDate()) : new Date();
           if (createdAt >= start && createdAt <= end) {
             totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
             if (transaction.type === 'debit' && transaction.categoryId) {
@@ -2469,7 +2481,7 @@ async function updateDashboard() {
             }
           }
         });
-        console.log('updateDashboard: Transactions processed', { totalBalance });
+        console.log('updateDashboard: Transactions processed', { totalBalance, categories: Object.keys(spendingByCategory) });
       } catch (error) {
         console.error('updateDashboard: Transaction fetch error', { message: error.message });
       }
@@ -2480,7 +2492,7 @@ async function updateDashboard() {
         const snapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
         snapshot.forEach(doc => {
           const budget = doc.data();
-          const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
+          const createdAt = budget.createdAt && budget.createdAt.toDate ? new Date(budget.createdAt.toDate()) : new Date();
           if (createdAt >= start && createdAt <= end) {
             totalBudgetAmount += budget.amount;
             totalSpent += budget.spent || 0;
@@ -2505,6 +2517,8 @@ async function updateDashboard() {
       if (chartContainer) {
         chartContainer.classList.remove('hidden');
         await renderSpendingPieChart(spendingByCategory, userCurrency);
+      } else {
+        console.error('updateDashboard: Chart container missing');
       }
 
       await loadBudgets();
@@ -2513,7 +2527,7 @@ async function updateDashboard() {
       console.log('updateDashboard: Admin mode complete');
     }
   } catch (error) {
-    console.error('updateDashboard error:', { message: error.message });
+    console.error('updateDashboard: Error', { message: error.message, stack: error.stack });
     showError('balance', 'Failed to load dashboard');
   }
 }
