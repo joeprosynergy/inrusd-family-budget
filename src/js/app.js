@@ -1,3 +1,4 @@
+import Chart from 'chart.js/auto';
 import {
   auth,
   db,
@@ -19,7 +20,83 @@ import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
 let isEditing = { transaction: false, budget: false, category: false, profile: false, childTransaction: false };
 let currentChildUserId = null;
 let currentAccountType = null;
-let loadedTabs = { budgets: false, transactions: false, childAccounts: false }; // Removed categories from lazy-loading
+let loadedTabs = { budgets: false, transactions: false, childAccounts: false };
+
+// Helper function to render pie chart
+async function renderSpendingPieChart(spendingByCategory, currency) {
+  const logError = (message, details) => {
+    const error = { message, details, timestamp: new Date().toISOString() };
+    localStorage.setItem('chartError', JSON.stringify(error));
+    console.error('renderSpendingPieChart:', error);
+  };
+
+  try {
+    const container = document.getElementById('spending-chart-container');
+    const canvas = document.getElementById('spending-pie-chart');
+    
+    if (!container || !canvas) {
+      logError('Missing DOM elements', { container: !!container, canvas: !!canvas });
+      if (container) {
+        container.innerHTML = '<h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Spending by Category</h3><p class="text-center py-4 text-gray-600 text-sm">Chart failed to load</p>';
+      }
+      return;
+    }
+
+    if (canvas.chart) {
+      canvas.chart.destroy();
+    }
+
+    const labels = Object.keys(spendingByCategory);
+    if (labels.length === 0) {
+      container.innerHTML = '<h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Spending by Category</h3><p class="text-center py-4 text-gray-600 text-sm">No spending data for this period</p>';
+      return;
+    }
+
+    const data = Object.values(spendingByCategory);
+    const backgroundColors = labels.map((_, index) => [
+      '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+      '#FF9F40', '#C9CBCF', '#7BC225', '#FF5733', '#C70039'
+    ][index % 10]);
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      logError('Failed to get canvas context', {});
+      container.innerHTML = '<h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Spending by Category</h3><p class="text-center py-4 text-gray-600 text-sm">Chart rendering failed</p>';
+      return;
+    }
+
+    canvas.chart = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: backgroundColors,
+          borderColor: '#fff',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top' },
+          tooltip: {
+            callbacks: {
+              label: (context) => `${context.label}: ${formatCurrency(context.parsed, currency)}`
+            }
+          }
+        }
+      }
+    });
+  } catch (error) {
+    logError('Rendering error', { message: error.message, stack: error.stack });
+    const container = document.getElementById('spending-chart-container');
+    if (container) {
+      container.innerHTML = '<h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Spending by Category</h3><p class="text-center py-4 text-gray-600 text-sm">Error loading chart</p>';
+    }
+  }
+}
 
 // Load App Data
 async function loadAppData() {
@@ -2327,91 +2404,6 @@ return 0;
 
 
 
-// Helper function to render pie chart
-async function renderSpendingPieChart(spendingByCategory, currency) {
-  const logError = (message, details) => {
-    const error = { message, details, timestamp: new Date().toISOString() };
-    localStorage.setItem('chartError', JSON.stringify(error));
-    console.error('renderSpendingPieChart:', error);
-  };
-
-  try {
-    const container = document.getElementById('spending-chart-container');
-    const canvas = document.getElementById('spending-pie-chart');
-    
-    if (!container || !canvas) {
-      logError('Missing DOM elements', { container: !!container, canvas: !!canvas });
-      if (container) {
-        container.innerHTML = '<p class="text-center py-4 text-gray-600 text-sm">Chart failed to load</p>';
-      }
-      return;
-    }
-
-    // Verify Chart.js
-    if (!window.Chart) {
-      logError('Chart.js not loaded', { chartAvailable: false });
-      container.innerHTML = '<p class="text-center py-4 text-gray-600 text-sm">Chart library not loaded</p>';
-      return;
-    }
-
-    // Clear existing chart
-    if (canvas.chart) {
-      canvas.chart.destroy();
-    }
-
-    const labels = Object.keys(spendingByCategory);
-    if (labels.length === 0) {
-      container.innerHTML = '<h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Spending by Category</h3><p class="text-center py-4 text-gray-600 text-sm">No spending data for this period</p>';
-      return;
-    }
-
-    const data = Object.values(spendingByCategory);
-    const backgroundColors = labels.map((_, index) => [
-      '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
-      '#FF9F40', '#C9CBCF', '#7BC225', '#FF5733', '#C70039'
-    ][index % 10]);
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      logError('Failed to get canvas context', {});
-      container.innerHTML = '<p class="text-center py-4 text-gray-600 text-sm">Chart rendering failed</p>';
-      return;
-    }
-
-    canvas.chart = new window.Chart(ctx, {
-      type: 'pie',
-      data: {
-        labels,
-        datasets: [{
-          data,
-          backgroundColor: backgroundColors,
-          borderColor: '#fff',
-          borderWidth: 1
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'top' },
-          tooltip: {
-            callbacks: {
-              label: (context) => `${context.label}: ${formatCurrency(context.parsed, currency)}`
-            }
-          }
-        }
-      }
-    });
-  } catch (error) {
-    logError('Rendering error', { message: error.message, stack: error.stack });
-    const container = document.getElementById('spending-chart-container');
-    if (container) {
-      container.innerHTML = '<p class="text-center py-4 text-gray-600 text-sm">Error loading chart</p>';
-    }
-  }
-}
-
-// Updated dashboard function
 async function updateDashboard() {
   const logError = (message, details) => {
     const error = { message, details, timestamp: new Date().toISOString() };
@@ -2462,7 +2454,6 @@ async function updateDashboard() {
       let totalSpent = 0;
       const spendingByCategory = {};
 
-      // Fetch categories
       const categoryMap = new Map();
       try {
         const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
@@ -2472,7 +2463,6 @@ async function updateDashboard() {
         logError('Category fetch error', { message: error.message });
       }
 
-      // Fetch transactions
       try {
         const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
         const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
@@ -2491,7 +2481,6 @@ async function updateDashboard() {
         logError('Transaction fetch error', { message: error.message });
       }
 
-      // Fetch budgets
       try {
         const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
         const snapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
@@ -2507,7 +2496,6 @@ async function updateDashboard() {
         logError('Budget fetch error', { message: error.message });
       }
 
-      // Update tiles
       balanceElement.textContent = await formatCurrency(totalBalance, 'INR');
       totalBudgetElement.textContent = await formatCurrency(totalBudgetAmount, 'INR');
       totalRemainingElement.textContent = await formatCurrency(totalBudgetAmount - totalSpent, 'INR');
@@ -2516,7 +2504,6 @@ async function updateDashboard() {
       if (afterBudgetElement.parentElement) afterBudgetElement.parentElement.classList.remove('hidden');
       if (totalBudgetElement.parentElement) totalBudgetElement.parentElement.classList.remove('hidden');
 
-      // Render pie chart
       const chartContainer = document.getElementById('spending-chart-container');
       if (chartContainer) {
         chartContainer.classList.remove('hidden');
@@ -2534,7 +2521,6 @@ async function updateDashboard() {
     showError('balance', 'Failed to load dashboard');
   }
 }
-
 
 
 
