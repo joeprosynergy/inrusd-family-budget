@@ -1,4 +1,3 @@
-import Chart from 'chart.js/auto';
 import {
   auth,
   db,
@@ -20,83 +19,7 @@ import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
 let isEditing = { transaction: false, budget: false, category: false, profile: false, childTransaction: false };
 let currentChildUserId = null;
 let currentAccountType = null;
-let loadedTabs = { budgets: false, transactions: false, childAccounts: false };
-
-// Helper function to render pie chart
-async function renderSpendingPieChart(spendingByCategory, currency) {
-  const logError = (message, details) => {
-    const error = { message, details, timestamp: new Date().toISOString() };
-    localStorage.setItem('chartError', JSON.stringify(error));
-    console.error('renderSpendingPieChart:', error);
-  };
-
-  try {
-    const container = document.getElementById('spending-chart-container');
-    const canvas = document.getElementById('spending-pie-chart');
-    
-    if (!container || !canvas) {
-      logError('Missing DOM elements', { container: !!container, canvas: !!canvas });
-      if (container) {
-        container.innerHTML = '<h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Spending by Category</h3><p class="text-center py-4 text-gray-600 text-sm">Chart failed to load</p>';
-      }
-      return;
-    }
-
-    if (canvas.chart) {
-      canvas.chart.destroy();
-    }
-
-    const labels = Object.keys(spendingByCategory);
-    if (labels.length === 0) {
-      container.innerHTML = '<h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Spending by Category</h3><p class="text-center py-4 text-gray-600 text-sm">No spending data for this period</p>';
-      return;
-    }
-
-    const data = Object.values(spendingByCategory);
-    const backgroundColors = labels.map((_, index) => [
-      '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
-      '#FF9F40', '#C9CBCF', '#7BC225', '#FF5733', '#C70039'
-    ][index % 10]);
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      logError('Failed to get canvas context', {});
-      container.innerHTML = '<h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Spending by Category</h3><p class="text-center py-4 text-gray-600 text-sm">Chart rendering failed</p>';
-      return;
-    }
-
-    canvas.chart = new Chart(ctx, {
-      type: 'pie',
-      data: {
-        labels,
-        datasets: [{
-          data,
-          backgroundColor: backgroundColors,
-          borderColor: '#fff',
-          borderWidth: 1
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'top' },
-          tooltip: {
-            callbacks: {
-              label: (context) => `${context.label}: ${formatCurrency(context.parsed, currency)}`
-            }
-          }
-        }
-      }
-    });
-  } catch (error) {
-    logError('Rendering error', { message: error.message, stack: error.stack });
-    const container = document.getElementById('spending-chart-container');
-    if (container) {
-      container.innerHTML = '<h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Spending by Category</h3><p class="text-center py-4 text-gray-600 text-sm">Error loading chart</p>';
-    }
-  }
-}
+let loadedTabs = { budgets: false, transactions: false, childAccounts: false }; // Removed categories from lazy-loading
 
 // Load App Data
 async function loadAppData() {
@@ -2398,135 +2321,149 @@ return 0;
 }
 }
 
-
-
-
-
-
-
 async function updateDashboard() {
-  const logError = (message, details) => {
-    const error = { message, details, timestamp: new Date().toISOString() };
-    localStorage.setItem('dashboardError', JSON.stringify(error));
-    console.error('updateDashboard:', error);
-  };
-
-  try {
-    if (!db || !currentUser || !currentUser.uid) {
-      logError('Missing Firestore or user', { db: !!db, user: !!currentUser });
-      showError('balance', 'Database or user not available');
-      return;
-    }
-
-    const balanceElement = document.getElementById('balance');
-    const afterBudgetElement = document.getElementById('after-budget');
-    const totalBudgetElement = document.getElementById('total-budget');
-    const totalRemainingElement = document.getElementById('total-remaining');
-    const childTilesElement = document.getElementById('child-tiles');
-    if (!balanceElement || !afterBudgetElement || !totalBudgetElement || !totalRemainingElement || !childTilesElement) {
-      logError('Missing DOM elements', {});
-      showError('balance', 'Dashboard elements not found');
-      return;
-    }
-
-    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
-
-    if (currentAccountType === 'child') {
-      const childBalance = await calculateChildBalance(currentUser.uid);
-      childTilesElement.innerHTML = `
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700">Your Balance</h3>
-          <p class="text-lg sm:text-2xl font-bold text-gray-900">${await formatCurrency(childBalance, 'INR')}</p>
-        </div>
-      `;
-      balanceElement.textContent = 'N/A';
-      afterBudgetElement.textContent = 'N/A';
-      totalBudgetElement.textContent = 'N/A';
-      totalRemainingElement.textContent = 'N/A';
-      if (balanceElement.parentElement) balanceElement.parentElement.classList.add('hidden');
-      if (afterBudgetElement.parentElement) afterBudgetElement.parentElement.classList.add('hidden');
-      if (totalBudgetElement.parentElement) totalBudgetElement.parentElement.classList.add('hidden');
-      const chartContainer = document.getElementById('spending-chart-container');
-      if (chartContainer) chartContainer.classList.add('hidden');
-    } else {
-      let totalBalance = 0;
-      let totalBudgetAmount = 0;
-      let totalSpent = 0;
-      const spendingByCategory = {};
-
-      const categoryMap = new Map();
-      try {
-        const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
-        const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
-        categoriesSnapshot.forEach(doc => categoryMap.set(doc.id, doc.data().name));
-      } catch (error) {
-        logError('Category fetch error', { message: error.message });
-      }
-
-      try {
-        const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
-        const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
-        snapshot.forEach(doc => {
-          const transaction = doc.data();
-          const createdAt = transaction.createdAt && transaction.createdAt.toDate ? new Date(transaction.createdAt.toDate()) : new Date();
-          if (createdAt >= start && createdAt <= end && transaction.type === 'debit' && transaction.categoryId) {
-            const categoryName = categoryMap.get(transaction.categoryId) || 'Uncategorized';
-            spendingByCategory[categoryName] = (spendingByCategory[categoryName] || 0) + transaction.amount;
-            totalBalance -= transaction.amount;
-          } else if (createdAt >= start && createdAt <= end && transaction.type === 'credit') {
-            totalBalance += transaction.amount;
-          }
-        });
-      } catch (error) {
-        logError('Transaction fetch error', { message: error.message });
-      }
-
-      try {
-        const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
-        const snapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
-        snapshot.forEach(doc => {
-          const budget = doc.data();
-          const createdAt = budget.createdAt && budget.createdAt.toDate ? new Date(budget.createdAt.toDate()) : new Date();
-          if (createdAt >= start && createdAt <= end) {
-            totalBudgetAmount += budget.amount;
-            totalSpent += budget.spent || 0;
-          }
-        });
-      } catch (error) {
-        logError('Budget fetch error', { message: error.message });
-      }
-
-      balanceElement.textContent = await formatCurrency(totalBalance, 'INR');
-      totalBudgetElement.textContent = await formatCurrency(totalBudgetAmount, 'INR');
-      totalRemainingElement.textContent = await formatCurrency(totalBudgetAmount - totalSpent, 'INR');
-      afterBudgetElement.textContent = await formatCurrency(totalBalance - (totalBudgetAmount - totalSpent), 'INR');
-      if (balanceElement.parentElement) balanceElement.parentElement.classList.remove('hidden');
-      if (afterBudgetElement.parentElement) afterBudgetElement.parentElement.classList.remove('hidden');
-      if (totalBudgetElement.parentElement) totalBudgetElement.parentElement.classList.remove('hidden');
-
-      const chartContainer = document.getElementById('spending-chart-container');
-      if (chartContainer) {
-        chartContainer.classList.remove('hidden');
-        await renderSpendingPieChart(spendingByCategory, userCurrency);
-      } else {
-        logError('Chart container missing', {});
-      }
-
-      await loadBudgets();
-      childTilesElement.innerHTML = '';
-      await loadChildTiles();
-    }
-  } catch (error) {
-    logError('Dashboard error', { message: error.message, stack: error.stack });
-    showError('balance', 'Failed to load dashboard');
-  }
+console.log('updateDashboard: Starting', {
+accountType: currentAccountType,
+userId: currentUser?.uid,
+userEmail: currentUser?.email
+});
+try {
+if (!db) {
+  console.error('updateDashboard: Firestore not available');
+  showError('balance', 'Database service not available');
+  return;
+}
+if (!currentUser || !currentUser.uid) {
+  console.error('updateDashboard: Current user not available', { currentUser });
+  showError('balance', 'User not authenticated');
+  return;
 }
 
+const balanceElement = document.getElementById('balance');
+const afterBudgetElement = document.getElementById('after-budget');
+const totalBudgetElement = document.getElementById('total-budget');
+const totalRemainingElement = document.getElementById('total-remaining');
+const childTilesElement = document.getElementById('child-tiles');
+if (!balanceElement || !afterBudgetElement || !totalBudgetElement || !totalRemainingElement || !childTilesElement) {
+  console.error('updateDashboard: Missing DOM elements', {
+    balanceElement: !!balanceElement,
+    afterBudgetElement: !!afterBudgetElement,
+    totalBudgetElement: !!totalBudgetElement,
+    totalRemainingElement: !!totalRemainingElement,
+    childTilesElement: !!childTilesElement
+  });
+  showError('balance', 'Dashboard elements not found');
+  return;
+}
 
+const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
+console.log('updateDashboard: Date range', { start: start.toISOString(), end: end.toISOString() });
 
+if (currentAccountType === 'child') {
+  console.log('updateDashboard: Child mode, calculating child balance');
+  const childBalance = await calculateChildBalance(currentUser.uid);
+  console.log('updateDashboard: Child balance computed', { childBalance });
 
+  childTilesElement.innerHTML = '';
+  const tile = document.createElement('div');
+  tile.classList.add('bg-white', 'p-4', 'sm:p-6', 'rounded-lg', 'shadow-md');
+  tile.innerHTML = `
+    <h3 class="text-base sm:text-lg font-semibold text-gray-700">Your Balance</h3>
+    <p class="text-lg sm:text-2xl font-bold text-gray-900">${await formatCurrency(childBalance, 'INR')}</p>
+  `;
+  childTilesElement.appendChild(tile);
+  console.log('updateDashboard: Child balance tile added', { childBalance });
 
+  childTilesElement.style.display = 'block';
+  childTilesElement.offsetHeight;
+  console.log('updateDashboard: Child tiles element updated', {
+    display: childTilesElement.style.display,
+    childCount: childTilesElement.children.length,
+    innerHTML: childTilesElement.innerHTML.substring(0, 100) + '...'
+  });
 
+  if (balanceElement.parentElement) {
+    balanceElement.parentElement.classList.add('hidden');
+    balanceElement.textContent = 'N/A';
+    console.log('updateDashboard: Balance tile hidden');
+  }
+  if (afterBudgetElement.parentElement) {
+    afterBudgetElement.parentElement.classList.add('hidden');
+    afterBudgetElement.textContent = 'N/A';
+    console.log('updateDashboard: After-budget tile hidden');
+  }
+  if (totalBudgetElement.parentElement) {
+    totalBudgetElement.parentElement.classList.add('hidden');
+    totalBudgetElement.textContent = 'N/A';
+    totalRemainingElement.textContent = 'N/A';
+    console.log('updateDashboard: Total budget tile hidden');
+  }
+} else {
+  console.log('updateDashboard: Admin mode, calculating family balance');
+  let totalBalance = 0;
+  let totalBudgetAmount = 0;
+  let totalSpent = 0;
+
+  await retryFirestoreOperation(async () => {
+    const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
+    const snapshot = await getDocs(transactionsQuery);
+    console.log('updateDashboard: Transactions fetched', { count: snapshot.size });
+    snapshot.forEach(doc => {
+      const transaction = doc.data();
+      const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
+      if (createdAt >= start && createdAt <= end) {
+        totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+      }
+    });
+    console.log('updateDashboard: Total balance calculated', { totalBalance });
+  });
+
+  await retryFirestoreOperation(async () => {
+    const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
+    const snapshot = await getDocs(budgetsQuery);
+    console.log('updateDashboard: Budgets fetched', { count: snapshot.size });
+    snapshot.forEach(doc => {
+      const budget = doc.data();
+      const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
+      if (createdAt >= start && createdAt <= end) {
+        totalBudgetAmount += budget.amount;
+        totalSpent += budget.spent || 0;
+      }
+    });
+    console.log('updateDashboard: Budgets calculated', { totalBudgetAmount, totalSpent });
+  });
+
+  balanceElement.textContent = await formatCurrency(totalBalance, 'INR');
+  balanceElement.parentElement.classList.remove('hidden');
+  totalBudgetElement.textContent = await formatCurrency(totalBudgetAmount, 'INR');
+  totalRemainingElement.textContent = await formatCurrency(totalBudgetAmount - totalSpent, 'INR');
+  totalBudgetElement.parentElement.classList.remove('hidden');
+  const afterBudget = totalBalance - (totalBudgetAmount - totalSpent);
+  afterBudgetElement.textContent = await formatCurrency(afterBudget, 'INR');
+  balanceElement.parentElement.classList.remove('hidden');
+  console.log('updateDashboard: Tiles updated', {
+    totalBalance,
+    totalBudgetAmount,
+    totalSpent,
+    unspent: totalBudgetAmount - totalSpent,
+    afterBudget
+  });
+
+  await loadBudgets();
+  childTilesElement.innerHTML = '';
+  await loadChildTiles();
+  console.log('updateDashboard: Admin child tiles loaded');
+}
+console.log('updateDashboard: Complete');
+} catch (error) {
+console.error('updateDashboard error:', {
+  code: error.code,
+  message: error.message,
+  stack: error.stack
+});
+showError('balance', `Failed to update dashboard: ${error.message}`);
+}
+}
 
 async function setupLogout() {
 console.log('setupLogout: Starting');
