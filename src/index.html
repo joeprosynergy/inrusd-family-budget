@@ -126,49 +126,44 @@
   <main class="p-4 sm:p-6">
     <!-- Swipeable Tabs Container -->
     <div id="swipeable-tabs" class="relative w-full overflow-x-hidden" aria-label="Swipe to change tabs">
-   <!-- Dashboard Section -->
-<div id="dashboard-section" class="space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-  <!-- Filter Controls -->
-  <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-    <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Filter Dashboard</h3>
-    <div class="flex flex-col sm:flex-row gap-4">
-      <select id="dashboard-filter" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 w-full sm:w-auto">
-        <option value="1week">Last 1 Week</option>
-        <option value="1month">Last 1 Month</option>
-        <option value="thisMonth" selected>This Month</option>
-        <option value="lastMonth">Last Month</option>
-        <option value="thisYear">This Year</option>
-        <option value="lastYear">Last Year</option>
-        <option value="custom">Custom Range</option>
-      </select>
-      <div id="custom-date-range" class="hidden flex flex-col sm:flex-row gap-4">
-        <input id="filter-start-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-        <input id="filter-end-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+      <!-- Dashboard Section -->
+      <div id="dashboard-section" class="space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
+        <!-- Filter Controls -->
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Filter Dashboard</h3>
+          <div class="flex flex-col sm:flex-row gap-4">
+            <select id="dashboard-filter" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 w-full sm:w-auto">
+              <option value="1week">Last 1 Week</option>
+              <option value="1month">Last 1 Month</option>
+              <option value="thisMonth" selected>This Month</option>
+              <option value="lastMonth">Last Month</option>
+              <option value="thisYear">This Year</option>
+              <option value="lastYear">Last Year</option>
+              <option value="custom">Custom Range</option>
+            </select>
+            <div id="custom-date-range" class="hidden flex flex-col sm:flex-row gap-4">
+              <input id="filter-start-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <input id="filter-end-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            </div>
+          </div>
+        </div>
+        <!-- Summary Tiles -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+          <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-700">Balance</h3>
+            <p id="balance" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
+            <p class="text-sm text-gray-500 mt-2">After Budget: <span id="after-budget">₹0</span></p>
+          </div>
+          <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-700">Total Budget</h3>
+            <p id="total-budget" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
+            <p class="text-sm text-gray-500 mt-2">Unspent Budget: <span id="total-remaining">₹0</span></p>
+          </div>
+        </div>
+        <!-- Budget and Child Tiles -->
+        <div id="budget-tiles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"></div>
+        <div id="child-tiles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"></div>
       </div>
-    </div>
-  </div>
-  <!-- Summary Tiles -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-    <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-      <h3 class="text-base sm:text-lg font-semibold text-gray-700">Balance</h3>
-      <p id="balance" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
-      <p class="text-sm text-gray-500 mt-2">After Budget: <span id="after-budget">₹0</span></p>
-    </div>
-    <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-      <h3 class="text-base sm:text-lg font-semibold text-gray-700">Total Budget</h3>
-      <p id="total-budget" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
-      <p class="text-sm text-gray-500 mt-2">Unspent Budget: <span id="total-remaining">₹0</span></p>
-    </div>
-  </div>
-  <!-- Budget and Child Tiles -->
-  <div id="budget-tiles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"></div>
-  <div id="child-tiles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"></div>
-  <!-- Spending Pie Chart -->
-  <div id="spending-chart-container" class="mt-4 bg-white p-4 sm:p-6 rounded-lg shadow-md">
-    <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Spending by Category</h3>
-    <canvas id="spending-pie-chart" style="max-width: 400px; margin: 0 auto; min-height: 200px;"></canvas>
-  </div>
-</div>
       <!-- Transactions Section -->
       <div id="transactions-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
         <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
