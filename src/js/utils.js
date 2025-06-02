@@ -1,7 +1,7 @@
-// Replaces the entire utils.js file from artifact 5e1dda05-0e7b-47af-8e66-e60c44f43f68
-// Updates resetBudgetsForNewMonth to fix updateDoc error and improve debugging
+// Replaces the entire utils.js file from artifact 5befdd9c-2aca-44dd-8829-7faf7f994d58
+// Uses setDoc instead of updateDoc to fix "u is not a function" error
 
-import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
 import { showError } from './core.js';
 
 // Retry Firestore Operation
@@ -213,9 +213,9 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
         updatePromises.push(
           retryFirestoreOperation(
             async () => {
-              console.log('resetBudgetsForNewMonth: Executing updateDoc', { budgetId: doc.id });
-              await updateDoc(docRef, updateData);
-              console.log('resetBudgetsForNewMonth: UpdateDoc successful', { budgetId: doc.id });
+              console.log('resetBudgetsForNewMonth: Executing setDoc', { budgetId: doc.id });
+              await setDoc(docRef, updateData, { merge: true });
+              console.log('resetBudgetsForNewMonth: setDoc successful', { budgetId: doc.id });
             },
             3,
             1000,
