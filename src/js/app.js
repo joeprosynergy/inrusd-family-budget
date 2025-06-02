@@ -927,7 +927,7 @@ async function setupCategories() {
 
 
 
-// Replaces the entire loadBudgets function in app.js from artifact 221221b0-d4cc-4003-92de-047f64980fe0
+// Replaces the entire loadBudgets function in app.js from artifact 5d415e81-c2bb-4baa-b778-1447007b0b96
 
 async function loadBudgets() {
   console.log('loadBudgets: Starting', { familyCode });
@@ -968,8 +968,6 @@ async function loadBudgets() {
     }
     budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
-    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
-    console.log('loadBudgets: Date range', { start: start.toISOString(), end: end.toISOString() });
     let totalBudgetAmount = 0;
     let totalRemainingAmount = 0;
     await retryFirestoreOperation(async () => {
@@ -986,40 +984,37 @@ async function loadBudgets() {
       }
       for (const doc of snapshot.docs) {
         const budget = doc.data();
-        const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
-        if (createdAt >= start && createdAt <= end) {
-          const spent = budget.spent || 0;
-          totalBudgetAmount += budget.amount;
-          totalRemainingAmount += budget.amount - spent;
-          const tr = document.createElement('tr');
-          tr.classList.add('table-row');
-          tr.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(budget.amount, 'INR')}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(spent, 'INR')}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(budget.amount - spent, 'INR')}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">
-              <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
-              <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
-            </td>
-          `;
-          budgetTable.appendChild(tr);
-          const tile = document.createElement('div');
-          tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
-          const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
-          tile.innerHTML = `
-            <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
-            <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${await formatCurrency(budget.amount, 'INR')}</span></p>
-            <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${await formatCurrency(spent, 'INR')}</span></p>
-            <p class="text-sm font-semibold text-gray-700 mt-2">
-              Remaining: <span id="${doc.id}-remaining">${await formatCurrency(budget.amount - spent, 'INR')}</span>
-            </p>
-            <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
-              <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
-            </div>
-          `;
-          budgetTiles.appendChild(tile);
-        }
+        const spent = budget.spent || 0;
+        totalBudgetAmount += budget.amount;
+        totalRemainingAmount += budget.amount - spent;
+        const tr = document.createElement('tr');
+        tr.classList.add('table-row');
+        tr.innerHTML = `
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(budget.amount, 'INR')}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(spent, 'INR')}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(budget.amount - spent, 'INR')}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm">
+            <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
+            <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
+          </td>
+        `;
+        budgetTable.appendChild(tr);
+        const tile = document.createElement('div');
+        tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
+        const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
+        tile.innerHTML = `
+          <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
+          <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${await formatCurrency(budget.amount, 'INR')}</span></p>
+          <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${await formatCurrency(spent, 'INR')}</span></p>
+          <p class="text-sm font-semibold text-gray-700 mt-2">
+            Remaining: <span id="${doc.id}-remaining">${await formatCurrency(budget.amount - spent, 'INR')}</span>
+          </p>
+          <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
+            <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
+          </div>
+        `;
+        budgetTiles.appendChild(tile);
       }
       console.log('loadBudgets: Tiles and table updated', {
         totalBudgetAmount,
