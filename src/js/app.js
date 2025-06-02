@@ -927,8 +927,8 @@ async function setupCategories() {
 
 
 
-// Replaces the entire loadBudgets function in app.js from artifact 61ce8294-09a7-4548-a5e7-1e61da9c1742
-// Handles missing categories and adjusts transaction query date range
+// Replaces the entire loadBudgets function in app.js from artifact 3f857bc6-57b9-4867-bbdb-08c781b7e30e
+// Computes spending from transactions for all filters, including this month
 
 async function loadBudgets() {
   console.log('loadBudgets: Starting', { familyCode });
@@ -979,11 +979,6 @@ async function loadBudgets() {
     start = new Date(start.getTime() - 5.5 * 60 * 60 * 1000); // Subtract 5.5 hours for IST to UTC
     console.log('loadBudgets: Adjusted start date for UTC', { adjustedStart: start.toISOString() });
 
-    // Determine if historical spending is needed
-    const now = new Date();
-    const currentMonthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const isCurrentMonth = filter === 'thisMonth' || (start <= now && now <= end);
-
     // Fetch categories to map budgets to transactions
     const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
     const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
@@ -1016,49 +1011,48 @@ async function loadBudgets() {
 
       for (const doc of snapshot.docs) {
         const budget = doc.data();
-        let spent = budget.spent || 0;
-        if (!isCurrentMonth) {
-          // Calculate spent from transactions for past months
-          const categoryIds = budgetToCategories.get(doc.id) || [];
-          if (categoryIds.length > 0) {
-            // Split categoryIds into chunks of 30 (Firestore 'in' limit)
-            const chunks = [];
-            for (let i = 0; i < categoryIds.length; i += 30) {
-              chunks.push(categoryIds.slice(i, i + 30));
-            }
-            let totalSpent = 0;
-            for (const chunk of chunks) {
-              const transactionsQuery = query(
-                collection(db, 'transactions'),
-                where('familyCode', '==', familyCode),
-                where('categoryId', 'in', chunk),
-                where('type', '==', 'debit'),
-                where('createdAt', '>=', start),
-                where('createdAt', '<=', end)
-              );
-              try {
-                const transactionsSnapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
-                totalSpent += transactionsSnapshot.docs.reduce((sum, txDoc) => sum + (txDoc.data().amount || 0), 0);
-                console.log('loadBudgets: Historical spent calculated', {
-                  budgetId: doc.id,
-                  chunkSize: chunk.length,
-                  transactionCount: transactionsSnapshot.size,
-                  chunkSpent: totalSpent
-                });
-              } catch (error) {
-                console.error('loadBudgets: Failed to fetch transactions', {
-                  budgetId: doc.id,
-                  code: error.code,
-                  message: error.message
-                });
-                // Continue with other chunks
-              }
-            }
-            spent = totalSpent;
-          } else {
-            console.warn('loadBudgets: No categories linked to budget', { budgetId: doc.id, name: budget.name });
-            spent = 0;
+        let spent = 0; // Always calculate from transactions
+        const categoryIds = budgetToCategories.get(doc.id) || [];
+        if (categoryIds.length > 0) {
+          // Split categoryIds into chunks of 30 (Firestore 'in' limit)
+          const chunks = [];
+          for (let i = 0; i < categoryIds.length; i += 30) {
+            chunks.push(categoryIds.slice(i, i + 30));
           }
+          let totalSpent = 0;
+          for (const chunk of chunks) {
+            const transactionsQuery = query(
+              collection(db, 'transactions'),
+              where('familyCode', '==', familyCode),
+              where('categoryId', 'in', chunk),
+              where('type', '==', 'debit'),
+              where('createdAt', '>=', start),
+              where('createdAt', '<=', end)
+            );
+            try {
+              const transactionsSnapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
+              totalSpent += transactionsSnapshot.docs.reduce((sum, txDoc) => sum + (txDoc.data().amount || 0), 0);
+              console.log('loadBudgets: Spent calculated', {
+                budgetId: doc.id,
+                filter,
+                chunkSize: chunk.length,
+                transactionCount: transactionsSnapshot.size,
+                chunkSpent: totalSpent
+              });
+            } catch (error) {
+              console.error('loadBudgets: Failed to fetch transactions', {
+                budgetId: doc.id,
+                filter,
+                code: error.code,
+                message: error.message
+              });
+              // Continue with other chunks
+            }
+          }
+          spent = totalSpent;
+        } else {
+          console.warn('loadBudgets: No categories linked to budget', { budgetId: doc.id, name: budget.name });
+          spent = 0;
         }
 
         totalBudgetAmount += budget.amount;
