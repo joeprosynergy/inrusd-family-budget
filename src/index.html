@@ -230,25 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 </script>
-// Initialize Transactions tab filter
-document.addEventListener('DOMContentLoaded', () => {
-  const transactionsFilter = document.getElementById('transactions-filter');
-  if (transactionsFilter) {
-    transactionsFilter.addEventListener('change', () => {
-      console.log('Transactions filter changed', { filter: transactionsFilter.value });
-      loadTransactions();
-    });
-    // Load transactions when tab is activated
-    const transactionsTabButton = document.querySelector('[data-tab="transactions"]'); // Adjust selector to match your tab button
-    if (transactionsTabButton) {
-      transactionsTabButton.addEventListener('click', () => {
-        console.log('Transactions tab activated');
-        loadTransactions();
-      });
-    }
-  }
-});
-</script>
+
       <!-- Budgets Section -->
       <div id="budgets-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
         <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
