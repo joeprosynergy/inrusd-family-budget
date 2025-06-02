@@ -1,7 +1,8 @@
-// Replaces the entire utils.js file from artifact f7b2a9e3-8f2a-4f1e-b8c7-2c3f9e8a7e1b
-// Only retryFirestoreOperation is updated; other functions remain unchanged
+// Replaces the entire utils.js file from artifact a8329100-0199-456b-b7d6-f7b12e9c61a2
+// Includes the latest resetBudgetsForNewMonth function and ensures proper exports
 
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { showError } from './core.js';
 
 // Retry Firestore Operation
 async function retryFirestoreOperation(operation, maxRetries = 3, delay = 1000, operationData = null) {
@@ -45,7 +46,7 @@ async function fetchExchangeRate(fromCurrency, toCurrency, cache = { rate: null,
     // Check in-memory cache
     if (cache.rate && cache.timestamp && (now - cache.timestamp) < CACHE_TTL) {
       console.log(`Using in-memory cached exchange rate for ${fromCurrency} to ${toCurrency}:`, cache.rate);
-      return cache.rate;
+      return rate;
     }
 
     console.log(`Fetching exchange rate from API for ${fromCurrency} to ${toCurrency}`);
@@ -147,9 +148,7 @@ function getDateRange(filter, startDateInput, endDateInput) {
   return { start, end };
 }
 
-// Replaces the resetBudgetsForNewMonth function in utils.js from artifact a8329100-0199-456b-b7d6-f7b12e9c61a2
-// Place this function in utils.js, replacing the existing resetBudgetsForNewMonth function
-
+// Reset Budgets for New Month
 async function resetBudgetsForNewMonth(db, familyCode, accountType) {
   console.log('resetBudgetsForNewMonth: Starting', { familyCode, accountType });
   if (!db || !familyCode) {
