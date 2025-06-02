@@ -1,5 +1,5 @@
-// Replaces the entire utils.js file from artifact a8329100-0199-456b-b7d6-f7b12e9c61a2
-// Includes the latest resetBudgetsForNewMonth function and ensures proper exports
+// Replaces the entire utils.js file from artifact 5e1dda05-0e7b-47af-8e66-e60c44f43f68
+// Updates resetBudgetsForNewMonth to fix updateDoc error and improve debugging
 
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { showError } from './core.js';
@@ -199,7 +199,7 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
         });
         lastResetMonth = '1970-01';
       }
-      console.log('resetBudgetsForNewMonth: Checking budget', { budgetId: doc.id, lastResetMonth });
+      console.log('resetBudgetsForNewMonth: Checking budget', { budgetId: doc.id, lastResetMonth, currentMonthYear });
 
       if (lastResetMonth !== currentMonthYear) {
         console.log('resetBudgetsForNewMonth: Budget needs reset', { budgetId: doc.id, name: budget.name });
@@ -207,9 +207,16 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
           spent: 0,
           lastResetMonth: currentMonthYear
         };
+        console.log('resetBudgetsForNewMonth: Preparing update', { budgetId: doc.id, updateData });
+        const docRef = doc(db, 'budgets', doc.id);
+        console.log('resetBudgetsForNewMonth: Document reference created', { budgetId: doc.id, docRefPath: docRef.path });
         updatePromises.push(
           retryFirestoreOperation(
-            () => updateDoc(doc(db, 'budgets', doc.id), updateData),
+            async () => {
+              console.log('resetBudgetsForNewMonth: Executing updateDoc', { budgetId: doc.id });
+              await updateDoc(docRef, updateData);
+              console.log('resetBudgetsForNewMonth: UpdateDoc successful', { budgetId: doc.id });
+            },
             3,
             1000,
             updateData
