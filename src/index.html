@@ -164,40 +164,72 @@
         <div id="budget-tiles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"></div>
         <div id="child-tiles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"></div>
       </div>
-      <!-- Transactions Section -->
-      <div id="transactions-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Transaction</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <select id="type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="debit">Debit</option>
-              <option value="credit">Credit</option>
-            </select>
-            <input id="amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <select id="category" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="">Select Category</option>
-              <option value="add-new">Add New</option>
-            </select>
-            <input id="description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-          </div>
-          <button id="add-transaction" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Transaction</button>
-        </div>
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
-          <table class="w-full">
-            <thead>
-              <tr class="bg-gray-200">
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Type</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Amount</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Category</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Description</th>
-                <th class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700" id="transaction-date-header">Date</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="transaction-table"></tbody>
-          </table>
-        </div>
-      </div>
+<!-- Replaces the Transactions section in index.html -->
+<div id="transactions-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
+  <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+    <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Transaction</h3>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <select id="type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <option value="debit">Debit</option>
+        <option value="credit">Credit</option>
+      </select>
+      <input id="amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+      <select id="category" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <option value="">Select Category</option>
+        <option value="add-new">Add New</option>
+      </select>
+      <input id="description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+    </div>
+    <button id="add-transaction" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Transaction</button>
+  </div>
+  <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+    <div class="mb-4 flex items-center">
+      <label for="transactions-filter" class="mr-2 text-sm font-medium text-gray-700">Filter Transactions:</label>
+      <select id="transactions-filter" class="p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <option value="thisMonth">This Month</option>
+        <option value="lastMonth">Last Month</option>
+        <option value="thisYear">This Year</option>
+        <option value="lastYear">Last Year</option>
+      </select>
+    </div>
+    <div class="overflow-x-auto no-swipe">
+      <table class="w-full">
+        <thead>
+          <tr class="bg-gray-200">
+            <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Type</th>
+            <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Amount</th>
+            <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Category</th>
+            <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Description</th>
+            <th class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700" id="transaction-date-header">Date</th>
+            <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="transaction-table"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// Initialize Transactions tab filter
+document.addEventListener('DOMContentLoaded', () => {
+  const transactionsFilter = document.getElementById('transactions-filter');
+  if (transactionsFilter) {
+    transactionsFilter.addEventListener('change', () => {
+      console.log('Transactions filter changed', { filter: transactionsFilter.value });
+      loadTransactions();
+    });
+    // Load transactions when tab is activated
+    const transactionsTabButton = document.querySelector('[data-tab="transactions"]'); // Adjust selector to match your tab button
+    if (transactionsTabButton) {
+      transactionsTabButton.addEventListener('click', () => {
+        console.log('Transactions tab activated');
+        loadTransactions();
+      });
+    }
+  }
+});
+</script>
       <!-- Budgets Section -->
       <div id="budgets-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
         <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
