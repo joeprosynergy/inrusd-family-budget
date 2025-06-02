@@ -1,3 +1,6 @@
+// Replaces the entire utils.js file from artifact 6997a191-00df-43ca-a476-19da2af2202d
+// Only resetBudgetsForNewMonth is updated; other functions remain unchanged
+
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 
 // Retry Firestore Operation
@@ -140,11 +143,15 @@ function getDateRange(filter, startDateInput, endDateInput) {
 }
 
 // Reset Budgets for New Month
-async function resetBudgetsForNewMonth(db, familyCode) {
-  console.log('resetBudgetsForNewMonth: Starting', { familyCode });
+async function resetBudgetsForNewMonth(db, familyCode, accountType) {
+  console.log('resetBudgetsForNewMonth: Starting', { familyCode, accountType });
   if (!db || !familyCode) {
     console.error('resetBudgetsForNewMonth: Missing db or familyCode', { db: !!db, familyCode });
-    throw new Error('Database or family code not available');
+    return; // Silently return to avoid blocking budget loading
+  }
+  if (accountType !== 'admin') {
+    console.log('resetBudgetsForNewMonth: Non-admin user, skipping reset', { accountType });
+    return;
   }
 
   try {
@@ -153,12 +160,26 @@ async function resetBudgetsForNewMonth(db, familyCode) {
     console.log('resetBudgetsForNewMonth: Current month-year', { currentMonthYear });
 
     const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
-    const snapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
+    let snapshot;
+    try {
+      snapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
+    } catch (error) {
+      console.error('resetBudgetsForNewMonth: Failed to fetch budgets', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      return; // Avoid throwing to allow budget loading to continue
+    }
     console.log('resetBudgetsForNewMonth: Budgets fetched', { count: snapshot.size });
 
     const updatePromises = [];
     snapshot.forEach(doc => {
       const budget = doc.data();
+      if (!budget.name || typeof budget.spent !== 'number') {
+        console.warn('resetBudgetsForNewMonth: Invalid budget data, skipping', { budgetId: doc.id, data: budget });
+        return;
+      }
       const lastResetMonth = budget.lastResetMonth || '1970-01'; // Default to epoch if unset
       console.log('resetBudgetsForNewMonth: Checking budget', { budgetId: doc.id, lastResetMonth });
 
@@ -169,6 +190,13 @@ async function resetBudgetsForNewMonth(db, familyCode) {
             updateDoc(doc(db, 'budgets', doc.id), {
               spent: 0,
               lastResetMonth: currentMonthYear
+            }).catch(error => {
+              console.error('resetBudgetsForNewMonth: Failed to update budget', {
+                budgetId: doc.id,
+                code: error.code,
+                message: error.message
+              });
+              return Promise.resolve(); // Continue with other updates
             })
           )
         );
@@ -185,12 +213,12 @@ async function resetBudgetsForNewMonth(db, familyCode) {
       console.log('resetBudgetsForNewMonth: No budgets need resetting');
     }
   } catch (error) {
-    console.error('resetBudgetsForNewMonth: Error', {
+    console.error('resetBudgetsForNewMonth: Unexpected error', {
       code: error.code,
       message: error.message,
       stack: error.stack
     });
-    throw new Error(`Failed to reset budgets: ${error.message}`);
+    // Do not throw; allow budget loading to proceed
   }
 }
 
