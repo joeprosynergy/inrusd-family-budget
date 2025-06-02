@@ -922,7 +922,8 @@ async function setupCategories() {
   }
 }
 
-// Budgets
+// Replaces the entire loadBudgets function in app.js (lines 509-572 in the original file)
+
 async function loadBudgets() {
   console.log('loadBudgets: Starting', { familyCode });
   if (!db) {
@@ -931,6 +932,11 @@ async function loadBudgets() {
     return;
   }
   try {
+    // Reset budgets if new month
+    console.log('loadBudgets: Checking for budget reset');
+    await resetBudgetsForNewMonth(db, familyCode);
+    console.log('loadBudgets: Budget reset check complete');
+
     const budgetTable = document.getElementById('budget-table');
     const budgetTiles = document.getElementById('budget-tiles');
     if (!budgetTable || !budgetTiles) {
@@ -1026,6 +1032,13 @@ async function loadBudgets() {
   }
 }
 
+
+
+
+
+
+// Replaces the entire setupBudgets function in app.js (lines 573-686 in the original file)
+
 async function setupBudgets() {
   console.log('Setting up budget event listeners');
   const addBudget = document.getElementById('add-budget');
@@ -1054,16 +1067,19 @@ async function setupBudgets() {
     try {
       addBudget.disabled = true;
       addBudget.textContent = 'Adding...';
+      const now = new Date();
+      const currentMonthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       await retryFirestoreOperation(() => 
         addDoc(collection(db, 'budgets'), {
           name,
           amount,
           spent: 0,
           familyCode,
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          lastResetMonth: currentMonthYear
         })
       );
-      console.log('Budget added:', { name, amount });
+      console.log('Budget added:', { name, amount, lastResetMonth: currentMonthYear });
       document.getElementById('budget-name').value = '';
       document.getElementById('budget-amount').value = '';
       addBudget.innerHTML = 'Add Budget';
@@ -1106,16 +1122,19 @@ async function setupBudgets() {
     try {
       saveBudget.disabled = true;
       saveBudget.textContent = 'Saving...';
+      const now = new Date();
+      const currentMonthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       await retryFirestoreOperation(() => 
         addDoc(collection(db, 'budgets'), {
           name,
           amount,
           spent: 0,
           familyCode,
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          lastResetMonth: currentMonthYear
         })
       );
-      console.log('Budget saved:', { name, amount });
+      console.log('Budget saved:', { name, amount, lastResetMonth: currentMonthYear });
       domElements.addBudgetModal?.classList.add('hidden');
       document.getElementById('new-budget-name').value = '';
       document.getElementById('new-budget-amount').value = '';
@@ -2321,149 +2340,159 @@ return 0;
 }
 }
 
+
+
+
+
+// Replaces the entire updateDashboard function in app.js (lines 1118-1212 in the original file)
+
 async function updateDashboard() {
-console.log('updateDashboard: Starting', {
-accountType: currentAccountType,
-userId: currentUser?.uid,
-userEmail: currentUser?.email
-});
-try {
-if (!db) {
-  console.error('updateDashboard: Firestore not available');
-  showError('balance', 'Database service not available');
-  return;
-}
-if (!currentUser || !currentUser.uid) {
-  console.error('updateDashboard: Current user not available', { currentUser });
-  showError('balance', 'User not authenticated');
-  return;
-}
-
-const balanceElement = document.getElementById('balance');
-const afterBudgetElement = document.getElementById('after-budget');
-const totalBudgetElement = document.getElementById('total-budget');
-const totalRemainingElement = document.getElementById('total-remaining');
-const childTilesElement = document.getElementById('child-tiles');
-if (!balanceElement || !afterBudgetElement || !totalBudgetElement || !totalRemainingElement || !childTilesElement) {
-  console.error('updateDashboard: Missing DOM elements', {
-    balanceElement: !!balanceElement,
-    afterBudgetElement: !!afterBudgetElement,
-    totalBudgetElement: !!totalBudgetElement,
-    totalRemainingElement: !!totalRemainingElement,
-    childTilesElement: !!childTilesElement
+  console.log('updateDashboard: Starting', {
+    accountType: currentAccountType,
+    userId: currentUser?.uid,
+    userEmail: currentUser?.email
   });
-  showError('balance', 'Dashboard elements not found');
-  return;
-}
+  try {
+    if (!db) {
+      console.error('updateDashboard: Firestore not available');
+      showError('balance', 'Database service not available');
+      return;
+    }
+    if (!currentUser || !currentUser.uid) {
+      console.error('updateDashboard: Current user not available', { currentUser });
+      showError('balance', 'User not authenticated');
+      return;
+    }
 
-const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
-console.log('updateDashboard: Date range', { start: start.toISOString(), end: end.toISOString() });
+    const balanceElement = document.getElementById('balance');
+    const afterBudgetElement = document.getElementById('after-budget');
+    const totalBudgetElement = document.getElementById('total-budget');
+    const totalRemainingElement = document.getElementById('total-remaining');
+    const childTilesElement = document.getElementById('child-tiles');
+    if (!balanceElement || !afterBudgetElement || !totalBudgetElement || !totalRemainingElement || !childTilesElement) {
+      console.error('updateDashboard: Missing DOM elements', {
+        balanceElement: !!balanceElement,
+        afterBudgetElement: !!afterBudgetElement,
+        totalBudgetElement: !!totalBudgetElement,
+        totalRemainingElement: !!totalRemainingElement,
+        childTilesElement: !!childTilesElement
+      });
+      showError('balance', 'Dashboard elements not found');
+      return;
+    }
 
-if (currentAccountType === 'child') {
-  console.log('updateDashboard: Child mode, calculating child balance');
-  const childBalance = await calculateChildBalance(currentUser.uid);
-  console.log('updateDashboard: Child balance computed', { childBalance });
+    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
+    console.log('updateDashboard: Date range for budgets', { start: start.toISOString(), end: end.toISOString() });
 
-  childTilesElement.innerHTML = '';
-  const tile = document.createElement('div');
-  tile.classList.add('bg-white', 'p-4', 'sm:p-6', 'rounded-lg', 'shadow-md');
-  tile.innerHTML = `
-    <h3 class="text-base sm:text-lg font-semibold text-gray-700">Your Balance</h3>
-    <p class="text-lg sm:text-2xl font-bold text-gray-900">${await formatCurrency(childBalance, 'INR')}</p>
-  `;
-  childTilesElement.appendChild(tile);
-  console.log('updateDashboard: Child balance tile added', { childBalance });
+    if (currentAccountType === 'child') {
+      console.log('updateDashboard: Child mode, calculating child balance');
+      const childBalance = await calculateChildBalance(currentUser.uid);
+      console.log('updateDashboard: Child balance computed', { childBalance });
 
-  childTilesElement.style.display = 'block';
-  childTilesElement.offsetHeight;
-  console.log('updateDashboard: Child tiles element updated', {
-    display: childTilesElement.style.display,
-    childCount: childTilesElement.children.length,
-    innerHTML: childTilesElement.innerHTML.substring(0, 100) + '...'
-  });
+      childTilesElement.innerHTML = '';
+      const tile = document.createElement('div');
+      tile.classList.add('bg-white', 'p-4', 'sm:p-6', 'rounded-lg', 'shadow-md');
+      tile.innerHTML = `
+        <h3 class="text-base sm:text-lg font-semibold text-gray-700">Your Balance</h3>
+        <p class="text-lg sm:text-2xl font-bold text-gray-900">${await formatCurrency(childBalance, 'INR')}</p>
+      `;
+      childTilesElement.appendChild(tile);
+      console.log('updateDashboard: Child balance tile added', { childBalance });
 
-  if (balanceElement.parentElement) {
-    balanceElement.parentElement.classList.add('hidden');
-    balanceElement.textContent = 'N/A';
-    console.log('updateDashboard: Balance tile hidden');
-  }
-  if (afterBudgetElement.parentElement) {
-    afterBudgetElement.parentElement.classList.add('hidden');
-    afterBudgetElement.textContent = 'N/A';
-    console.log('updateDashboard: After-budget tile hidden');
-  }
-  if (totalBudgetElement.parentElement) {
-    totalBudgetElement.parentElement.classList.add('hidden');
-    totalBudgetElement.textContent = 'N/A';
-    totalRemainingElement.textContent = 'N/A';
-    console.log('updateDashboard: Total budget tile hidden');
-  }
-} else {
-  console.log('updateDashboard: Admin mode, calculating family balance');
-  let totalBalance = 0;
-  let totalBudgetAmount = 0;
-  let totalSpent = 0;
+      childTilesElement.style.display = 'block';
+      childTilesElement.offsetHeight;
+      console.log('updateDashboard: Child tiles element updated', {
+        display: childTilesElement.style.display,
+        childCount: childTilesElement.children.length,
+        innerHTML: childTilesElement.innerHTML.substring(0, 100) + '...'
+      });
 
-  await retryFirestoreOperation(async () => {
-    const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
-    const snapshot = await getDocs(transactionsQuery);
-    console.log('updateDashboard: Transactions fetched', { count: snapshot.size });
-    snapshot.forEach(doc => {
-      const transaction = doc.data();
-      const createdAt = transaction.createdAt ? new Date(transaction.createdAt.toDate()) : new Date();
-      if (createdAt >= start && createdAt <= end) {
-        totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+      if (balanceElement.parentElement) {
+        balanceElement.parentElement.classList.add('hidden');
+        balanceElement.textContent = 'N/A';
+        console.log('updateDashboard: Balance tile hidden');
       }
-    });
-    console.log('updateDashboard: Total balance calculated', { totalBalance });
-  });
-
-  await retryFirestoreOperation(async () => {
-    const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
-    const snapshot = await getDocs(budgetsQuery);
-    console.log('updateDashboard: Budgets fetched', { count: snapshot.size });
-    snapshot.forEach(doc => {
-      const budget = doc.data();
-      const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
-      if (createdAt >= start && createdAt <= end) {
-        totalBudgetAmount += budget.amount;
-        totalSpent += budget.spent || 0;
+      if (afterBudgetElement.parentElement) {
+        afterBudgetElement.parentElement.classList.add('hidden');
+        afterBudgetElement.textContent = 'N/A';
+        console.log('updateDashboard: After-budget tile hidden');
       }
+      if (totalBudgetElement.parentElement) {
+        totalBudgetElement.parentElement.classList.add('hidden');
+        totalBudgetElement.textContent = 'N/A';
+        totalRemainingElement.textContent = 'N/A';
+        console.log('updateDashboard: Total budget tile hidden');
+      }
+    } else {
+      console.log('updateDashboard: Admin mode, calculating family balance');
+      let totalBalance = 0;
+      let totalBudgetAmount = 0;
+      let totalSpent = 0;
+
+      // Calculate all-time balance
+      const { start: allTimeStart, end: allTimeEnd } = getDateRange('allTime', null, null);
+      console.log('updateDashboard: All-time range for balance', { start: allTimeStart.toISOString(), end: allTimeEnd.toISOString() });
+      await retryFirestoreOperation(async () => {
+        const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
+        const snapshot = await getDocs(transactionsQuery);
+        console.log('updateDashboard: Transactions fetched for balance', { count: snapshot.size });
+        snapshot.forEach(doc => {
+          const transaction = doc.data();
+          totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+        });
+        console.log('updateDashboard: Total balance calculated', { totalBalance });
+      });
+
+      // Calculate budgets for selected date range
+      await retryFirestoreOperation(async () => {
+        const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
+        const snapshot = await getDocs(budgetsQuery);
+        console.log('updateDashboard: Budgets fetched', { count: snapshot.size });
+        snapshot.forEach(doc => {
+          const budget = doc.data();
+          const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
+          if (createdAt >= start && createdAt <= end) {
+            totalBudgetAmount += budget.amount;
+            totalSpent += budget.spent || 0;
+          }
+        });
+        console.log('updateDashboard: Budgets calculated', { totalBudgetAmount, totalSpent });
+      });
+
+      balanceElement.textContent = await formatCurrency(totalBalance, 'INR');
+      balanceElement.parentElement.classList.remove('hidden');
+      totalBudgetElement.textContent = await formatCurrency(totalBudgetAmount, 'INR');
+      totalRemainingElement.textContent = await formatCurrency(totalBudgetAmount - totalSpent, 'INR');
+      totalBudgetElement.parentElement.classList.remove('hidden');
+      const afterBudget = totalBalance - (totalBudgetAmount - totalSpent);
+      afterBudgetElement.textContent = await formatCurrency(afterBudget, 'INR');
+      balanceElement.parentElement.classList.remove('hidden');
+      console.log('updateDashboard: Tiles updated', {
+        totalBalance,
+        totalBudgetAmount,
+        totalSpent,
+        unspent: totalBudgetAmount - totalSpent,
+        afterBudget
+      });
+
+      await loadBudgets();
+      childTilesElement.innerHTML = '';
+      await loadChildTiles();
+      console.log('updateDashboard: Admin child tiles loaded');
+    }
+    console.log('updateDashboard: Complete');
+  } catch (error) {
+    console.error('updateDashboard error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
     });
-    console.log('updateDashboard: Budgets calculated', { totalBudgetAmount, totalSpent });
-  });
+    showError('balance', `Failed to update dashboard: ${error.message}`);
+  }
+}
 
-  balanceElement.textContent = await formatCurrency(totalBalance, 'INR');
-  balanceElement.parentElement.classList.remove('hidden');
-  totalBudgetElement.textContent = await formatCurrency(totalBudgetAmount, 'INR');
-  totalRemainingElement.textContent = await formatCurrency(totalBudgetAmount - totalSpent, 'INR');
-  totalBudgetElement.parentElement.classList.remove('hidden');
-  const afterBudget = totalBalance - (totalBudgetAmount - totalSpent);
-  afterBudgetElement.textContent = await formatCurrency(afterBudget, 'INR');
-  balanceElement.parentElement.classList.remove('hidden');
-  console.log('updateDashboard: Tiles updated', {
-    totalBalance,
-    totalBudgetAmount,
-    totalSpent,
-    unspent: totalBudgetAmount - totalSpent,
-    afterBudget
-  });
 
-  await loadBudgets();
-  childTilesElement.innerHTML = '';
-  await loadChildTiles();
-  console.log('updateDashboard: Admin child tiles loaded');
-}
-console.log('updateDashboard: Complete');
-} catch (error) {
-console.error('updateDashboard error:', {
-  code: error.code,
-  message: error.message,
-  stack: error.stack
-});
-showError('balance', `Failed to update dashboard: ${error.message}`);
-}
-}
+
 
 async function setupLogout() {
 console.log('setupLogout: Starting');
@@ -2572,25 +2601,34 @@ if (logoutButton) {
 }, 500);
 }
 
+// Replaces the entire initApp function in app.js (lines 1213-1230 in the original file)
+
 async function initApp() {
-console.log('initApp: Starting');
-try {
-setupTabs();
-setupProfile();
-setupCategories();
-setupBudgets();
-setupTransactions();
-setupChildAccounts();
-setupLogout();
-console.log('initApp: Complete');
-} catch (error) {
-console.error('initApp error:', {
-  code: error.code,
-  message: error.message,
-  stack: error.stack
-});
-showError('page-title', 'Failed to initialize app.');
-}
+  console.log('initApp: Starting');
+  try {
+    // Reset budgets for admin users during initialization
+    if (currentUser && currentAccountType === 'admin' && db && familyCode) {
+      console.log('initApp: Checking budget reset for admin');
+      await resetBudgetsForNewMonth(db, familyCode);
+      console.log('initApp: Budget reset check complete');
+    }
+
+    setupTabs();
+    setupProfile();
+    setupCategories();
+    setupBudgets();
+    setupTransactions();
+    setupChildAccounts();
+    setupLogout();
+    console.log('initApp: Complete');
+  } catch (error) {
+    console.error('initApp error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    showError('page-title', 'Failed to initialize app.');
+  }
 }
 
 export { loadAppData, initApp };
