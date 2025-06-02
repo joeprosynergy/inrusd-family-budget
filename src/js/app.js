@@ -1499,7 +1499,6 @@ async function setupBudgets() {
 
 
 
-// Transactions
 async function loadTransactions() {
   console.log('loadTransactions: Starting', { familyCode });
   try {
@@ -1608,28 +1607,45 @@ async function loadTransactions() {
       return;
     }
 
+    const transactions = [];
     snapshot.forEach(doc => {
       const transaction = doc.data();
       const createdAt = transaction.createdAt && transaction.createdAt.toDate ? new Date(transaction.createdAt.toDate()) : new Date();
-      const categoryName = categoryMap.get(transaction.categoryId) || 'Unknown';
+      transactions.push({ id: doc.id, ...transaction, createdAt });
+    });
+    console.log('loadTransactions: Transactions after query', { count: transactions.length });
+
+    if (transactions.length === 0) {
+      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found for this period</td></tr>';
+      console.log('loadTransactions: No transactions in date range');
+      return;
+    }
+
+    // Sort transactions by createdAt in descending order (latest first)
+    transactions.sort((a, b) => b.createdAt - a.createdAt);
+    console.log('loadTransactions: Transactions sorted by createdAt', { count: transactions.length });
+
+    for (const transaction of transactions) {
       const tr = document.createElement('tr');
       tr.classList.add('table-row');
+      const categoryName = transaction.categoryId ? categoryMap.get(transaction.categoryId) || 'Unknown' : 'None';
+      const day = transaction.createdAt.toLocaleString('en-US', { day: 'numeric' });
       tr.innerHTML = `
-        <td class="px-4 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">${transaction.type}</td>
-        <td class="px-4 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">${formatCurrencySync(transaction.amount, 'INR')}</td>
-        <td class="px-4 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">${categoryName}</td>
-        <td class="px-4 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">${transaction.description || '-'}</td>
-        <td class="px-4 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">${createdAt.toLocaleDateString()}</td>
-        <td class="px-4 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm">
-          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
-          <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${await formatCurrency(transaction.amount || 0, 'INR')}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${categoryName}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
+        <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${day}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
+          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${transaction.id}">Edit</button>
+          <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${transaction.id}">Delete</button>
         </td>
       `;
       transactionTable.appendChild(tr);
-    });
-    console.log('loadTransactions: Table updated', { transactionCount: snapshot.size });
+    }
+    console.log('loadTransactions: Table updated', { rendered: transactions.length });
   } catch (error) {
-    console.error('loadTransactions: Error loading transactions', {
+    console.error('loadTransactions error:', {
       code: error.code,
       message: error.message,
       stack: error.stack
@@ -1647,50 +1663,6 @@ async function loadTransactions() {
 
 
 
-
-
-
-    
-
-
-    
-
-   // Sort transactions by createdAt in descending order (latest first)
-transactions.sort((a, b) => b.createdAt - a.createdAt);
-console.log('loadTransactions: Transactions sorted by createdAt', { count: transactions.length });
-
-for (const transaction of transactions) {
-  const tr = document.createElement('tr');
-  tr.classList.add('table-row');
-  const categoryName = transaction.categoryId ? categoryMap.get(transaction.categoryId) || 'Unknown' : 'None';
-  const day = transaction.createdAt.toLocaleString('en-US', { day: 'numeric' });
-  tr.innerHTML = `
-    <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
-    <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${await formatCurrency(transaction.amount || 0, 'INR')}</td>
-    <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${categoryName}</td>
-    <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
-    <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${day}</td>
-    <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
-      <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${transaction.id}">Edit</button>
-      <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${transaction.id}">Delete</button>
-    </td>
-  `;
-  transactionTable.appendChild(tr);
-}
-console.log('loadTransactions: Table updated', { rendered: transactions.length });
-} catch (error) {
-console.error('loadTransactions error:', {
-  code: error.code,
-  message: error.message,
-  stack: error.stack
-});
-showError('category', `Failed to load transactions: ${error.message}`);
-const transactionTable = document.getElementById('transaction-table');
-if (transactionTable) {
-  transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-}
-}
-}
 
 async function setupTransactions() {
 console.log('setupTransactions: Starting');
