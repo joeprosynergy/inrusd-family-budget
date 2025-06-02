@@ -1,7 +1,7 @@
 // auth.js
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { showError, clearErrors, setUserCurrency, setFamilyCode } from './core.js';
+import { showError, clearErrors, setUserCurrency, setFamilyCode, domElements } from './core.js';
 import { generateFamilyCode, isValidFamilyCode, familyCodeExists, retryFirestoreOperation } from './utils.js';
 
 let isSetup = false;
@@ -87,8 +87,15 @@ export function setupAuth(loadAppDataCallback) {
       try {
         loginButton.disabled = true;
         loginButton.textContent = 'Logging in...';
+        // Show loading spinner
+        const loadingSpinner = checkElement('loading-spinner');
+        if (loadingSpinner) {
+          loadingSpinner.classList.remove('hidden');
+          loadingSpinner.setAttribute('aria-busy', 'true');
+        }
         await signInWithEmailAndPassword(auth, email, password);
         console.log('Login successful');
+        // loadAppDataCallback will handle hiding the spinner
       } catch (error) {
         console.error('Login failed:', { code: error.code, message: error.message });
         const errorMessages = {
@@ -98,6 +105,12 @@ export function setupAuth(loadAppDataCallback) {
           'auth/too-many-requests': 'Too many attempts, try again later'
         };
         showError('login-email', errorMessages[error.code] || error.message);
+        // Hide loading spinner on error
+        const loadingSpinner = checkElement('loading-spinner');
+        if (loadingSpinner) {
+          loadingSpinner.classList.add('hidden');
+          loadingSpinner.setAttribute('aria-busy', 'false');
+        }
       } finally {
         loginButton.disabled = false;
         loginButton.textContent = 'Login';
@@ -278,33 +291,37 @@ export function setupAuth(loadAppDataCallback) {
     console.error('Cannot setup reset: reset-button missing');
   }
 
-  // Modal toggling event listeners (for updated index.html)
+  // Modal toggling event listeners
   const showSignupBtn = checkElement('show-signup-btn');
   showSignupBtn?.addEventListener('click', () => {
     checkElement('signup-modal').classList.remove('hidden');
+    checkElement('signup-modal').setAttribute('aria-hidden', 'false');
     checkElement('login-modal').classList.add('hidden');
-    checkElement('signup-email').focus(); // Accessibility
+    checkElement('signup-email').focus();
   });
 
   const showResetBtn = checkElement('show-reset-btn');
   showResetBtn?.addEventListener('click', () => {
     checkElement('reset-modal').classList.remove('hidden');
+    checkElement('reset-modal').setAttribute('aria-hidden', 'false');
     checkElement('login-modal').classList.add('hidden');
-    checkElement('reset-email').focus(); // Accessibility
+    checkElement('reset-email').focus();
   });
 
   const showLoginFromSignupBtn = checkElement('show-login-from-signup-btn');
   showLoginFromSignupBtn?.addEventListener('click', () => {
     checkElement('login-modal').classList.remove('hidden');
+    checkElement('login-modal').setAttribute('aria-hidden', 'false');
     checkElement('signup-modal').classList.add('hidden');
-    checkElement('login-email').focus(); // Accessibility
+    checkElement('login-email').focus();
   });
 
   const showLoginFromResetBtn = checkElement('show-login-from-reset-btn');
   showLoginFromResetBtn?.addEventListener('click', () => {
     checkElement('login-modal').classList.remove('hidden');
+    checkElement('login-modal').setAttribute('aria-hidden', 'false');
     checkElement('reset-modal').classList.add('hidden');
-    checkElement('login-email').focus(); // Accessibility
+    checkElement('login-email').focus();
   });
 
   console.log('setupAuth: Complete');
