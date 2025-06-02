@@ -927,8 +927,8 @@ async function setupCategories() {
 
 
 
-// Replaces the entire loadBudgets function in app.js from artifact 4ad17a15-bc8b-430b-8dbb-c8d75976b9bc
-// Displays historical spent from spendingHistory for past month filters
+// Replaces the entire loadBudgets function in app.js from artifact b6107f7a-67fa-487e-9d54-8ef426675f78
+// Computes historical spent from transactions for past month filters
 
 async function loadBudgets() {
   console.log('loadBudgets: Starting', { familyCode });
@@ -970,15 +970,30 @@ async function loadBudgets() {
     budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
 
-    // Get filter for historical spending
+    // Get filter for transaction queries
     const filter = domElements.dashboardFilter?.value || 'thisMonth';
-    const { start } = getDateRangeWrapper(filter);
-    let displayMonthYear = '';
-    if (filter === 'lastMonth') {
-      const filterDate = new Date(start);
-      displayMonthYear = `${filterDate.getFullYear()}-${String(filterDate.getMonth() + 1).padStart(2, '0')}`; // e.g., "2025-05"
-      console.log('loadBudgets: Using historical spending for', { displayMonthYear });
-    }
+    const { start, end } = getDateRangeWrapper(filter);
+    console.log('loadBudgets: Filter applied', { filter, start: start.toISOString(), end: end.toISOString() });
+
+    // Determine if historical spending is needed
+    const now = new Date();
+    const currentMonthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const isCurrentMonth = filter === 'thisMonth' || (start <= now && now <= end);
+
+    // Fetch categories to map budgets to transactions
+    const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
+    const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
+    const budgetToCategories = new Map();
+    categoriesSnapshot.forEach(doc => {
+      const category = doc.data();
+      if (category.budgetId) {
+        if (!budgetToCategories.has(category.budgetId)) {
+          budgetToCategories.set(category.budgetId, []);
+        }
+        budgetToCategories.get(category.budgetId).push(doc.id);
+      }
+    });
+    console.log('loadBudgets: Budget to categories map', { budgetToCategories });
 
     let totalBudgetAmount = 0;
     let totalRemainingAmount = 0;
@@ -994,14 +1009,40 @@ async function loadBudgets() {
         console.log('loadBudgets: No budgets found');
         return;
       }
+
       for (const doc of snapshot.docs) {
         const budget = doc.data();
-        // Use historical spent for past months, current spent otherwise
         let spent = budget.spent || 0;
-        if (displayMonthYear && budget.spendingHistory?.mapValue?.fields?.[displayMonthYear]) {
-          spent = Number(budget.spendingHistory.mapValue.fields[displayMonthYear].integerValue) || 0;
-          console.log('loadBudgets: Using historical spent', { budgetId: doc.id, displayMonthYear, spent });
+        if (!isCurrentMonth) {
+          // Calculate spent from transactions for past months
+          const categoryIds = budgetToCategories.get(doc.id) || [];
+          if (categoryIds.length > 0) {
+            const transactionsQuery = query(
+              collection(db, 'transactions'),
+              where('familyCode', '==', familyCode),
+              where('categoryId', 'in', categoryIds),
+              where('type', '==', 'debit'),
+              where('createdAt', '>=', start),
+              where('createdAt', '<=', end)
+            );
+            try {
+              const transactionsSnapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
+              spent = transactionsSnapshot.docs.reduce((sum, txDoc) => sum + (txDoc.data().amount || 0), 0);
+              console.log('loadBudgets: Historical spent calculated', { budgetId: doc.id, spent, transactionCount: transactionsSnapshot.size });
+            } catch (error) {
+              console.error('loadBudgets: Failed to fetch transactions', {
+                budgetId: doc.id,
+                code: error.code,
+                message: error.message
+              });
+              spent = 0; // Fallback to 0 if query fails
+            }
+          } else {
+            console.log('loadBudgets: No categories linked to budget', { budgetId: doc.id });
+            spent = 0;
+          }
         }
+
         totalBudgetAmount += budget.amount;
         totalRemainingAmount += budget.amount - spent;
         const tr = document.createElement('tr');
