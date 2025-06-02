@@ -1,5 +1,5 @@
-// Replaces the entire utils.js file from artifact 71855d22-081a-4684-b46e-5787d8b8517e
-// Uses Firestore REST API for resetBudgetsForNewMonth to fix "u is not a function" error
+// Replaces the entire utils.js file from artifact c2d44821-31ce-4c5f-96b4-963f4eff2711
+// Updates resetBudgetsForNewMonth to save historical spending in spendingHistory
 
 import { collection, query, where, getDocs, doc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
@@ -164,7 +164,8 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
   try {
     const now = new Date();
     const currentMonthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`; // e.g., "2025-06"
-    console.log('resetBudgetsForNewMonth: Current month-year', { currentMonthYear });
+    const prevMonthYear = `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`; // e.g., "2025-05"
+    console.log('resetBudgetsForNewMonth: Current month-year', { currentMonthYear, prevMonthYear });
 
     const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
     let snapshot;
@@ -190,7 +191,6 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
       // Normalize lastResetMonth format
       let lastResetMonth = budget.lastResetMonth || '1970-01';
       if (typeof lastResetMonth === 'string' && lastResetMonth.match(/^[0-9]{4}-[0-9]{1,2}$/)) {
-        // Fix single-digit months (e.g., "2025-6" to "2025-06")
         const parts = lastResetMonth.split('-');
         lastResetMonth = `${parts[0]}-${parts[1].padStart(2, '0')}`;
       } else {
@@ -207,9 +207,18 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
         const updateData = {
           fields: {
             spent: { integerValue: 0 },
-            lastResetMonth: { stringValue: currentMonthYear }
+            lastResetMonth: { stringValue: currentMonthYear },
+            spendingHistory: {
+              mapValue: {
+                fields: budget.spendingHistory?.mapValue?.fields || {},
+              }
+            }
           }
         };
+        // Save current spent to spendingHistory for the previous month
+        if (budget.spent > 0 && lastResetMonth !== '1970-01') {
+          updateData.fields.spendingHistory.mapValue.fields[lastResetMonth] = { integerValue: budget.spent };
+        }
         console.log('resetBudgetsForNewMonth: Preparing REST update', { budgetId: doc.id, updateData });
         const docPath = `budgets/${doc.id}`;
         console.log('resetBudgetsForNewMonth: Document path', { budgetId: doc.id, docPath });
@@ -224,7 +233,7 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
               }
               const token = await user.getIdToken();
               const projectId = db.app.options.projectId;
-              const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${docPath}?updateMask.fieldPaths=spent&updateMask.fieldPaths=lastResetMonth`;
+              const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${docPath}?updateMask.fieldPaths=spent&updateMask.fieldPaths=lastResetMonth&updateMask.fieldPaths=spendingHistory`;
               const response = await fetch(url, {
                 method: 'PATCH',
                 headers: {
