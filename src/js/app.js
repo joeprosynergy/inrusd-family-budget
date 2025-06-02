@@ -927,7 +927,8 @@ async function setupCategories() {
 
 
 
-// Replaces the entire loadBudgets function in app.js from artifact 5d415e81-c2bb-4baa-b778-1447007b0b96
+// Replaces the entire loadBudgets function in app.js from artifact 4ad17a15-bc8b-430b-8dbb-c8d75976b9bc
+// Displays historical spent from spendingHistory for past month filters
 
 async function loadBudgets() {
   console.log('loadBudgets: Starting', { familyCode });
@@ -968,6 +969,17 @@ async function loadBudgets() {
     }
     budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
+
+    // Get filter for historical spending
+    const filter = domElements.dashboardFilter?.value || 'thisMonth';
+    const { start } = getDateRangeWrapper(filter);
+    let displayMonthYear = '';
+    if (filter === 'lastMonth') {
+      const filterDate = new Date(start);
+      displayMonthYear = `${filterDate.getFullYear()}-${String(filterDate.getMonth() + 1).padStart(2, '0')}`; // e.g., "2025-05"
+      console.log('loadBudgets: Using historical spending for', { displayMonthYear });
+    }
+
     let totalBudgetAmount = 0;
     let totalRemainingAmount = 0;
     await retryFirestoreOperation(async () => {
@@ -984,7 +996,12 @@ async function loadBudgets() {
       }
       for (const doc of snapshot.docs) {
         const budget = doc.data();
-        const spent = budget.spent || 0;
+        // Use historical spent for past months, current spent otherwise
+        let spent = budget.spent || 0;
+        if (displayMonthYear && budget.spendingHistory?.mapValue?.fields?.[displayMonthYear]) {
+          spent = Number(budget.spendingHistory.mapValue.fields[displayMonthYear].integerValue) || 0;
+          console.log('loadBudgets: Using historical spent', { budgetId: doc.id, displayMonthYear, spent });
+        }
         totalBudgetAmount += budget.amount;
         totalRemainingAmount += budget.amount - spent;
         const tr = document.createElement('tr');
@@ -1045,7 +1062,6 @@ async function loadBudgets() {
     }
   }
 }
-
 
 
 
