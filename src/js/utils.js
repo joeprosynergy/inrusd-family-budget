@@ -1,5 +1,5 @@
 // utils.js
-import { collection, query, where, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, writeBatch, SDK_VERSION } from 'firebase/firestore';
 import { showError } from './core.js';
 
 /**
@@ -180,8 +180,8 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
 
   try {
     // Check Firebase SDK version
-    const firebaseVersion = require('firebase/firestore').SDK_VERSION;
-    console.log('resetBudgetsForNewMonth: Firebase SDK version', { version: firebaseVersion });
+    const firebaseVersion = SDK_VERSION || 'unknown';
+    console.log('resetBudgetsForNewMonth: Firebase Firestore SDK version', { version: firebaseVersion });
     if (!firebaseVersion.startsWith('9') && !firebaseVersion.startsWith('10')) {
       console.warn('resetBudgetsForNewMonth: Firebase SDK may be outdated; expected v9+');
     }
