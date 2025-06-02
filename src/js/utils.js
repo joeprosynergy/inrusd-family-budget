@@ -1,16 +1,21 @@
-// Replaces the entire utils.js file from artifact 6997a191-00df-43ca-a476-19da2af2202d
-// Only resetBudgetsForNewMonth is updated; other functions remain unchanged
+// Replaces the entire utils.js file from artifact f7b2a9e3-8f2a-4f1e-b8c7-2c3f9e8a7e1b
+// Only retryFirestoreOperation is updated; other functions remain unchanged
 
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 
 // Retry Firestore Operation
-async function retryFirestoreOperation(operation, maxRetries = 3, delay = 1000) {
+async function retryFirestoreOperation(operation, maxRetries = 3, delay = 1000, operationData = null) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Firestore operation attempt ${attempt}/${maxRetries}`);
       return await operation();
     } catch (error) {
-      console.error('Firestore operation failed:', { attempt, code: error.code, message: error.message });
+      console.error('Firestore operation failed:', {
+        attempt,
+        code: error.code,
+        message: error.message,
+        operationData: operationData ? JSON.stringify(operationData, null, 2) : 'No operation data provided'
+      });
       if (attempt === maxRetries || error.code === 'permission-denied') {
         throw error;
       }
