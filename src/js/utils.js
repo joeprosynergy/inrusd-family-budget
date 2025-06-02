@@ -147,7 +147,9 @@ function getDateRange(filter, startDateInput, endDateInput) {
   return { start, end };
 }
 
-// Reset Budgets for New Month
+// Replaces the resetBudgetsForNewMonth function in utils.js from artifact a8329100-0199-456b-b7d6-f7b12e9c61a2
+// Place this function in utils.js, replacing the existing resetBudgetsForNewMonth function
+
 async function resetBudgetsForNewMonth(db, familyCode, accountType) {
   console.log('resetBudgetsForNewMonth: Starting', { familyCode, accountType });
   if (!db || !familyCode) {
@@ -185,24 +187,33 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
         console.warn('resetBudgetsForNewMonth: Invalid budget data, skipping', { budgetId: doc.id, data: budget });
         return;
       }
-      const lastResetMonth = budget.lastResetMonth || '1970-01'; // Default to epoch if unset
+      // Normalize lastResetMonth format
+      let lastResetMonth = budget.lastResetMonth || '1970-01';
+      if (typeof lastResetMonth === 'string' && lastResetMonth.match(/^[0-9]{4}-[0-9]{1,2}$/)) {
+        // Fix single-digit months (e.g., "2025-6" to "2025-06")
+        const parts = lastResetMonth.split('-');
+        lastResetMonth = `${parts[0]}-${parts[1].padStart(2, '0')}`;
+      } else {
+        console.warn('resetBudgetsForNewMonth: Invalid lastResetMonth format, using default', {
+          budgetId: doc.id,
+          lastResetMonth
+        });
+        lastResetMonth = '1970-01';
+      }
       console.log('resetBudgetsForNewMonth: Checking budget', { budgetId: doc.id, lastResetMonth });
 
       if (lastResetMonth !== currentMonthYear) {
         console.log('resetBudgetsForNewMonth: Budget needs reset', { budgetId: doc.id, name: budget.name });
+        const updateData = {
+          spent: 0,
+          lastResetMonth: currentMonthYear
+        };
         updatePromises.push(
-          retryFirestoreOperation(() => 
-            updateDoc(doc(db, 'budgets', doc.id), {
-              spent: 0,
-              lastResetMonth: currentMonthYear
-            }).catch(error => {
-              console.error('resetBudgetsForNewMonth: Failed to update budget', {
-                budgetId: doc.id,
-                code: error.code,
-                message: error.message
-              });
-              return Promise.resolve(); // Continue with other updates
-            })
+          retryFirestoreOperation(
+            () => updateDoc(doc(db, 'budgets', doc.id), updateData),
+            3,
+            1000,
+            updateData
           )
         );
       } else {
@@ -218,12 +229,12 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
       console.log('resetBudgetsForNewMonth: No budgets need resetting');
     }
   } catch (error) {
-    console.error('resetBudgetsForNewMonth: Unexpected error', {
+    console.error('resetBudgetsForNewMonth: Error resetting budgets', {
       code: error.code,
       message: error.message,
       stack: error.stack
     });
-    // Do not throw; allow budget loading to proceed
+    showError('budget-name', `Failed to reset budgets: ${error.message}`);
   }
 }
 
