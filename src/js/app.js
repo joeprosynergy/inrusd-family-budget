@@ -2727,19 +2727,100 @@ async function updateDashboard() {
         console.log('updateDashboard: Total balance calculated', { totalBalance });
       });
 
-      // Calculate budgets for selected date range
+      // Fetch budgets
+      const budgetToCategories = new Map();
       await retryFirestoreOperation(async () => {
+        const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
+        const categoriesSnapshot = await getDocs(categoriesQuery);
+        categoriesSnapshot.forEach(doc => {
+          const category = doc.data();
+          if (category.budgetId) {
+            if (!budgetToCategories.has(category.budgetId)) {
+              budgetToCategories.set(category.budgetId, []);
+            }
+            budgetToCategories.get(category.budgetId).push(doc.id);
+          }
+        });
+        console.log('updateDashboard: Budget to categories map', { budgetToCategoriesSize: budgetToCategories.size });
+
         const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
         const snapshot = await getDocs(budgetsQuery);
         console.log('updateDashboard: Budgets fetched', { count: snapshot.size });
-        snapshot.forEach(doc => {
+        for (const doc of snapshot.docs) {
           const budget = doc.data();
-          const createdAt = budget.createdAt ? new Date(budget.createdAt.toDate()) : new Date();
-          if (createdAt >= start && createdAt <= end) {
-            totalBudgetAmount += budget.amount;
-            totalSpent += budget.spent || 0;
+          totalBudgetAmount += budget.amount;
+
+          // Calculate spent from transactions for the date range
+          const categoryIds = budgetToCategories.get(doc.id) || [];
+          if (categoryIds.length > 0) {
+            const chunks = [];
+            for (let i = 0; i < categoryIds.length; i += 30) {
+              chunks.push(categoryIds.slice(i, i + 30));
+            }
+            let debitTotal = 0;
+            let creditTotal = 0;
+            for (const chunk of chunks) {
+              const debitQuery = query(
+                collection(db, 'transactions'),
+                where('familyCode', '==', familyCode),
+                where('categoryId', 'in', chunk),
+                where('type', '==', 'debit'),
+                where('createdAt', '>=', start),
+                where('createdAt', '<=', end)
+              );
+              try {
+                const debitSnapshot = await retryFirestoreOperation(() => getDocs(debitQuery));
+                debitTotal += debitSnapshot.docs.reduce((sum, txDoc) => sum + (txDoc.data().amount || 0), 0);
+                console.log('updateDashboard: Debit transactions calculated', {
+                  budgetId: doc.id,
+                  chunkSize: chunk.length,
+                  debitCount: debitSnapshot.size,
+                  debitAmount: debitTotal
+                });
+              } catch (error) {
+                console.error('updateDashboard: Failed to fetch debit transactions', {
+                  budgetId: doc.id,
+                  code: error.code,
+                  message: error.message
+                });
+              }
+
+              const creditQuery = query(
+                collection(db, 'transactions'),
+                where('familyCode', '==', familyCode),
+                where('categoryId', 'in', chunk),
+                where('type', '==', 'credit'),
+                where('createdAt', '>=', start),
+                where('createdAt', '<=', end)
+              );
+              try {
+                const creditSnapshot = await retryFirestoreOperation(() => getDocs(creditQuery));
+                creditTotal += creditSnapshot.docs.reduce((sum, txDoc) => sum + (txDoc.data().amount || 0), 0);
+                console.log('updateDashboard: Credit transactions calculated', {
+                  budgetId: doc.id,
+                  chunkSize: chunk.length,
+                  creditCount: creditSnapshot.size,
+                  creditAmount: creditTotal
+                });
+              } catch (error) {
+                console.error('updateDashboard: Failed to fetch credit transactions', {
+                  budgetId: doc.id,
+                  code: error.code,
+                  message: error.message
+                });
+              }
+            }
+            totalSpent += debitTotal - creditTotal;
+            console.log('updateDashboard: Net spent calculated for budget', {
+              budgetId: doc.id,
+              debitTotal,
+              creditTotal,
+              netSpent: debitTotal - creditTotal
+            });
+          } else {
+            console.log('updateDashboard: No categories linked to budget', { budgetId: doc.id });
           }
-        });
+        }
         console.log('updateDashboard: Budgets calculated', { totalBudgetAmount, totalSpent });
       });
 
@@ -2748,7 +2829,7 @@ async function updateDashboard() {
       totalBudgetElement.textContent = await formatCurrency(totalBudgetAmount, 'INR');
       totalRemainingElement.textContent = await formatCurrency(totalBudgetAmount - totalSpent, 'INR');
       totalBudgetElement.parentElement.classList.remove('hidden');
-      const afterBudget = totalBalance - totalBudgetAmount;
+      const afterBudget = totalBalance - (totalBudgetAmount - totalSpent);
       afterBudgetElement.textContent = await formatCurrency(afterBudget, 'INR');
       afterBudgetElement.parentElement.classList.remove('hidden');
       console.log('updateDashboard: Tiles updated', {
