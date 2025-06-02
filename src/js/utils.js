@@ -1,4 +1,4 @@
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 
 // Retry Firestore Operation
 async function retryFirestoreOperation(operation, maxRetries = 3, delay = 1000) {
@@ -127,6 +127,11 @@ function getDateRange(filter, startDateInput, endDateInput) {
         start.setTime(0);
       }
       break;
+    case 'allTime':
+      start.setTime(0); // Epoch start
+      end.setTime(now.getTime());
+      end.setHours(23, 59, 59, 999);
+      break;
     default:
       start.setTime(0);
       break;
@@ -134,6 +139,62 @@ function getDateRange(filter, startDateInput, endDateInput) {
   return { start, end };
 }
 
+// Reset Budgets for New Month
+async function resetBudgetsForNewMonth(db, familyCode) {
+  console.log('resetBudgetsForNewMonth: Starting', { familyCode });
+  if (!db || !familyCode) {
+    console.error('resetBudgetsForNewMonth: Missing db or familyCode', { db: !!db, familyCode });
+    throw new Error('Database or family code not available');
+  }
+
+  try {
+    const now = new Date();
+    const currentMonthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`; // e.g., "2025-06"
+    console.log('resetBudgetsForNewMonth: Current month-year', { currentMonthYear });
+
+    const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
+    const snapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
+    console.log('resetBudgetsForNewMonth: Budgets fetched', { count: snapshot.size });
+
+    const updatePromises = [];
+    snapshot.forEach(doc => {
+      const budget = doc.data();
+      const lastResetMonth = budget.lastResetMonth || '1970-01'; // Default to epoch if unset
+      console.log('resetBudgetsForNewMonth: Checking budget', { budgetId: doc.id, lastResetMonth });
+
+      if (lastResetMonth !== currentMonthYear) {
+        console.log('resetBudgetsForNewMonth: Budget needs reset', { budgetId: doc.id, name: budget.name });
+        updatePromises.push(
+          retryFirestoreOperation(() => 
+            updateDoc(doc(db, 'budgets', doc.id), {
+              spent: 0,
+              lastResetMonth: currentMonthYear
+            })
+          )
+        );
+      } else {
+        console.log('resetBudgetsForNewMonth: Budget already reset this month', { budgetId: doc.id, name: budget.name });
+      }
+    });
+
+    if (updatePromises.length > 0) {
+      console.log('resetBudgetsForNewMonth: Updating budgets', { count: updatePromises.length });
+      await Promise.all(updatePromises);
+      console.log('resetBudgetsForNewMonth: Budgets reset complete', { updated: updatePromises.length });
+    } else {
+      console.log('resetBudgetsForNewMonth: No budgets need resetting');
+    }
+  } catch (error) {
+    console.error('resetBudgetsForNewMonth: Error', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    throw new Error(`Failed to reset budgets: ${error.message}`);
+  }
+}
+
+// Generate Family Code
 async function generateFamilyCode(db) {
   console.log('generateFamilyCode: Starting');
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -175,11 +236,13 @@ async function generateFamilyCode(db) {
   return code;
 }
 
+// Validate Family Code Format
 function isValidFamilyCode(code) {
   const regex = /^[A-Z0-9]{6}$/;
   return regex.test(code);
 }
 
+// Check Family Code Existence
 async function familyCodeExists(db, code) {
   try {
     const usersQuery = query(collection(db, 'users'), where('familyCode', '==', code));
@@ -194,4 +257,4 @@ async function familyCodeExists(db, code) {
   }
 }
 
-export { retryFirestoreOperation, fetchExchangeRate, getDateRange, generateFamilyCode, isValidFamilyCode, familyCodeExists };
+export { retryFirestoreOperation, fetchExchangeRate, getDateRange, resetBudgetsForNewMonth, generateFamilyCode, isValidFamilyCode, familyCodeExists };
