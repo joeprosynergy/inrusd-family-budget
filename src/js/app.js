@@ -922,7 +922,12 @@ async function setupCategories() {
   }
 }
 
-// Replaces the entire loadBudgets function in app.js (lines 509-572 in the original file)
+
+
+
+
+
+// Replaces the entire loadBudgets function in app.js from artifact 221221b0-d4cc-4003-92de-047f64980fe0
 
 async function loadBudgets() {
   console.log('loadBudgets: Starting', { familyCode });
@@ -931,12 +936,26 @@ async function loadBudgets() {
     showError('budget-name', 'Database service not available');
     return;
   }
-  try {
-    // Reset budgets if new month
-    console.log('loadBudgets: Checking for budget reset');
-    await resetBudgetsForNewMonth(db, familyCode);
-    console.log('loadBudgets: Budget reset check complete');
 
+  // Attempt budget reset for admin users
+  if (currentAccountType === 'admin') {
+    try {
+      console.log('loadBudgets: Attempting budget reset for admin');
+      await resetBudgetsForNewMonth(db, familyCode, currentAccountType);
+      console.log('loadBudgets: Budget reset attempt complete');
+    } catch (error) {
+      console.error('loadBudgets: Budget reset failed, continuing to load budgets', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      // Continue loading budgets despite reset failure
+    }
+  } else {
+    console.log('loadBudgets: Non-admin user, skipping budget reset', { accountType: currentAccountType });
+  }
+
+  try {
     const budgetTable = document.getElementById('budget-table');
     const budgetTiles = document.getElementById('budget-tiles');
     if (!budgetTable || !budgetTiles) {
@@ -1015,7 +1034,7 @@ async function loadBudgets() {
       }
     });
   } catch (error) {
-    console.error('loadBudgets error:', {
+    console.error('loadBudgets: Error loading budgets', {
       code: error.code,
       message: error.message,
       stack: error.stack
