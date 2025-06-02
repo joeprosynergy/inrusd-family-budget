@@ -1,12 +1,16 @@
-// Replaces the entire utils.js file from artifact c2d44821-31ce-4c5f-96b4-963f4eff2711
-// Updates resetBudgetsForNewMonth to save historical spending in spendingHistory
-
-import { collection, query, where, getDocs, doc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+// utils.js
+import { collection, query, where, getDocs, doc, updateDoc, batch } from 'firebase/firestore';
 import { showError } from './core.js';
 
-// Retry Firestore Operation
-async function retryFirestoreOperation(operation, maxRetries = 3, delay = 1000, operationData = null) {
+/**
+ * Retries a Firestore operation
+ * @param {Function} operation
+ * @param {number} maxRetries
+ * @param {number} baseDelay
+ * @param {any} operationData
+ * @returns {Promise<any>}
+ */
+async function retryFirestoreOperation(operation, maxRetries = 3, baseDelay = 1000, operationData = null) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Firestore operation attempt ${attempt}/${maxRetries}`);
@@ -16,131 +20,142 @@ async function retryFirestoreOperation(operation, maxRetries = 3, delay = 1000, 
         attempt,
         code: error.code,
         message: error.message,
-        operationData: operationData ? JSON.stringify(operationData, null, 2) : 'No operation data provided'
+        operationData: operationData ? JSON.stringify(operationData, null, 2) : 'No operation data'
       });
       if (attempt === maxRetries || error.code === 'permission-denied') {
         throw error;
       }
+      const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 }
 
-// Fetch Exchange Rate
+/**
+ * Fetches exchange rate
+ * @param {string} fromCurrency
+ * @param {string} toCurrency
+ * @param {{ rate: number | null, timestamp: number | null }} cache
+ * @param {number} CACHE_TTL
+ * @returns {Promise<number>}
+ */
 async function fetchExchangeRate(fromCurrency, toCurrency, cache = { rate: null, timestamp: null }, CACHE_TTL = 3600000) {
-  try {
-    const cacheKey = `exchangeRate_${fromCurrency}_${toCurrency}`;
-    const cachedData = localStorage.getItem(cacheKey);
-    const now = Date.now();
+  const cacheKey = `exchangeRate_${fromCurrency}_${toCurrency}`;
+  const now = Date.now();
 
-    // Check localStorage cache
-    if (cachedData) {
-      const { rate, timestamp } = JSON.parse(cachedData);
-      if (timestamp && (now - timestamp) < CACHE_TTL) {
-        console.log(`Using localStorage cached exchange rate for ${fromCurrency} to ${toCurrency}:`, rate);
-        cache.rate = rate;
-        cache.timestamp = timestamp;
-        return rate;
-      }
-    }
-
-    // Check in-memory cache
-    if (cache.rate && cache.timestamp && (now - cache.timestamp) < CACHE_TTL) {
-      console.log(`Using in-memory cached exchange rate for ${fromCurrency} to ${toCurrency}:`, cache.rate);
+  // Check localStorage cache
+  const cachedData = localStorage.getItem(cacheKey);
+  if (cachedData) {
+    const { rate, timestamp } = JSON.parse(cachedData);
+    if (timestamp && (now - timestamp) < CACHE_TTL) {
+      console.log(`Using localStorage cached exchange rate for ${fromCurrency} to ${toCurrency}:`, rate);
+      cache.rate = rate;
+      cache.timestamp = timestamp;
       return rate;
     }
+  }
 
-    console.log(`Fetching exchange rate from API for ${fromCurrency} to ${toCurrency}`);
-    const response = await fetch(`https://v6.exchangerate-api.com/v6/18891e972833c8dd062c1283/latest/${fromCurrency}`);
-    const data = await response.json();
-    if (data.result !== 'success') throw new Error(`Failed to fetch exchange rate for ${fromCurrency} to ${toCurrency}`);
-    const rate = data.conversion_rates[toCurrency];
-    if (!rate) throw new Error(`Conversion rate for ${toCurrency} not found`);
-    cache.rate = rate;
-    cache.timestamp = now;
-    
-    // Store in localStorage
-    localStorage.setItem(cacheKey, JSON.stringify({ rate, timestamp: now }));
-    console.log(`Exchange rate fetched and cached for ${fromCurrency} to ${toCurrency}:`, rate);
-    return rate;
-  } catch (error) {
-    console.error(`Error fetching exchange rate for ${fromCurrency} to ${toCurrency}:`, error);
-    // Fallback rates
-    const fallbackRates = {
-      'INR_USD': 0.012,
-      'INR_ZAR': 0.22,
-      'USD_ZAR': 18.0
-    };
-    const key = `${fromCurrency}_${toCurrency}`;
-    const fallbackRate = fallbackRates[key] || 1.0;
-    console.warn(`Using fallback rate for ${key}:`, fallbackRate);
-    return fallbackRate;
+  // Check in-memory cache
+  if (cache.rate && cache.timestamp && (now - cache.timestamp) < CACHE_TTL) {
+    console.log(`Using in-memory cached exchange rate for ${fromCurrency} to ${toCurrency}:`, cache.rate);
+    return cache.rate;
+  }
+
+  // Fetch from API with retry
+  let attempts = 0;
+  const maxAttempts = 3;
+  while (attempts < maxAttempts) {
+    attempts++;
+    try {
+      console.log(`Fetching exchange rate attempt ${attempts}/${maxAttempts} for ${fromCurrency} to ${toCurrency}`);
+      const response = await fetch(`https://v6.exchangerate-api.com/v6/18891e972833c8dd062c1283/latest/${fromCurrency}`);
+      const data = await response.json();
+      if (data.result !== 'success' || !data.conversion_rates?.[toCurrency]) {
+        throw new Error(`Invalid API response for ${fromCurrency} to ${toCurrency}`);
+      }
+      const rate = data.conversion_rates[toCurrency];
+      cache.rate = rate;
+      cache.timestamp = now;
+      localStorage.setItem(cacheKey, JSON.stringify({ rate, timestamp: now }));
+      console.log(`Exchange rate fetched:`, rate);
+      return rate;
+    } catch (error) {
+      console.error(`Exchange rate fetch failed:`, error.message);
+      if (attempts === maxAttempts) {
+        const fallbackRates = { INR_USD: 0.012, INR_ZAR: 0.22, USD_ZAR: 18.0 };
+        const key = `${fromCurrency}_${toCurrency}`;
+        const fallbackRate = fallbackRates[key] || 1.0;
+        console.warn(`Using fallback rate for ${key}:`, fallbackRate);
+        return fallbackRate;
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
   }
 }
 
-// Get Date Range for Filters
+/**
+ * Gets date range for filters
+ * @param {string} filter
+ * @param {HTMLInputElement | null} startDateInput
+ * @param {HTMLInputElement | null} endDateInput
+ * @returns {{ start: Date, end: Date }}
+ */
 function getDateRange(filter, startDateInput, endDateInput) {
   const now = new Date();
   const start = new Date();
   const end = new Date();
-  
+
+  start.setUTCHours(0, 0, 0, 0);
+  end.setUTCHours(23, 59, 59, 999);
+
   switch (filter) {
     case '1week':
-      start.setDate(now.getDate() - 7);
+      start.setUTCDate(now.getUTCDate() - 7);
       break;
     case '1month':
-      start.setMonth(now.getMonth() - 1);
+      start.setUTCMonth(now.getUTCMonth() - 1);
       break;
     case 'thisMonth':
-      start.setDate(1);
-      start.setHours(0, 0, 0, 0);
-      end.setMonth(now.getMonth() + 1);
-      end.setDate(0);
-      end.setHours(23, 59, 59, 999);
+      start.setUTCDate(1);
+      end.setUTCMonth(now.getUTCMonth() + 1);
+      end.setUTCDate(0);
       break;
     case 'lastMonth':
-      start.setMonth(now.getMonth() - 1);
-      start.setDate(1);
-      start.setHours(0, 0, 0, 0);
-      end.setMonth(now.getMonth());
-      end.setDate(0);
-      end.setHours(23, 59, 59, 999);
+      start.setUTCMonth(now.getUTCMonth() - 1);
+      start.setUTCDate(1);
+      end.setUTCMonth(now.getUTCMonth());
+      end.setUTCDate(0);
       break;
     case 'thisYear':
-      start.setMonth(0);
-      start.setDate(1);
-      start.setHours(0, 0, 0, 0);
-      end.setMonth(11);
-      end.setDate(31);
-      end.setHours(23, 59, 59, 999);
+      start.setUTCMonth(0);
+      start.setUTCDate(1);
+      end.setUTCMonth(11);
+      end.setUTCDate(31);
       break;
     case 'lastYear':
-      start.setFullYear(now.getFullYear() - 1);
-      start.setMonth(0);
-      start.setDate(1);
-      start.setHours(0, 0, 0, 0);
-      end.setFullYear(now.getFullYear() - 1);
-      end.setMonth(11);
-      end.setDate(31);
-      end.setHours(23, 59, 59, 999);
+      start.setUTCFullYear(now.getUTCFullYear() - 1);
+      start.setUTCMonth(0);
+      start.setUTCDate(1);
+      end.setUTCFullYear(now.getUTCFullYear() - 1);
+      end.setUTCMonth(11);
+      end.setUTCDate(31);
       break;
     case 'custom':
       const startDate = startDateInput?.value ? new Date(startDateInput.value) : null;
       const endDate = endDateInput?.value ? new Date(endDateInput.value) : null;
-      if (startDate && endDate && startDate <= endDate) {
+      if (startDate && endDate && startDate <= endDate && !isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
         start.setTime(startDate.getTime());
-        start.setHours(0, 0, 0, 0);
+        start.setUTCHours(0, 0, 0, 0);
         end.setTime(endDate.getTime());
-        end.setHours(23, 59, 59, 999);
+        end.setUTCHours(23, 59, 59, 999);
       } else {
-        console.warn('Invalid custom date range; using default (all time)');
+        console.warn('Invalid custom date range; using all time');
         start.setTime(0);
       }
       break;
     case 'allTime':
-      start.setTime(0); // Epoch start
+      start.setTime(0);
       end.setTime(now.getTime());
-      end.setHours(23, 59, 59, 999);
       break;
     default:
       start.setTime(0);
@@ -149,12 +164,17 @@ function getDateRange(filter, startDateInput, endDateInput) {
   return { start, end };
 }
 
-// Reset Budgets for New Month
+/**
+ * Resets budgets for new month
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} familyCode
+ * @param {string} accountType
+ */
 async function resetBudgetsForNewMonth(db, familyCode, accountType) {
   console.log('resetBudgetsForNewMonth: Starting', { familyCode, accountType });
   if (!db || !familyCode) {
     console.error('resetBudgetsForNewMonth: Missing db or familyCode', { db: !!db, familyCode });
-    return; // Silently return to avoid blocking budget loading
+    return;
   }
   if (accountType !== 'admin') {
     console.log('resetBudgetsForNewMonth: Non-admin user, skipping reset', { accountType });
@@ -163,110 +183,55 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
 
   try {
     const now = new Date();
-    const currentMonthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`; // e.g., "2025-06"
-    const prevMonthYear = `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`; // e.g., "2025-05"
-    console.log('resetBudgetsForNewMonth: Current month-year', { currentMonthYear, prevMonthYear });
+    const currentMonthYear = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    const prevMonthYear = `${now.getUTCFullYear()}-${String(now.getUTCMonth()).padStart(2, '0')}`;
+    console.log('resetBudgetsForNewMonth: Month check', { currentMonthYear, prevMonthYear });
 
     const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
-    let snapshot;
-    try {
-      snapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
-    } catch (error) {
-      console.error('resetBudgetsForNewMonth: Failed to fetch budgets', {
-        code: error.code,
-        message: error.message,
-        stack: error.stack
-      });
-      return; // Avoid throwing to allow budget loading to continue
-    }
+    const snapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
     console.log('resetBudgetsForNewMonth: Budgets fetched', { count: snapshot.size });
 
-    const updatePromises = [];
-    snapshot.forEach(doc => {
-      const budget = doc.data();
+    const batch = db.batch();
+    let updateCount = 0;
+
+    for (const docSnap of snapshot.docs) {
+      const budget = docSnap.data();
       if (!budget.name || typeof budget.spent !== 'number') {
-        console.warn('resetBudgetsForNewMonth: Invalid budget data, skipping', { budgetId: doc.id, data: budget });
-        return;
+        console.warn('resetBudgetsForNewMonth: Invalid budget data', { budgetId: docSnap.id });
+        continue;
       }
-      // Normalize lastResetMonth format
       let lastResetMonth = budget.lastResetMonth || '1970-01';
-      if (typeof lastResetMonth === 'string' && lastResetMonth.match(/^[0-9]{4}-[0-9]{1,2}$/)) {
+      if (lastResetMonth.match(/^[0-9]{4}-[0-9]{1,2}$/)) {
         const parts = lastResetMonth.split('-');
         lastResetMonth = `${parts[0]}-${parts[1].padStart(2, '0')}`;
       } else {
-        console.warn('resetBudgetsForNewMonth: Invalid lastResetMonth format, using default', {
-          budgetId: doc.id,
-          lastResetMonth
-        });
         lastResetMonth = '1970-01';
       }
-      console.log('resetBudgetsForNewMonth: Checking budget', { budgetId: doc.id, lastResetMonth, currentMonthYear });
 
       if (lastResetMonth !== currentMonthYear) {
-        console.log('resetBudgetsForNewMonth: Budget needs reset', { budgetId: doc.id, name: budget.name });
-        const updateData = {
-          fields: {
-            spent: { integerValue: 0 },
-            lastResetMonth: { stringValue: currentMonthYear },
-            spendingHistory: {
-              mapValue: {
-                fields: budget.spendingHistory?.mapValue?.fields || {},
-              }
-            }
-          }
-        };
-        // Save current spent to spendingHistory for the previous month
+        const budgetRef = doc(db, 'budgets', docSnap.id);
+        const spendingHistory = budget.spendingHistory?.mapValue?.fields || {};
         if (budget.spent > 0 && lastResetMonth !== '1970-01') {
-          updateData.fields.spendingHistory.mapValue.fields[lastResetMonth] = { integerValue: budget.spent };
+          spendingHistory[prevMonthYear] = { integerValue: budget.spent };
         }
-        console.log('resetBudgetsForNewMonth: Preparing REST update', { budgetId: doc.id, updateData });
-        const docPath = `budgets/${doc.id}`;
-        console.log('resetBudgetsForNewMonth: Document path', { budgetId: doc.id, docPath });
-        updatePromises.push(
-          retryFirestoreOperation(
-            async () => {
-              console.log('resetBudgetsForNewMonth: Executing REST PATCH', { budgetId: doc.id });
-              const auth = getAuth();
-              const user = auth.currentUser;
-              if (!user) {
-                throw new Error('User not authenticated');
-              }
-              const token = await user.getIdToken();
-              const projectId = db.app.options.projectId;
-              const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${docPath}?updateMask.fieldPaths=spent&updateMask.fieldPaths=lastResetMonth&updateMask.fieldPaths=spendingHistory`;
-              const response = await fetch(url, {
-                method: 'PATCH',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(updateData)
-              });
-              if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`REST API error: ${JSON.stringify(errorData)}`);
-              }
-              console.log('resetBudgetsForNewMonth: REST PATCH successful', { budgetId: doc.id });
-            },
-            3,
-            1000,
-            updateData
-          )
-        );
-      } else {
-        console.log('resetBudgetsForNewMonth: Budget already reset this month', { budgetId: doc.id, name: budget.name });
+        batch.update(budgetRef, {
+          spent: 0,
+          lastResetMonth: currentMonthYear,
+          spendingHistory
+        });
+        updateCount++;
+        console.log('resetBudgetsForNewMonth: Queued update', { budgetId: docSnap.id });
       }
-    });
+    }
 
-    if (updatePromises.length > 0) {
-      console.log('resetBudgetsForNewMonth: Updating budgets', { count: updatePromises.length });
-      await Promise.all(updatePromises);
-      console.log('resetBudgetsForNewMonth: Budgets reset complete', { updated: updatePromises.length });
+    if (updateCount > 0) {
+      await retryFirestoreOperation(() => batch.commit());
+      console.log('resetBudgetsForNewMonth: Batch update complete', { updated: updateCount });
     } else {
       console.log('resetBudgetsForNewMonth: No budgets need resetting');
     }
   } catch (error) {
-    console.error('resetBudgetsForNewMonth: Error resetting budgets', {
+    console.error('resetBudgetsForNewMonth: Error', {
       code: error.code,
       message: error.message,
       stack: error.stack
@@ -275,7 +240,11 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
   }
 }
 
-// Generate Family Code
+/**
+ * Generates unique family code
+ * @param {import('firebase/firestore').Firestore} db
+ * @returns {Promise<string>}
+ */
 async function generateFamilyCode(db) {
   console.log('generateFamilyCode: Starting');
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -285,57 +254,46 @@ async function generateFamilyCode(db) {
   const maxAttempts = 10;
 
   while (!isUnique && attempts < maxAttempts) {
-    code = '';
-    for (let i = 0; i < 6; i++) {
-      code += characters.charAt(Math.floor(Math.random() * characters.length));
-    }
+    code = Array.from({ length: 6 }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
     console.log('generateFamilyCode: Generated code', { code, attempt: attempts + 1 });
 
-    try {
-      const usersQuery = query(collection(db, 'users'), where('familyCode', '==', code));
-      const snapshot = await getDocs(usersQuery);
-      if (snapshot.empty) {
-        isUnique = true;
-        console.log('generateFamilyCode: Code is unique', { code });
-      } else {
-        console.log('generateFamilyCode: Code already in use', { code });
-      }
-    } catch (error) {
-      console.error('generateFamilyCode: Error checking code uniqueness', {
-        code: error.code,
-        message: error.message
-      });
-      throw new Error('Failed to validate family code uniqueness');
+    const usersQuery = query(collection(db, 'users'), where('familyCode', '==', code));
+    const snapshot = await retryFirestoreOperation(() => getDocs(usersQuery));
+    if (snapshot.empty) {
+      isUnique = true;
+      console.log('generateFamilyCode: Code is unique', { code });
     }
     attempts++;
   }
 
   if (!isUnique) {
-    throw new Error('Could not generate a unique family code after maximum attempts');
+    throw new Error('Could not generate a unique family code');
   }
-
   return code;
 }
 
-// Validate Family Code Format
+/**
+ * Validates family code format
+ * @param {string} code
+ * @returns {boolean}
+ */
 function isValidFamilyCode(code) {
-  const regex = /^[A-Z0-9]{6}$/;
-  return regex.test(code);
+  return /^[A-Z0-9]{6}$/.test(code);
 }
 
-// Check Family Code Existence
+/**
+ * Checks if family code exists
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} code
+ * @returns {Promise<boolean>}
+ */
 async function familyCodeExists(db, code) {
-  try {
-    const usersQuery = query(collection(db, 'users'), where('familyCode', '==', code));
-    const snapshot = await getDocs(usersQuery);
-    return !snapshot.empty;
-  } catch (error) {
-    console.error('familyCodeExists: Error checking code existence', {
-      code: error.code,
-      message: error.message
-    });
-    throw new Error('Failed to check family code existence');
+  if (!isValidFamilyCode(code)) {
+    throw new Error('Invalid family code format');
   }
+  const usersQuery = query(collection(db, 'users'), where('familyCode', '==', code));
+  const snapshot = await retryFirestoreOperation(() => getDocs(usersQuery));
+  return !snapshot.empty;
 }
 
 export { retryFirestoreOperation, fetchExchangeRate, getDateRange, resetBudgetsForNewMonth, generateFamilyCode, isValidFamilyCode, familyCodeExists };
