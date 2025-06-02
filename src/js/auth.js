@@ -1,10 +1,39 @@
+// auth.js
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { showError, clearErrors, setUserCurrency, setFamilyCode, domElements } from './core.js';
+import { showError, clearErrors, setUserCurrency, setFamilyCode } from './core.js';
 import { generateFamilyCode, isValidFamilyCode, familyCodeExists, retryFirestoreOperation } from './utils.js';
 
 let isSetup = false;
+const DEBOUNCE_MS = 500; // Debounce delay for form submissions
 
+/**
+ * Validates email format
+ * @param {string} email
+ * @returns {boolean}
+ */
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+/**
+ * Debounces a function
+ * @param {Function} func
+ * @param {number} wait
+ * @returns {Function}
+ */
+function debounce(func, wait) {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
+
+/**
+ * Sets up authentication event listeners
+ * @param {Function} loadAppDataCallback
+ */
 export function setupAuth(loadAppDataCallback) {
   if (isSetup) {
     console.log('setupAuth: Already initialized, skipping');
@@ -15,7 +44,7 @@ export function setupAuth(loadAppDataCallback) {
   const auth = getAuth();
   const db = getFirestore();
 
-  // Helper to log DOM element status
+  // Helper to log and get DOM element
   function checkElement(id) {
     const element = document.getElementById(id);
     console.log(`Checking element ${id}: ${element ? 'found' : 'not found'}`);
@@ -27,74 +56,77 @@ export function setupAuth(loadAppDataCallback) {
   const familyCodeOption = checkElement('admin-family-code-option');
   accountTypeSelect?.addEventListener('change', () => {
     console.log('signup-account-type: Changed', { value: accountTypeSelect.value });
+    const familyCodeInput = checkElement('signup-family-code');
     if (accountTypeSelect.value === 'child') {
       familyCodeOption.classList.add('hidden');
-      document.getElementById('signup-family-code').setAttribute('required', 'true');
-      document.getElementById('signup-family-code').placeholder = 'Enter existing 6-digit alphanumeric Family Code';
+      familyCodeInput.setAttribute('required', 'true');
+      familyCodeInput.placeholder = 'Enter existing 6-digit alphanumeric Family Code';
     } else {
       familyCodeOption.classList.remove('hidden');
-      document.getElementById('signup-family-code').removeAttribute('required');
-      document.getElementById('signup-family-code').placeholder = '6-digit alphanumeric Family Code (optional)';
+      familyCodeInput.removeAttribute('required');
+      familyCodeInput.placeholder = '6-digit alphanumeric Family Code (optional)';
     }
   });
 
-  // Login button
+  // Login handler
   const loginButton = checkElement('login-button');
   if (loginButton) {
-    loginButton.removeEventListener('click', handleLogin); // Prevent duplicates
-    loginButton.addEventListener('click', handleLogin);
-    async function handleLogin() {
+    const handleLogin = debounce(async () => {
       console.log('Login button clicked');
       clearErrors();
-      const email = document.getElementById('login-email')?.value;
-      const password = document.getElementById('login-password')?.value;
+      const email = checkElement('login-email')?.value.trim();
+      const password = checkElement('login-password')?.value;
       if (!email || !password) {
-        console.log('Missing email or password');
         showError('login-email', 'Please enter email and password');
+        return;
+      }
+      if (!isValidEmail(email)) {
+        showError('login-email', 'Invalid email format');
         return;
       }
       try {
         loginButton.disabled = true;
         loginButton.textContent = 'Logging in...';
-        console.log('Attempting signInWithEmailAndPassword');
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        console.log('Login successful:', userCredential.user.uid);
+        await signInWithEmailAndPassword(auth, email, password);
+        console.log('Login successful');
       } catch (error) {
-        console.error('Login failed:', {
-          code: error.code,
-          message: error.message
-        });
-        showError('login-email', error.message);
+        console.error('Login failed:', { code: error.code, message: error.message });
+        const errorMessages = {
+          'auth/user-not-found': 'No user found with this email',
+          'auth/wrong-password': 'Incorrect password',
+          'auth/invalid-email': 'Invalid email format',
+          'auth/too-many-requests': 'Too many attempts, try again later'
+        };
+        showError('login-email', errorMessages[error.code] || error.message);
       } finally {
         loginButton.disabled = false;
         loginButton.textContent = 'Login';
       }
-    }
+    }, DEBOUNCE_MS);
+    loginButton.addEventListener('click', handleLogin);
   } else {
     console.error('Cannot setup login: login-button missing');
   }
 
-  // Signup button
+  // Signup handler
   const signupButton = checkElement('signup-button');
   if (signupButton) {
-    signupButton.removeEventListener('click', handleSignup); // Prevent duplicates
-    signupButton.addEventListener('click', handleSignup);
-    async function handleSignup() {
+    const handleSignup = debounce(async () => {
       console.log('Signup button clicked');
       clearErrors();
-      const email = document.getElementById('signup-email')?.value.trim();
-      const password = document.getElementById('signup-password')?.value;
-      const confirmPassword = document.getElementById('signup-confirm-password')?.value;
-      const familyCodeInputRaw = document.getElementById('signup-family-code')?.value || '';
+      const email = checkElement('signup-email')?.value.trim();
+      const password = checkElement('signup-password')?.value;
+      const confirmPassword = checkElement('signup-confirm-password')?.value;
+      const familyCodeInputRaw = checkElement('signup-family-code')?.value || '';
       const familyCodeInput = familyCodeInputRaw.trim().toUpperCase();
-      const currency = document.getElementById('signup-currency')?.value;
-      const accountType = document.getElementById('signup-account-type')?.value;
-      const useExisting = document.getElementById('use-existing-family-code')?.checked ?? false;
+      const currency = checkElement('signup-currency')?.value;
+      const accountType = checkElement('signup-account-type')?.value;
+      const useExisting = checkElement('use-existing-family-code')?.checked ?? false;
 
-      console.log('Signup inputs:', { email, currency, accountType, familyCode: familyCodeInput, familyCodeRaw: familyCodeInputRaw, useExisting, authState: auth.currentUser ? auth.currentUser.uid : null });
+      console.log('Signup inputs:', { email, currency, accountType, familyCode: familyCodeInput, useExisting });
 
       // Validate inputs
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      if (!isValidEmail(email)) {
         showError('signup-email', 'Valid email is required');
         return;
       }
@@ -106,11 +138,11 @@ export function setupAuth(loadAppDataCallback) {
         showError('signup-confirm-password', 'Passwords do not match');
         return;
       }
-      if (!currency || !['INR', 'USD', 'ZAR'].includes(currency)) {
+      if (!['INR', 'USD', 'ZAR'].includes(currency)) {
         showError('signup-currency', 'Valid currency is required');
         return;
       }
-      if (!accountType || !['admin', 'child'].includes(accountType)) {
+      if (!['admin', 'child'].includes(accountType)) {
         showError('signup-account-type', 'Valid account type is required');
         return;
       }
@@ -119,205 +151,161 @@ export function setupAuth(loadAppDataCallback) {
       try {
         signupButton.disabled = true;
         signupButton.textContent = 'Signing up...';
-        console.log('Attempting createUserWithEmailAndPassword', { email });
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
         console.log('Signup successful:', userCredential.user.uid);
       } catch (error) {
-        console.error('Signup failed:', {
-          code: error.code,
-          message: error.message
-        });
-        let errorMessage = error.message || 'Failed to sign up.';
-        if (error.code === 'auth/email-already-in-use') {
-          errorMessage = 'This email is already in use.';
-        } else if (error.code === 'auth/invalid-email') {
-          errorMessage = 'Invalid email format.';
-        }
-        showError('signup-email', errorMessage);
+        console.error('Signup failed:', { code: error.code, message: error.message });
+        const errorMessages = {
+          'auth/email-already-in-use': 'This email is already in use',
+          'auth/invalid-email': 'Invalid email format',
+          'auth/weak-password': 'Password is too weak'
+        };
+        showError('signup-email', errorMessages[error.code] || error.message);
         signupButton.disabled = false;
         signupButton.textContent = 'Sign Up';
         return;
       }
 
-      // Validate family code after user creation
+      // Validate family code
       let finalFamilyCode;
       try {
-        console.log('Checking auth state after signup', { user: auth.currentUser ? auth.currentUser.uid : null });
         if (accountType === 'child') {
           if (!familyCodeInput) {
-            console.log('Child signup: Missing family code');
             showError('signup-family-code', 'Family code is required for child accounts');
             throw new Error('Missing family code');
           }
-          console.log('Child signup: Validating family code format', { familyCodeInput });
           if (!isValidFamilyCode(familyCodeInput)) {
-            console.log('Child signup: Invalid family code format', { familyCodeInput });
             showError('signup-family-code', 'Family code must be 6 uppercase alphanumeric characters (A-Z, 0-9)');
             throw new Error('Invalid family code format');
           }
-          console.log('Child signup: Checking family code existence', { familyCodeInput });
-          let exists;
-          try {
-            exists = await retryFirestoreOperation(() => familyCodeExists(db, familyCodeInput));
-          } catch (queryError) {
-            console.error('Child signup: Failed to check family code existence after retries', {
-              code: queryError.code,
-              message: queryError.message,
-              stack: queryError.stack
-            });
-            // Fallback: Assume code exists if query fails (temporary for testing)
-            console.warn('Child signup: Bypassing family code existence check due to permission error');
-            exists = true;
-          }
-          console.log('Child signup: Existence check result', { exists });
+          const exists = await retryFirestoreOperation(() => familyCodeExists(db, familyCodeInput));
           if (!exists) {
-            console.log('Child signup: Family code does not exist', { familyCodeInput });
             showError('signup-family-code', 'Family code does not exist');
             throw new Error('Family code does not exist');
           }
           finalFamilyCode = familyCodeInput;
         } else {
           if (useExisting && familyCodeInput) {
-            console.log('Admin signup: Validating provided family code format', { familyCodeInput });
             if (!isValidFamilyCode(familyCodeInput)) {
-              console.log('Admin signup: Invalid family code format', { familyCodeInput });
               showError('signup-family-code', 'Family code must be 6 uppercase alphanumeric characters (A-Z, 0-9)');
               throw new Error('Invalid family code format');
             }
-            console.log('Admin signup: Checking family code existence', { familyCodeInput });
-            let exists;
-            try {
-              exists = await retryFirestoreOperation(() => familyCodeExists(db, familyCodeInput));
-            } catch (queryError) {
-              console.error('Admin signup: Failed to check family code existence after retries', {
-                code: queryError.code,
-                message: queryError.message,
-                stack: queryError.stack
-              });
-              // Fallback: Assume code exists if query fails (temporary for testing)
-              console.warn('Admin signup: Bypassing family code existence check due to permission error');
-              exists = true;
-            }
-            console.log('Admin signup: Existence check result', { exists });
+            const exists = await retryFirestoreOperation(() => familyCodeExists(db, familyCodeInput));
             if (!exists) {
-              console.log('Admin signup: Family code does not exist', { familyCodeInput });
               showError('signup-family-code', 'Family code does not exist');
               throw new Error('Family code does not exist');
             }
             finalFamilyCode = familyCodeInput;
           } else {
-            console.log('Admin signup: Generating new family code');
-            try {
-              finalFamilyCode = await retryFirestoreOperation(() => generateFamilyCode(db));
-            } catch (queryError) {
-              console.error('Admin signup: Failed to generate family code after retries', {
-                code: queryError.code,
-                message: queryError.message,
-                stack: queryError.stack
-              });
-              // Fallback: Generate a local code if query fails (temporary for testing)
-              console.warn('Admin signup: Generating fallback family code locally');
-              const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-              finalFamilyCode = '';
-              for (let i = 0; i < 6; i++) {
-                finalFamilyCode += characters.charAt(Math.floor(Math.random() * characters.length));
-              }
-            }
-            console.log('Admin signup: Generated family code', { finalFamilyCode });
+            finalFamilyCode = await retryFirestoreOperation(() => generateFamilyCode(db));
           }
         }
 
         // Create user document
-        console.log('Creating user document', { uid: userCredential.user.uid, familyCode: finalFamilyCode });
-        try {
-          await setDoc(doc(db, 'users', userCredential.user.uid), {
-            email,
-            familyCode: finalFamilyCode,
-            currency,
-            accountType,
-            createdAt: serverTimestamp()
-          });
-          console.log('User document created:', { uid: userCredential.user.uid, familyCode: finalFamilyCode });
-        } catch (setDocError) {
-          console.error('Failed to create user document:', {
-            code: setDocError.code,
-            message: setDocError.message,
-            stack: setDocError.stack
-          });
-          throw new Error(`Failed to create user document: ${setDocError.message}`);
-        }
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          email,
+          familyCode: finalFamilyCode,
+          currency,
+          accountType,
+          createdAt: serverTimestamp()
+        });
+        console.log('User document created:', { uid: userCredential.user.uid, familyCode: finalFamilyCode });
 
         // Update app state
         setUserCurrency(currency);
         setFamilyCode(finalFamilyCode);
-        document.getElementById('signup-email').value = '';
-        document.getElementById('signup-password').value = '';
-        document.getElementById('signup-confirm-password').value = '';
-        document.getElementById('signup-family-code').value = '';
-        document.getElementById('signup-currency').value = 'INR';
-        document.getElementById('signup-account-type').value = 'admin';
-        document.getElementById('use-existing-family-code').checked = false;
-        document.getElementById('signup-modal').classList.add('hidden');
-        document.getElementById('auth-section').classList.add('hidden');
-        document.getElementById('app-section').classList.remove('hidden');
-        document.getElementById('page-title').textContent = 'Budget Dashboard';
+        checkElement('signup-email').value = '';
+        checkElement('signup-password').value = '';
+        checkElement('signup-confirm-password').value = '';
+        checkElement('signup-family-code').value = '';
+        checkElement('signup-currency').value = 'INR';
+        checkElement('signup-account-type').value = 'admin';
+        checkElement('use-existing-family-code').checked = false;
+        checkElement('signup-modal').classList.add('hidden');
+        checkElement('auth-section').classList.add('hidden');
+        checkElement('app-section').classList.remove('hidden');
+        checkElement('page-title').textContent = 'Budget Dashboard';
+        checkElement('login-modal').focus(); // Accessibility: focus on login modal
         await loadAppDataCallback();
       } catch (error) {
-        console.error('Post-signup error:', {
-          code: error.code,
-          message: error.message,
-          stack: error.stack
-        });
+        console.error('Post-signup error:', { code: error.code, message: error.message });
         showError('signup-family-code', error.message || 'Failed to complete signup');
-        // Delete the user if document creation fails
         try {
           await userCredential.user.delete();
           console.log('Deleted incomplete user:', userCredential.user.uid);
         } catch (deleteError) {
-          console.error('Failed to delete incomplete user:', {
-            code: deleteError.code,
-            message: deleteError.message
-          });
+          console.error('Failed to delete incomplete user:', { code: deleteError.code, message: deleteError.message });
         }
       } finally {
         signupButton.disabled = false;
         signupButton.textContent = 'Sign Up';
       }
-    }
+    }, DEBOUNCE_MS);
+    signupButton.addEventListener('click', handleSignup);
   } else {
     console.error('Cannot setup signup: signup-button missing');
   }
 
-  // Reset button
+  // Reset handler
   const resetButton = checkElement('reset-button');
   if (resetButton) {
-    resetButton.removeEventListener('click', handleReset); // Prevent duplicates
-    resetButton.addEventListener('click', handleReset);
-    async function handleReset() {
+    const handleReset = debounce(async () => {
       console.log('Reset button clicked');
       clearErrors();
-      const email = document.getElementById('reset-email')?.value;
+      const email = checkElement('reset-email')?.value.trim();
       if (!email) {
-        console.log('Missing reset email');
         showError('reset-email', 'Please enter an email');
         return;
       }
+      if (!isValidEmail(email)) {
+        showError('reset-email', 'Invalid email format');
+        return;
+      }
       try {
-        console.log('Attempting sendPasswordResetEmail');
         await sendPasswordResetEmail(auth, email);
-        console.log('Password reset email sent');
         showError('reset-email', 'Password reset email sent', false);
       } catch (error) {
-        console.error('Password reset failed:', {
-          code: error.code,
-          message: error.message
-        });
-        showError('reset-email', error.message);
+        console.error('Password reset failed:', { code: error.code, message: error.message });
+        const errorMessages = {
+          'auth/user-not-found': 'No user found with this email',
+          'auth/invalid-email': 'Invalid email format'
+        };
+        showError('reset-email', errorMessages[error.code] || error.message);
       }
-    }
+    }, DEBOUNCE_MS);
+    resetButton.addEventListener('click', handleReset);
   } else {
     console.error('Cannot setup reset: reset-button missing');
   }
+
+  // Modal toggling event listeners (for updated index.html)
+  const showSignupBtn = checkElement('show-signup-btn');
+  showSignupBtn?.addEventListener('click', () => {
+    checkElement('signup-modal').classList.remove('hidden');
+    checkElement('login-modal').classList.add('hidden');
+    checkElement('signup-email').focus(); // Accessibility
+  });
+
+  const showResetBtn = checkElement('show-reset-btn');
+  showResetBtn?.addEventListener('click', () => {
+    checkElement('reset-modal').classList.remove('hidden');
+    checkElement('login-modal').classList.add('hidden');
+    checkElement('reset-email').focus(); // Accessibility
+  });
+
+  const showLoginFromSignupBtn = checkElement('show-login-from-signup-btn');
+  showLoginFromSignupBtn?.addEventListener('click', () => {
+    checkElement('login-modal').classList.remove('hidden');
+    checkElement('signup-modal').classList.add('hidden');
+    checkElement('login-email').focus(); // Accessibility
+  });
+
+  const showLoginFromResetBtn = checkElement('show-login-from-reset-btn');
+  showLoginFromResetBtn?.addEventListener('click', () => {
+    checkElement('login-modal').classList.remove('hidden');
+    checkElement('reset-modal').classList.add('hidden');
+    checkElement('login-email').focus(); // Accessibility
+  });
 
   console.log('setupAuth: Complete');
 }
