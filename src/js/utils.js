@@ -1,5 +1,5 @@
 // utils.js
-import { collection, query, where, getDocs, doc, updateDoc, batch } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { showError } from './core.js';
 
 /**
@@ -25,7 +25,7 @@ async function retryFirestoreOperation(operation, maxRetries = 3, baseDelay = 10
       if (attempt === maxRetries || error.code === 'permission-denied') {
         throw error;
       }
-      const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+      const delay = baseDelay * Math.pow(2, attempt - 1);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
@@ -43,7 +43,6 @@ async function fetchExchangeRate(fromCurrency, toCurrency, cache = { rate: null,
   const cacheKey = `exchangeRate_${fromCurrency}_${toCurrency}`;
   const now = Date.now();
 
-  // Check localStorage cache
   const cachedData = localStorage.getItem(cacheKey);
   if (cachedData) {
     const { rate, timestamp } = JSON.parse(cachedData);
@@ -55,13 +54,11 @@ async function fetchExchangeRate(fromCurrency, toCurrency, cache = { rate: null,
     }
   }
 
-  // Check in-memory cache
   if (cache.rate && cache.timestamp && (now - cache.timestamp) < CACHE_TTL) {
     console.log(`Using in-memory cached exchange rate for ${fromCurrency} to ${toCurrency}:`, cache.rate);
     return cache.rate;
   }
 
-  // Fetch from API with retry
   let attempts = 0;
   const maxAttempts = 3;
   while (attempts < maxAttempts) {
@@ -182,6 +179,13 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
   }
 
   try {
+    // Check Firebase SDK version
+    const firebaseVersion = require('firebase/firestore').SDK_VERSION;
+    console.log('resetBudgetsForNewMonth: Firebase SDK version', { version: firebaseVersion });
+    if (!firebaseVersion.startsWith('9') && !firebaseVersion.startsWith('10')) {
+      console.warn('resetBudgetsForNewMonth: Firebase SDK may be outdated; expected v9+');
+    }
+
     const now = new Date();
     const currentMonthYear = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
     const prevMonthYear = `${now.getUTCFullYear()}-${String(now.getUTCMonth()).padStart(2, '0')}`;
@@ -191,9 +195,7 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
     const snapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
     console.log('resetBudgetsForNewMonth: Budgets fetched', { count: snapshot.size });
 
-    const batch = db.batch();
-    let updateCount = 0;
-
+    const updates = [];
     for (const docSnap of snapshot.docs) {
       const budget = docSnap.data();
       if (!budget.name || typeof budget.spent !== 'number') {
@@ -209,24 +211,51 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
       }
 
       if (lastResetMonth !== currentMonthYear) {
-        const budgetRef = doc(db, 'budgets', docSnap.id);
         const spendingHistory = budget.spendingHistory?.mapValue?.fields || {};
         if (budget.spent > 0 && lastResetMonth !== '1970-01') {
           spendingHistory[prevMonthYear] = { integerValue: budget.spent };
         }
-        batch.update(budgetRef, {
-          spent: 0,
-          lastResetMonth: currentMonthYear,
-          spendingHistory
+        updates.push({
+          ref: doc(db, 'budgets', docSnap.id),
+          data: {
+            spent: 0,
+            lastResetMonth: currentMonthYear,
+            spendingHistory
+          }
         });
-        updateCount++;
         console.log('resetBudgetsForNewMonth: Queued update', { budgetId: docSnap.id });
       }
     }
 
-    if (updateCount > 0) {
-      await retryFirestoreOperation(() => batch.commit());
-      console.log('resetBudgetsForNewMonth: Batch update complete', { updated: updateCount });
+    if (updates.length > 0) {
+      try {
+        const batch = writeBatch(db);
+        updates.forEach(({ ref, data }) => {
+          batch.update(ref, data);
+        });
+        await retryFirestoreOperation(() => batch.commit());
+        console.log('resetBudgetsForNewMonth: Batch update complete', { updated: updates.length });
+      } catch (batchError) {
+        console.error('resetBudgetsForNewMonth: Batch update failed', {
+          code: batchError.code,
+          message: batchError.message,
+          stack: batchError.stack
+        });
+        // Fallback: Update documents individually
+        console.log('resetBudgetsForNewMonth: Falling back to individual updates');
+        for (const { ref, data } of updates) {
+          try {
+            await retryFirestoreOperation(() => updateDoc(ref, data));
+            console.log('resetBudgetsForNewMonth: Individual update successful', { budgetId: ref.id });
+          } catch (updateError) {
+            console.error('resetBudgetsForNewMonth: Individual update failed', {
+              budgetId: ref.id,
+              code: updateError.code,
+              message: updateError.message
+            });
+          }
+        }
+      }
     } else {
       console.log('resetBudgetsForNewMonth: No budgets need resetting');
     }
