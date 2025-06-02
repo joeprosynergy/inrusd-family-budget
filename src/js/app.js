@@ -927,8 +927,8 @@ async function setupCategories() {
 
 
 
-// Replaces the entire loadBudgets function in app.js from artifact b6107f7a-67fa-487e-9d54-8ef426675f78
-// Computes historical spent from transactions for past month filters
+// Replaces the entire loadBudgets function in app.js from artifact 61ce8294-09a7-4548-a5e7-1e61da9c1742
+// Handles missing categories and adjusts transaction query date range
 
 async function loadBudgets() {
   console.log('loadBudgets: Starting', { familyCode });
@@ -972,8 +972,12 @@ async function loadBudgets() {
 
     // Get filter for transaction queries
     const filter = domElements.dashboardFilter?.value || 'thisMonth';
-    const { start, end } = getDateRangeWrapper(filter);
+    let { start, end } = getDateRangeWrapper(filter);
     console.log('loadBudgets: Filter applied', { filter, start: start.toISOString(), end: end.toISOString() });
+
+    // Adjust start date for timezone (ensure UTC coverage)
+    start = new Date(start.getTime() - 5.5 * 60 * 60 * 1000); // Subtract 5.5 hours for IST to UTC
+    console.log('loadBudgets: Adjusted start date for UTC', { adjustedStart: start.toISOString() });
 
     // Determine if historical spending is needed
     const now = new Date();
@@ -993,7 +997,7 @@ async function loadBudgets() {
         budgetToCategories.get(category.budgetId).push(doc.id);
       }
     });
-    console.log('loadBudgets: Budget to categories map', { budgetToCategories });
+    console.log('loadBudgets: Budget to categories map', { budgetToCategoriesSize: budgetToCategories.size });
 
     let totalBudgetAmount = 0;
     let totalRemainingAmount = 0;
@@ -1017,28 +1021,42 @@ async function loadBudgets() {
           // Calculate spent from transactions for past months
           const categoryIds = budgetToCategories.get(doc.id) || [];
           if (categoryIds.length > 0) {
-            const transactionsQuery = query(
-              collection(db, 'transactions'),
-              where('familyCode', '==', familyCode),
-              where('categoryId', 'in', categoryIds),
-              where('type', '==', 'debit'),
-              where('createdAt', '>=', start),
-              where('createdAt', '<=', end)
-            );
-            try {
-              const transactionsSnapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
-              spent = transactionsSnapshot.docs.reduce((sum, txDoc) => sum + (txDoc.data().amount || 0), 0);
-              console.log('loadBudgets: Historical spent calculated', { budgetId: doc.id, spent, transactionCount: transactionsSnapshot.size });
-            } catch (error) {
-              console.error('loadBudgets: Failed to fetch transactions', {
-                budgetId: doc.id,
-                code: error.code,
-                message: error.message
-              });
-              spent = 0; // Fallback to 0 if query fails
+            // Split categoryIds into chunks of 30 (Firestore 'in' limit)
+            const chunks = [];
+            for (let i = 0; i < categoryIds.length; i += 30) {
+              chunks.push(categoryIds.slice(i, i + 30));
             }
+            let totalSpent = 0;
+            for (const chunk of chunks) {
+              const transactionsQuery = query(
+                collection(db, 'transactions'),
+                where('familyCode', '==', familyCode),
+                where('categoryId', 'in', chunk),
+                where('type', '==', 'debit'),
+                where('createdAt', '>=', start),
+                where('createdAt', '<=', end)
+              );
+              try {
+                const transactionsSnapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
+                totalSpent += transactionsSnapshot.docs.reduce((sum, txDoc) => sum + (txDoc.data().amount || 0), 0);
+                console.log('loadBudgets: Historical spent calculated', {
+                  budgetId: doc.id,
+                  chunkSize: chunk.length,
+                  transactionCount: transactionsSnapshot.size,
+                  chunkSpent: totalSpent
+                });
+              } catch (error) {
+                console.error('loadBudgets: Failed to fetch transactions', {
+                  budgetId: doc.id,
+                  code: error.code,
+                  message: error.message
+                });
+                // Continue with other chunks
+              }
+            }
+            spent = totalSpent;
           } else {
-            console.log('loadBudgets: No categories linked to budget', { budgetId: doc.id });
+            console.warn('loadBudgets: No categories linked to budget', { budgetId: doc.id, name: budget.name });
             spent = 0;
           }
         }
