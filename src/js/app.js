@@ -1056,38 +1056,73 @@ async function loadBudgets() {
 
 
 
-// Replaces the entire setupBudgets function in app.js (lines 573-686 in the original file)
+// Replaces the entire setupBudgets function in app.js from artifact be66a83b-9ffc-47c1-b66e-b03133d0ba6f
 
 async function setupBudgets() {
-  console.log('Setting up budget event listeners');
+  console.log('setupBudgets: Starting');
   const addBudget = document.getElementById('add-budget');
   const saveBudget = document.getElementById('save-budget');
   const cancelBudget = document.getElementById('cancel-budget');
   const budgetTable = document.getElementById('budget-table');
 
-  addBudget?.addEventListener('click', async () => {
-    console.log('Add Budget clicked', { isEditing: isEditing.budget });
-    if (isEditing.budget) return;
-    clearErrors();
-    const name = document.getElementById('budget-name')?.value.trim();
-    const amount = parseFloat(document.getElementById('budget-amount')?.value);
-    if (!name) {
-      showError('budget-name', 'Name is required');
+  // Verify DOM elements
+  if (!addBudget || !saveBudget || !cancelBudget || !budgetTable) {
+    console.error('setupBudgets: Missing DOM elements', {
+      addBudget: !!addBudget,
+      saveBudget: !!saveBudget,
+      cancelBudget: !!cancelBudget,
+      budgetTable: !!budgetTable
+    });
+    showError('budget-name', 'Budget form or table not found');
+    return;
+  }
+
+  addBudget.addEventListener('click', async () => {
+    console.log('addBudget: Clicked', { isEditing: isEditing.budget });
+    if (isEditing.budget) {
+      console.log('addBudget: Skipped, in edit mode');
       return;
     }
-    if (!amount || amount <= 0) {
-      showError('budget-amount', 'Valid amount is required');
+    clearErrors();
+    const nameInput = document.getElementById('budget-name');
+    const amountInput = document.getElementById('budget-amount');
+    if (!nameInput || !amountInput) {
+      console.error('addBudget: Missing input elements', {
+        nameInput: !!nameInput,
+        amountInput: !!amountInput
+      });
+      showError('budget-name', 'Form inputs not found');
+      return;
+    }
+    const name = nameInput.value.trim();
+    const amountRaw = amountInput.value.trim();
+    const amount = parseFloat(amountRaw);
+
+    if (!name) {
+      showError('budget-name', 'Budget name is required');
+      return;
+    }
+    if (!amountRaw || isNaN(amount) || amount <= 0) {
+      showError('budget-amount', 'Valid positive amount is required');
       return;
     }
     if (!currentUser || !db) {
+      console.error('addBudget: Missing user or Firestore');
       showError('budget-name', 'Database service not available');
       return;
     }
+    if (currentAccountType !== 'admin') {
+      console.error('addBudget: Non-admin user attempted to add budget');
+      showError('budget-name', 'Only admins can add budgets');
+      return;
+    }
+
     try {
       addBudget.disabled = true;
       addBudget.textContent = 'Adding...';
       const now = new Date();
       const currentMonthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      console.log('addBudget: Creating budget', { name, amount, lastResetMonth: currentMonthYear });
       await retryFirestoreOperation(() => 
         addDoc(collection(db, 'budgets'), {
           name,
@@ -1098,15 +1133,19 @@ async function setupBudgets() {
           lastResetMonth: currentMonthYear
         })
       );
-      console.log('Budget added:', { name, amount, lastResetMonth: currentMonthYear });
-      document.getElementById('budget-name').value = '';
-      document.getElementById('budget-amount').value = '';
+      console.log('addBudget: Budget added', { name, amount, lastResetMonth: currentMonthYear });
+      nameInput.value = '';
+      amountInput.value = '';
       addBudget.innerHTML = 'Add Budget';
       await loadBudgets();
       await loadCategories();
     } catch (error) {
-      console.error('Error adding budget:', error);
-      showError('budget-name', 'Failed to add budget.');
+      console.error('addBudget: Error adding budget', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      showError('budget-name', `Failed to add budget: ${error.message}`);
     } finally {
       addBudget.disabled = false;
       addBudget.textContent = 'Add Budget';
@@ -1114,35 +1153,55 @@ async function setupBudgets() {
   });
 
   domElements.categoryBudgetSelect?.addEventListener('change', () => {
-    console.log('Category Budget select changed:', domElements.categoryBudgetSelect.value);
+    console.log('categoryBudgetSelect: Changed', { value: domElements.categoryBudgetSelect.value });
     if (domElements.categoryBudgetSelect.value === 'add-new') {
       domElements.addBudgetModal?.classList.remove('hidden');
       domElements.categoryBudgetSelect.value = 'none';
     }
   });
 
-  saveBudget?.addEventListener('click', async () => {
-    console.log('Save Budget clicked');
+  saveBudget.addEventListener('click', async () => {
+    console.log('saveBudget: Clicked');
     clearErrors();
-    const name = document.getElementById('new-budget-name')?.value.trim();
-    const amount = parseFloat(document.getElementById('new-budget-amount')?.value);
-    if (!name) {
-      showError('new-budget-name', 'Name is required');
+    const nameInput = document.getElementById('new-budget-name');
+    const amountInput = document.getElementById('new-budget-amount');
+    if (!nameInput || !amountInput) {
+      console.error('saveBudget: Missing modal input elements', {
+        nameInput: !!nameInput,
+        amountInput: !!amountInput
+      });
+      showError('new-budget-name', 'Modal form inputs not found');
       return;
     }
-    if (!amount || amount <= 0) {
-      showError('new-budget-amount', 'Valid amount is required');
+    const name = nameInput.value.trim();
+    const amountRaw = amountInput.value.trim();
+    const amount = parseFloat(amountRaw);
+
+    if (!name) {
+      showError('new-budget-name', 'Budget name is required');
+      return;
+    }
+    if (!amountRaw || isNaN(amount) || amount <= 0) {
+      showError('new-budget-amount', 'Valid positive amount is required');
       return;
     }
     if (!currentUser || !db) {
+      console.error('saveBudget: Missing user or Firestore');
       showError('new-budget-name', 'Database service not available');
       return;
     }
+    if (currentAccountType !== 'admin') {
+      console.error('saveBudget: Non-admin user attempted to add budget');
+      showError('new-budget-name', 'Only admins can add budgets');
+      return;
+    }
+
     try {
       saveBudget.disabled = true;
       saveBudget.textContent = 'Saving...';
       const now = new Date();
       const currentMonthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      console.log('saveBudget: Creating budget', { name, amount, lastResetMonth: currentMonthYear });
       await retryFirestoreOperation(() => 
         addDoc(collection(db, 'budgets'), {
           name,
@@ -1153,33 +1212,40 @@ async function setupBudgets() {
           lastResetMonth: currentMonthYear
         })
       );
-      console.log('Budget saved:', { name, amount, lastResetMonth: currentMonthYear });
+      console.log('saveBudget: Budget saved', { name, amount, lastResetMonth: currentMonthYear });
       domElements.addBudgetModal?.classList.add('hidden');
-      document.getElementById('new-budget-name').value = '';
-      document.getElementById('new-budget-amount').value = '';
+      nameInput.value = '';
+      amountInput.value = '';
       await loadBudgets();
       await loadCategories();
     } catch (error) {
-      console.error('Error saving budget:', error);
-      showError('new-budget-name', 'Failed to save budget.');
+      console.error('saveBudget: Error saving budget', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      showError('new-budget-name', `Failed to save budget: ${error.message}`);
     } finally {
       saveBudget.disabled = false;
       saveBudget.textContent = 'Save';
     }
   });
 
-  cancelBudget?.addEventListener('click', () => {
-    console.log('Cancel Budget clicked');
+  cancelBudget.addEventListener('click', () => {
+    console.log('cancelBudget: Clicked');
     domElements.addBudgetModal?.classList.add('hidden');
     document.getElementById('new-budget-name').value = '';
     document.getElementById('new-budget-amount').value = '';
   });
 
-  budgetTable?.addEventListener('click', async (e) => {
+  budgetTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-budget')) {
-      console.log('Edit Budget clicked:', e.target.dataset.id);
+      console.log('editBudget: Clicked', { id: e.target.dataset.id });
       const id = e.target.dataset.id;
-      if (!db) return;
+      if (!db) {
+        console.error('editBudget: Firestore not available');
+        return;
+      }
       try {
         const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'budgets', id)));
         if (docSnap.exists()) {
@@ -1188,16 +1254,24 @@ async function setupBudgets() {
           document.getElementById('budget-amount').value = data.amount;
           addBudget.innerHTML = 'Update Budget';
           isEditing.budget = true;
-          console.log('Entered edit mode for budget:', id);
+          console.log('editBudget: Entered edit mode', { id });
           const updateHandler = async () => {
-            const name = document.getElementById('budget-name')?.value.trim();
-            const amount = parseFloat(document.getElementById('budget-amount')?.value);
-            if (!name) {
-              showError('budget-name', 'Name is required');
+            const nameInput = document.getElementById('budget-name');
+            const amountInput = document.getElementById('budget-amount');
+            if (!nameInput || !amountInput) {
+              console.error('editBudget: Missing input elements');
+              showError('budget-name', 'Form inputs not found');
               return;
             }
-            if (!amount || amount <= 0) {
-              showError('budget-amount', 'Valid amount is required');
+            const name = nameInput.value.trim();
+            const amountRaw = amountInput.value.trim();
+            const amount = parseFloat(amountRaw);
+            if (!name) {
+              showError('budget-name', 'Budget name is required');
+              return;
+            }
+            if (!amountRaw || isNaN(amount) || amount <= 0) {
+              showError('budget-amount', 'Valid positive amount is required');
               return;
             }
             try {
@@ -1206,16 +1280,16 @@ async function setupBudgets() {
               await retryFirestoreOperation(() => 
                 updateDoc(doc(db, 'budgets', id), { name, amount })
               );
-              console.log('Budget updated:', { id, name, amount });
-              document.getElementById('budget-name').value = '';
-              document.getElementById('budget-amount').value = '';
+              console.log('editBudget: Budget updated', { id, name, amount });
+              nameInput.value = '';
+              amountInput.value = '';
               addBudget.innerHTML = 'Add Budget';
               isEditing.budget = false;
               await loadBudgets();
               await loadCategories();
             } catch (error) {
-              console.error('Error updating budget:', error);
-              showError('budget-name', 'Failed to update budget.');
+              console.error('editBudget: Error updating budget', error);
+              showError('budget-name', `Failed to update budget: ${error.message}`);
             } finally {
               addBudget.disabled = false;
               addBudget.textContent = 'Add Budget';
@@ -1227,12 +1301,12 @@ async function setupBudgets() {
           addBudget.addEventListener('click', updateHandler, { once: true });
         }
       } catch (error) {
-        console.error('Error fetching budget:', error);
-        showError('budget-name', 'Failed to fetch budget.');
+        console.error('editBudget: Error fetching budget', error);
+        showError('budget-name', `Failed to fetch budget: ${error.message}`);
       }
     }
     if (e.target.classList.contains('delete-budget')) {
-      console.log('Delete Budget clicked:', e.target.dataset.id);
+      console.log('deleteBudget: Clicked', { id: e.target.dataset.id });
       const id = e.target.dataset.id;
       if (domElements.deleteConfirmModal && db) {
         domElements.deleteConfirmMessage.textContent = 'Are you sure you want to delete this budget?';
@@ -1240,17 +1314,18 @@ async function setupBudgets() {
         const confirmHandler = async () => {
           try {
             await retryFirestoreOperation(() => deleteDoc(doc(db, 'budgets', id)));
-            console.log('Budget deleted:', { id });
+            console.log('deleteBudget: Budget deleted', { id });
             await loadBudgets();
             await loadCategories();
             domElements.deleteConfirmModal.classList.add('hidden');
           } catch (error) {
-            console.error('Error deleting budget:', error);
-            showError('budget-name', 'Failed to delete budget.');
+            console.error('deleteBudget: Error deleting budget', error);
+            showError('budget-name', `Failed to delete budget: ${error.message}`);
           }
           domElements.confirmDelete.removeEventListener('click', confirmHandler);
         };
         const cancelHandler = () => {
+          console.log('deleteBudget: Cancelled');
           domElements.deleteConfirmModal.classList.add('hidden');
           domElements.cancelDelete.removeEventListener('click', cancelHandler);
         };
@@ -1260,6 +1335,9 @@ async function setupBudgets() {
     }
   });
 }
+
+
+
 
 // Transactions
 async function loadTransactions() {
