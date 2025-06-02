@@ -1056,7 +1056,7 @@ async function loadBudgets() {
 
 
 
-// Replaces the entire setupBudgets function in app.js from artifact be66a83b-9ffc-47c1-b66e-b03133d0ba6f
+// Replaces the entire setupBudgets function in app.js from artifact c4f2e6a9-8b7d-4e2f-9c3a-5e7b2d1a6f0e
 
 async function setupBudgets() {
   console.log('setupBudgets: Starting');
@@ -1117,21 +1117,51 @@ async function setupBudgets() {
       return;
     }
 
+    // Fetch familyCode from Firestore to ensure correctness
+    let verifiedFamilyCode;
+    try {
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      if (!userDoc.exists()) {
+        console.error('addBudget: User document not found', { uid: currentUser.uid });
+        showError('budget-name', 'User profile not found');
+        return;
+      }
+      verifiedFamilyCode = userDoc.data().familyCode;
+      if (!verifiedFamilyCode) {
+        console.error('addBudget: No familyCode in user document', { uid: currentUser.uid });
+        showError('budget-name', 'Invalid user configuration');
+        return;
+      }
+      console.log('addBudget: Verified familyCode', { verifiedFamilyCode });
+    } catch (error) {
+      console.error('addBudget: Error fetching user document', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      showError('budget-name', 'Failed to verify user profile');
+      return;
+    }
+
     try {
       addBudget.disabled = true;
       addBudget.textContent = 'Adding...';
       const now = new Date();
       const currentMonthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      console.log('addBudget: Creating budget', { name, amount, lastResetMonth: currentMonthYear });
+      const budgetData = {
+        name,
+        amount,
+        spent: 0,
+        familyCode: verifiedFamilyCode,
+        createdAt: serverTimestamp(),
+        lastResetMonth: currentMonthYear
+      };
+      console.log('addBudget: Creating budget', budgetData);
       await retryFirestoreOperation(() => 
-        addDoc(collection(db, 'budgets'), {
-          name,
-          amount,
-          spent: 0,
-          familyCode,
-          createdAt: serverTimestamp(),
-          lastResetMonth: currentMonthYear
-        })
+        addDoc(collection(db, 'budgets'), budgetData),
+        3,
+        1000,
+        budgetData
       );
       console.log('addBudget: Budget added', { name, amount, lastResetMonth: currentMonthYear });
       nameInput.value = '';
@@ -1196,21 +1226,51 @@ async function setupBudgets() {
       return;
     }
 
+    // Fetch familyCode from Firestore
+    let verifiedFamilyCode;
+    try {
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      if (!userDoc.exists()) {
+        console.error('saveBudget: User document not found', { uid: currentUser.uid });
+        showError('new-budget-name', 'User profile not found');
+        return;
+      }
+      verifiedFamilyCode = userDoc.data().familyCode;
+      if (!verifiedFamilyCode) {
+        console.error('saveBudget: No familyCode in user document', { uid: currentUser.uid });
+        showError('new-budget-name', 'Invalid user configuration');
+        return;
+      }
+      console.log('saveBudget: Verified familyCode', { verifiedFamilyCode });
+    } catch (error) {
+      console.error('saveBudget: Error fetching user document', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      showError('new-budget-name', 'Failed to verify user profile');
+      return;
+    }
+
     try {
       saveBudget.disabled = true;
       saveBudget.textContent = 'Saving...';
       const now = new Date();
       const currentMonthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      console.log('saveBudget: Creating budget', { name, amount, lastResetMonth: currentMonthYear });
+      const budgetData = {
+        name,
+        amount,
+        spent: 0,
+        familyCode: verifiedFamilyCode,
+        createdAt: serverTimestamp(),
+        lastResetMonth: currentMonthYear
+      };
+      console.log('saveBudget: Creating budget', budgetData);
       await retryFirestoreOperation(() => 
-        addDoc(collection(db, 'budgets'), {
-          name,
-          amount,
-          spent: 0,
-          familyCode,
-          createdAt: serverTimestamp(),
-          lastResetMonth: currentMonthYear
-        })
+        addDoc(collection(db, 'budgets'), budgetData),
+        3,
+        1000,
+        budgetData
       );
       console.log('saveBudget: Budget saved', { name, amount, lastResetMonth: currentMonthYear });
       domElements.addBudgetModal?.classList.add('hidden');
