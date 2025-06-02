@@ -1,22 +1,30 @@
+// core.js
 // Core module: Firebase initialization, DOM setup, auth state, and utilities
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { fetchExchangeRate } from './utils.js';
 
+/** @type {import('firebase/auth').Auth | null} */
 let auth = null;
+/** @type {import('firebase/firestore').Firestore | null} */
 let db = null;
+/** @type {import('firebase/auth').User | null} */
 let currentUser = null;
+/** @type {string} */
 let userCurrency = 'INR';
+/** @type {string} */
 let familyCode = '';
-let exchangeRateCache = {
-  INR_USD: { rate: null, timestamp: null },
-  INR_ZAR: { rate: null, timestamp: null },
-  USD_ZAR: { rate: null, timestamp: null }
-};
+/** @type {Map<string, { rate: number | null, timestamp: number | null }>} */
+const exchangeRateCache = new Map([
+  ['INR_USD', { rate: null, timestamp: null }],
+  ['INR_ZAR', { rate: null, timestamp: null }],
+  ['USD_ZAR', { rate: null, timestamp: null }]
+]);
 const CACHE_TTL = 3600000; // 1 hour in milliseconds
 
-// DOM Elements (exported for use in other modules)
+// DOM Elements
+/** @type {Record<string, HTMLElement | null>} */
 const domElements = {
   authSection: null,
   appSection: null,
@@ -69,7 +77,10 @@ const domElements = {
   childTiles: null
 };
 
-// Initialize Firebase
+/**
+ * Initializes Firebase with retry logic
+ * @returns {Promise<{ auth: import('firebase/auth').Auth, db: import('firebase/firestore').Firestore }>}
+ */
 async function initializeFirebase() {
   const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -80,13 +91,13 @@ async function initializeFirebase() {
     appId: import.meta.env.VITE_FIREBASE_APP_ID
   };
 
-  let initAttempts = 0;
+  let attempts = 0;
   const maxAttempts = 3;
-  const retryDelay = 2000;
+  const baseDelay = 2000;
 
-  while (initAttempts < maxAttempts) {
-    initAttempts++;
-    console.log(`Firebase initialization attempt ${initAttempts}/${maxAttempts}`);
+  while (attempts < maxAttempts) {
+    attempts++;
+    console.log(`Firebase initialization attempt ${attempts}/${maxAttempts}`);
     try {
       if (!navigator.onLine) throw new Error('No internet connection');
       const requiredFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
@@ -100,34 +111,41 @@ async function initializeFirebase() {
       return { auth, db };
     } catch (error) {
       console.error('Firebase initialization failed:', error.message);
-      if (initAttempts === maxAttempts) {
+      if (attempts === maxAttempts) {
         alert('Failed to connect to Firebase. Please check your network.');
         throw error;
       }
-      await new Promise(resolve => setTimeout(resolve, retryDelay));
+      const delay = baseDelay * Math.pow(2, attempts - 1); // Exponential backoff
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
+  throw new Error('Firebase initialization failed after maximum attempts');
 }
 
-// Setup DOM Elements
+/**
+ * Sets up DOM elements with caching
+ */
 function setupDOM() {
   console.log('Querying DOM elements');
   try {
-    for (const [key, _] of Object.entries(domElements)) {
-      domElements[key] = document.getElementById(key.replace(/([A-Z])/g, '-$1').toLowerCase());
+    for (const [key] of Object.entries(domElements)) {
+      const id = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+      domElements[key] = document.getElementById(id);
       console.log(`DOM element ${key}: ${domElements[key] ? 'found' : 'not found'}`);
-      if (!domElements[key]) console.warn(`DOM element not found: ${key}`);
+      if (!domElements[key]) console.warn(`DOM element not found: ${id}`);
     }
 
     // Hide sections initially
     domElements.authSection?.classList.add('hidden');
     domElements.appSection?.classList.add('hidden');
 
-    // Create loading spinner
+    // Create loading spinner with ARIA
     const loadingDiv = document.createElement('div');
     loadingDiv.id = 'loading-spinner';
     loadingDiv.className = 'flex justify-center items-center h-screen';
-    loadingDiv.innerHTML = `<div class="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-600"></div>`;
+    loadingDiv.setAttribute('aria-live', 'polite');
+    loadingDiv.setAttribute('aria-label', 'Loading application');
+    loadingDiv.innerHTML = `<div class="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-600" role="status"></div>`;
     document.body.appendChild(loadingDiv);
   } catch (error) {
     console.error('Error querying DOM elements:', error);
@@ -135,11 +153,14 @@ function setupDOM() {
   }
 }
 
-// Setup Auth State Listener
+/**
+ * Sets up auth state listener
+ * @param {Function} loadAppDataCallback
+ */
 function setupAuthStateListener(loadAppDataCallback) {
   console.log('setupAuthStateListener: Starting');
-  if (!auth) {
-    console.error('setupAuthStateListener: Auth service not available');
+  if (!auth || !db) {
+    console.error('setupAuthStateListener: Auth or Firestore service not available');
     showError('login-email', 'Authentication service not available.');
     domElements.authSection?.classList.remove('hidden');
     document.getElementById('loading-spinner')?.remove();
@@ -155,15 +176,25 @@ function setupAuthStateListener(loadAppDataCallback) {
         currentUser = user;
         console.log('Fetching user document for UID:', user.uid);
         const docRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(docRef);
+        let docSnap;
+        let attempts = 0;
+        const maxAttempts = 3;
+        while (attempts < maxAttempts) {
+          try {
+            docSnap = await getDoc(docRef);
+            break;
+          } catch (error) {
+            attempts++;
+            if (attempts === maxAttempts) throw error;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
         if (docSnap.exists()) {
           console.log('User document found:', docSnap.data());
           userCurrency = docSnap.data().currency || 'INR';
           familyCode = docSnap.data().familyCode;
           console.log('User data loaded:', { userCurrency, familyCode });
-          console.log('Calling loadAppDataCallback');
           await loadAppDataCallback();
-          console.log('Hiding authSection, showing appSection');
           domElements.authSection?.classList.add('hidden');
           domElements.appSection?.classList.remove('hidden');
         } else {
@@ -177,6 +208,7 @@ function setupAuthStateListener(loadAppDataCallback) {
         domElements.authSection?.classList.remove('hidden');
         domElements.appSection?.classList.add('hidden');
         domElements.loginModal?.classList.remove('hidden');
+        domElements.loginModal?.focus(); // Accessibility
       }
     } catch (error) {
       console.error('setupAuthStateListener error:', {
@@ -191,60 +223,74 @@ function setupAuthStateListener(loadAppDataCallback) {
   console.log('setupAuthStateListener: Complete');
 }
 
-// Utility: Format Currency
+/**
+ * Formats currency amount
+ * @param {number} amount
+ * @param {string} currency
+ * @returns {Promise<string>}
+ */
 async function formatCurrency(amount, currency) {
   try {
     let displayAmount = amount;
-    // Fetch exchange rates if cache is stale or empty
-    if (!exchangeRateCache.INR_USD.rate || Date.now() - exchangeRateCache.INR_USD.timestamp > CACHE_TTL) {
-      exchangeRateCache.INR_USD.rate = await fetchExchangeRate('INR', 'USD') || 0.012; // Fallback rate
-      exchangeRateCache.INR_USD.timestamp = Date.now();
-    }
-    if (!exchangeRateCache.INR_ZAR.rate || Date.now() - exchangeRateCache.INR_ZAR.timestamp > CACHE_TTL) {
-      exchangeRateCache.INR_ZAR.rate = await fetchExchangeRate('INR', 'ZAR') || 0.22; // Fallback rate
-      exchangeRateCache.INR_ZAR.timestamp = Date.now();
-    }
-    if (!exchangeRateCache.USD_ZAR.rate || Date.now() - exchangeRateCache.USD_ZAR.timestamp > CACHE_TTL) {
-      exchangeRateCache.USD_ZAR.rate = await fetchExchangeRate('USD', 'ZAR') || 18.0; // Fallback rate
-      exchangeRateCache.USD_ZAR.timestamp = Date.now();
+    const now = Date.now();
+    const rateKeys = ['INR_USD', 'INR_ZAR', 'USD_ZAR'];
+    const fallbackRates = {
+      INR_USD: 0.012,
+      INR_ZAR: 0.22,
+      USD_ZAR: 18.0
+    };
+
+    // Update exchange rates if stale
+    for (const key of rateKeys) {
+      const [from, to] = key.split('_');
+      const cacheEntry = exchangeRateCache.get(key);
+      if (!cacheEntry.rate || now - cacheEntry.timestamp > CACHE_TTL) {
+        try {
+          cacheEntry.rate = await fetchExchangeRate(from, to, cacheEntry);
+        } catch {
+          cacheEntry.rate = fallbackRates[key];
+        }
+        cacheEntry.timestamp = now;
+        exchangeRateCache.set(key, cacheEntry);
+      }
     }
 
-    // Convert amount based on input and user currency
-    if (currency === 'INR' && userCurrency === 'USD') {
-      displayAmount = amount * exchangeRateCache.INR_USD.rate;
-    } else if (currency === 'USD' && userCurrency === 'INR') {
-      displayAmount = amount / exchangeRateCache.INR_USD.rate;
-    } else if (currency === 'INR' && userCurrency === 'ZAR') {
-      displayAmount = amount * exchangeRateCache.INR_ZAR.rate;
-    } else if (currency === 'ZAR' && userCurrency === 'INR') {
-      displayAmount = amount / exchangeRateCache.INR_ZAR.rate;
-    } else if (currency === 'USD' && userCurrency === 'ZAR') {
-      displayAmount = amount * exchangeRateCache.USD_ZAR.rate;
-    } else if (currency === 'ZAR' && userCurrency === 'USD') {
-      displayAmount = amount / exchangeRateCache.USD_ZAR.rate;
-    }
+    // Convert amount
+    const conversions = {
+      INR_USD: amount * exchangeRateCache.get('INR_USD').rate,
+      USD_INR: amount / exchangeRateCache.get('INR_USD').rate,
+      INR_ZAR: amount * exchangeRateCache.get('INR_ZAR').rate,
+      ZAR_INR: amount / exchangeRateCache.get('INR_ZAR').rate,
+      USD_ZAR: amount * exchangeRateCache.get('USD_ZAR').rate,
+      ZAR_USD: amount / exchangeRateCache.get('USD_ZAR').rate
+    };
+    displayAmount = conversions[`${currency}_${userCurrency}`] || amount;
 
     // Format based on user currency
-    if (userCurrency === 'USD') {
-      return `$${Number(displayAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    } else if (userCurrency === 'ZAR') {
-      return `R${Number(displayAmount).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    } else {
-      return `₹${Number(displayAmount).toLocaleString('en-IN')}`;
-    }
+    const formatters = {
+      USD: value => `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      ZAR: value => `R${Number(value).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      INR: value => `₹${Number(value).toLocaleString('en-IN')}`
+    };
+    return formatters[userCurrency](displayAmount);
   } catch (error) {
     console.error('Error formatting currency:', error);
     return amount.toString();
   }
 }
 
-// Utility: Show Error
+/**
+ * Shows error message
+ * @param {string} elementId
+ * @param {string} message
+ */
 function showError(elementId, message) {
   try {
     console.log('Showing error:', { elementId, message });
     const errorDiv = document.createElement('div');
     errorDiv.className = 'text-red-600 text-sm mt-1';
     errorDiv.textContent = message;
+    errorDiv.setAttribute('role', 'alert');
     const element = document.getElementById(elementId);
     if (element) {
       element.parentElement.appendChild(errorDiv);
@@ -257,7 +303,9 @@ function showError(elementId, message) {
   }
 }
 
-// Utility: Clear Errors
+/**
+ * Clears error messages
+ */
 function clearErrors() {
   try {
     console.log('Clearing errors');
@@ -267,15 +315,26 @@ function clearErrors() {
   }
 }
 
-// Named functions for setters
+/**
+ * Sets current user
+ * @param {import('firebase/auth').User | null} user
+ */
 function setCurrentUser(user) {
   currentUser = user;
 }
 
+/**
+ * Sets user currency
+ * @param {string} currency
+ */
 function setUserCurrency(currency) {
   userCurrency = currency;
 }
 
+/**
+ * Sets family code
+ * @param {string} code
+ */
 function setFamilyCode(code) {
   familyCode = code;
 }
