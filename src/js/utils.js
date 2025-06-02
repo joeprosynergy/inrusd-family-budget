@@ -1,7 +1,8 @@
-// Replaces the entire utils.js file from artifact 5befdd9c-2aca-44dd-8829-7faf7f994d58
-// Uses setDoc instead of updateDoc to fix "u is not a function" error
+// Replaces the entire utils.js file from artifact 71855d22-081a-4684-b46e-5787d8b8517e
+// Uses Firestore REST API for resetBudgetsForNewMonth to fix "u is not a function" error
 
-import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { showError } from './core.js';
 
 // Retry Firestore Operation
@@ -204,18 +205,39 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
       if (lastResetMonth !== currentMonthYear) {
         console.log('resetBudgetsForNewMonth: Budget needs reset', { budgetId: doc.id, name: budget.name });
         const updateData = {
-          spent: 0,
-          lastResetMonth: currentMonthYear
+          fields: {
+            spent: { integerValue: 0 },
+            lastResetMonth: { stringValue: currentMonthYear }
+          }
         };
-        console.log('resetBudgetsForNewMonth: Preparing update', { budgetId: doc.id, updateData });
-        const docRef = doc(db, 'budgets', doc.id);
-        console.log('resetBudgetsForNewMonth: Document reference created', { budgetId: doc.id, docRefPath: docRef.path });
+        console.log('resetBudgetsForNewMonth: Preparing REST update', { budgetId: doc.id, updateData });
+        const docPath = `budgets/${doc.id}`;
+        console.log('resetBudgetsForNewMonth: Document path', { budgetId: doc.id, docPath });
         updatePromises.push(
           retryFirestoreOperation(
             async () => {
-              console.log('resetBudgetsForNewMonth: Executing setDoc', { budgetId: doc.id });
-              await setDoc(docRef, updateData, { merge: true });
-              console.log('resetBudgetsForNewMonth: setDoc successful', { budgetId: doc.id });
+              console.log('resetBudgetsForNewMonth: Executing REST PATCH', { budgetId: doc.id });
+              const auth = getAuth();
+              const user = auth.currentUser;
+              if (!user) {
+                throw new Error('User not authenticated');
+              }
+              const token = await user.getIdToken();
+              const projectId = db.app.options.projectId;
+              const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${docPath}?updateMask.fieldPaths=spent&updateMask.fieldPaths=lastResetMonth`;
+              const response = await fetch(url, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(updateData)
+              });
+              if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`REST API error: ${JSON.stringify(errorData)}`);
+              }
+              console.log('resetBudgetsForNewMonth: REST PATCH successful', { budgetId: doc.id });
             },
             3,
             1000,
