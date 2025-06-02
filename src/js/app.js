@@ -1501,17 +1501,19 @@ async function setupBudgets() {
 
 // Transactions
 async function loadTransactions() {
-  console.log('loadTransactions: Starting');
+  console.log('loadTransactions: Starting', { familyCode });
   try {
     // Verify DOM elements
     const transactionTable = document.getElementById('transaction-table');
     const dateHeader = document.getElementById('transaction-date-header');
-    if (!transactionTable || !dateHeader) {
+    const transactionsFilter = document.getElementById('transactions-filter');
+    if (!transactionTable || !dateHeader || !transactionsFilter) {
       console.error('loadTransactions: Missing DOM elements', {
         transactionTable: !!transactionTable,
-        dateHeader: !!dateHeader
+        dateHeader: !!dateHeader,
+        transactionsFilter: !!transactionsFilter
       });
-      showError('category', 'Transaction table or date header not found');
+      showError('transactions-filter', 'Transaction table, date header, or filter not found');
       return;
     }
     transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">Loading...</td></tr>';
@@ -1519,21 +1521,42 @@ async function loadTransactions() {
     // Verify Firestore and familyCode
     if (!db || !familyCode) {
       console.error('loadTransactions: Firestore or familyCode not available', { db: !!db, familyCode });
-      showError('category', 'Database service not available');
+      showError('transactions-filter', 'Database service not available');
       transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Database unavailable</td></tr>';
       return;
     }
 
+    // Set default filter to 'thisMonth'
+    transactionsFilter.value = transactionsFilter.value || 'thisMonth';
+    const filter = transactionsFilter.value;
+    console.log('loadTransactions: Filter selected', { filter });
+
     // Get date range from filter
-    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
+    const { start, end } = getDateRangeWrapper(filter);
     console.log('loadTransactions: Date range', { start: start.toISOString(), end: end.toISOString() });
 
-    // Determine month for header (use filter's start date or fallback to current month)
-    const filterMonth = domElements.dashboardFilter?.value && domElements.dashboardFilter.value !== 'thisMonth'
-      ? start.toLocaleString('en-US', { month: 'short' })
-      : new Date().toLocaleString('en-US', { month: 'short' });
-    dateHeader.textContent = filterMonth;
-    console.log('loadTransactions: Set date header', { month: filterMonth });
+    // Adjust start date for UTC (subtract IST offset)
+    const adjustedStart = new Date(start.getTime() - 5.5 * 60 * 60 * 1000);
+    console.log('loadTransactions: Adjusted start date for UTC', { adjustedStart: adjustedStart.toISOString() });
+
+    // Set date header based on filter
+    let headerText;
+    switch (filter) {
+      case 'thisMonth':
+        headerText = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' });
+        break;
+      case 'lastMonth':
+        headerText = new Date(start).toLocaleString('en-US', { month: 'short', year: 'numeric' });
+        break;
+      case 'thisYear':
+      case 'lastYear':
+        headerText = start.getFullYear().toString();
+        break;
+      default:
+        headerText = 'Date';
+    }
+    dateHeader.textContent = headerText;
+    console.log('loadTransactions: Set date header', { headerText });
 
     // Pre-fetch categories
     console.log('loadTransactions: Fetching categories');
@@ -1546,7 +1569,7 @@ async function loadTransactions() {
         code: error.code,
         message: error.message
       });
-      categoriesSnapshot = { docs: [] }; // Fallback to empty categories
+      categoriesSnapshot = { docs: [] };
     }
     const categoryMap = new Map();
     categoriesSnapshot.forEach(doc => {
@@ -1554,9 +1577,15 @@ async function loadTransactions() {
     });
     console.log('loadTransactions: Categories loaded', { count: categoriesSnapshot.size });
 
-    // Fetch transactions
+    // Fetch transactions with server-side date filtering
     console.log('loadTransactions: Fetching transactions');
-    const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
+    const transactionsQuery = query(
+      collection(db, 'transactions'),
+      where('familyCode', '==', familyCode),
+      where('createdAt', '>=', adjustedStart),
+      where('createdAt', '<=', end),
+      orderBy('createdAt', 'desc')
+    );
     let snapshot;
     try {
       snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
@@ -1567,33 +1596,51 @@ async function loadTransactions() {
         stack: error.stack
       });
       transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Failed to load transactions</td></tr>';
-      showError('category', `Failed to load transactions: ${error.message}`);
+      showError('transactions-filter', `Failed to load transactions: ${error.message}`);
       return;
     }
     console.log('loadTransactions: Transactions fetched', { count: snapshot.size });
 
     transactionTable.innerHTML = '';
     if (snapshot.empty) {
-      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found</td></tr>';
+      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found for this period</td></tr>';
       console.log('loadTransactions: No transactions in Firestore');
       return;
     }
 
-    const transactions = [];
     snapshot.forEach(doc => {
       const transaction = doc.data();
       const createdAt = transaction.createdAt && transaction.createdAt.toDate ? new Date(transaction.createdAt.toDate()) : new Date();
-      if (createdAt >= start && createdAt <= end) {
-        transactions.push({ id: doc.id, ...transaction, createdAt });
-      }
+      const categoryName = categoryMap.get(transaction.categoryId) || 'Unknown';
+      const tr = document.createElement('tr');
+      tr.classList.add('table-row');
+      tr.innerHTML = `
+        <td class="px-4 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">${transaction.type}</td>
+        <td class="px-4 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">${formatCurrencySync(transaction.amount, 'INR')}</td>
+        <td class="px-4 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">${categoryName}</td>
+        <td class="px-4 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">${transaction.description || '-'}</td>
+        <td class="px-4 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">${createdAt.toLocaleDateString()}</td>
+        <td class="px-4 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm">
+          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${doc.id}">Edit</button>
+          <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${doc.id}">Delete</button>
+        </td>
+      `;
+      transactionTable.appendChild(tr);
     });
-    console.log('loadTransactions: Transactions after date filter', { count: transactions.length });
-
-    if (transactions.length === 0) {
-      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found for this period</td></tr>';
-      console.log('loadTransactions: No transactions in date range');
-      return;
+    console.log('loadTransactions: Table updated', { transactionCount: snapshot.size });
+  } catch (error) {
+    console.error('loadTransactions: Error loading transactions', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    showError('transactions-filter', `Failed to load transactions: ${error.message}`);
+    const transactionTable = document.getElementById('transaction-table');
+    if (transactionTable) {
+      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
     }
+  }
+}
 
 
 
