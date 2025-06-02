@@ -927,8 +927,8 @@ async function setupCategories() {
 
 
 
-// Replaces the entire loadBudgets function in app.js from artifact 3f857bc6-57b9-4867-bbdb-08c781b7e30e
-// Computes spending from transactions for all filters, including this month
+// Replaces the entire loadBudgets function in app.js from artifact fb62ddf1-9743-4243-a80d-4455248f490c
+// Includes credit transactions to reduce spent amount
 
 async function loadBudgets() {
   console.log('loadBudgets: Starting', { familyCode });
@@ -1011,7 +1011,7 @@ async function loadBudgets() {
 
       for (const doc of snapshot.docs) {
         const budget = doc.data();
-        let spent = 0; // Always calculate from transactions
+        let spent = 0;
         const categoryIds = budgetToCategories.get(doc.id) || [];
         if (categoryIds.length > 0) {
           // Split categoryIds into chunks of 30 (Firestore 'in' limit)
@@ -1019,9 +1019,11 @@ async function loadBudgets() {
           for (let i = 0; i < categoryIds.length; i += 30) {
             chunks.push(categoryIds.slice(i, i + 30));
           }
-          let totalSpent = 0;
+          let debitTotal = 0;
+          let creditTotal = 0;
           for (const chunk of chunks) {
-            const transactionsQuery = query(
+            // Query debit transactions
+            const debitQuery = query(
               collection(db, 'transactions'),
               where('familyCode', '==', familyCode),
               where('categoryId', 'in', chunk),
@@ -1030,26 +1032,60 @@ async function loadBudgets() {
               where('createdAt', '<=', end)
             );
             try {
-              const transactionsSnapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
-              totalSpent += transactionsSnapshot.docs.reduce((sum, txDoc) => sum + (txDoc.data().amount || 0), 0);
-              console.log('loadBudgets: Spent calculated', {
+              const debitSnapshot = await retryFirestoreOperation(() => getDocs(debitQuery));
+              debitTotal += debitSnapshot.docs.reduce((sum, txDoc) => sum + (txDoc.data().amount || 0), 0);
+              console.log('loadBudgets: Debit transactions calculated', {
                 budgetId: doc.id,
                 filter,
                 chunkSize: chunk.length,
-                transactionCount: transactionsSnapshot.size,
-                chunkSpent: totalSpent
+                debitCount: debitSnapshot.size,
+                debitAmount: debitTotal
               });
             } catch (error) {
-              console.error('loadBudgets: Failed to fetch transactions', {
+              console.error('loadBudgets: Failed to fetch debit transactions', {
                 budgetId: doc.id,
                 filter,
                 code: error.code,
                 message: error.message
               });
-              // Continue with other chunks
+            }
+
+            // Query credit transactions
+            const creditQuery = query(
+              collection(db, 'transactions'),
+              where('familyCode', '==', familyCode),
+              where('categoryId', 'in', chunk),
+              where('type', '==', 'credit'),
+              where('createdAt', '>=', start),
+              where('createdAt', '<=', end)
+            );
+            try {
+              const creditSnapshot = await retryFirestoreOperation(() => getDocs(creditQuery));
+              creditTotal += creditSnapshot.docs.reduce((sum, txDoc) => sum + (txDoc.data().amount || 0), 0);
+              console.log('loadBudgets: Credit transactions calculated', {
+                budgetId: doc.id,
+                filter,
+                chunkSize: chunk.length,
+                creditCount: creditSnapshot.size,
+                creditAmount: creditTotal
+              });
+            } catch (error) {
+              console.error('loadBudgets: Failed to fetch credit transactions', {
+                budgetId: doc.id,
+                filter,
+                code: error.code,
+                message: error.message
+              });
             }
           }
-          spent = totalSpent;
+          spent = debitTotal - creditTotal;
+          console.log('loadBudgets: Net spent calculated', {
+            budgetId: doc.id,
+            filter,
+            debitTotal,
+            creditTotal,
+            netSpent: spent
+          });
         } else {
           console.warn('loadBudgets: No categories linked to budget', { budgetId: doc.id, name: budget.name });
           spent = 0;
