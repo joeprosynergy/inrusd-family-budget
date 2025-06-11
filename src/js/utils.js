@@ -1,7 +1,7 @@
 // utils.js
 import { collection, query, where, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { showError } from './core.js';
-
+const transactionCache = new Map();
 /**
  * Retries a Firestore operation
  * @param {Function} operation
@@ -319,4 +319,40 @@ async function familyCodeExists(db, code) {
   return !snapshot.empty;
 }
 
-export { retryFirestoreOperation, fetchExchangeRate, getDateRange, resetBudgetsForNewMonth, generateFamilyCode, isValidFamilyCode, familyCodeExists };
+/**
+ * Fetches and caches transactions for a date range
+ * @param {Firestore} db
+ * @param {string} familyCode
+ * @param {Date} start
+ * @param {Date} end
+ * @returns {Promise<Array>}
+ */
+async function fetchCachedTransactions(db, familyCode, start, end) {
+  const cacheKey = `${familyCode}_${start.toISOString()}_${end.toISOString()}`;
+  if (transactionCache.has(cacheKey)) {
+    console.log('fetchCachedTransactions: Using cached transactions', { cacheKey });
+    return transactionCache.get(cacheKey);
+  }
+
+  const transactionsQuery = query(
+    collection(db, 'transactions'),
+    where('familyCode', '==', familyCode),
+    where('createdAt', '>=', start),
+    where('createdAt', '<=', end)
+  );
+  const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
+  const transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt.toDate() }));
+  transactionCache.set(cacheKey, transactions);
+  console.log('fetchCachedTransactions: Cached transactions', { cacheKey, count: transactions.length });
+  return transactions;
+}
+
+/**
+ * Clears transaction cache
+ */
+function clearTransactionCache() {
+  transactionCache.clear();
+  console.log('clearTransactionCache: Cache cleared');
+}
+
+export { retryFirestoreOperation, fetchExchangeRate, getDateRange, resetBudgetsForNewMonth, generateFamilyCode, isValidFamilyCode, familyCodeExists, fetchCachedTransactions, clearTransactionCache };
