@@ -32,18 +32,15 @@ async function loadAppData() {
     console.log('Fetching exchange rates');
     // Fetch all rates in parallel
     const [inrUsdRate, inrZarRate, usdZarRate] = await Promise.all([
-      fetchExchangeRate('INR', 'USD', exchangeRateCache.INR_USD),
-      fetchExchangeRate('INR', 'ZAR', exchangeRateCache.INR_ZAR),
-      fetchExchangeRate('USD', 'ZAR', exchangeRateCache.USD_ZAR)
+      fetchExchangeRate('INR', 'USD', exchangeRateCache.get('INR_USD')),
+      fetchExchangeRate('INR', 'ZAR', exchangeRateCache.get('INR_ZAR')),
+      fetchExchangeRate('USD', 'ZAR', exchangeRateCache.get('USD_ZAR'))
     ]);
     console.log('Exchange rates loaded:', { INR_USD: inrUsdRate, INR_ZAR: inrZarRate, USD_ZAR: usdZarRate });
     // Update cache entries
-    exchangeRateCache.INR_USD.rate = inrUsdRate;
-    exchangeRateCache.INR_ZAR.rate = inrZarRate;
-    exchangeRateCache.USD_ZAR.rate = usdZarRate;
-    exchangeRateCache.INR_USD.timestamp = Date.now();
-    exchangeRateCache.INR_ZAR.timestamp = Date.now();
-    exchangeRateCache.USD_ZAR.timestamp = Date.now();
+    exchangeRateCache.set('INR_USD', { rate: inrUsdRate, timestamp: Date.now() });
+    exchangeRateCache.set('INR_ZAR', { rate: inrZarRate, timestamp: Date.now() });
+    exchangeRateCache.set('USD_ZAR', { rate: usdZarRate, timestamp: Date.now() });
     if (domElements.currencyToggle) {
       domElements.currencyToggle.value = userCurrency;
     }
