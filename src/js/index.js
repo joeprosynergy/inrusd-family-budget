@@ -32,7 +32,7 @@ async function init() {
       console.log('init: DOM setup complete');
       setupAuthStateListener(loadAppData);
       console.log('init: Auth state listener setup');
-      setupAuth(loadAppData);
+      await setupAuth(loadAppData);
       console.log('init: Auth setup complete');
       await initApp();
       console.log('init: App initialized');
