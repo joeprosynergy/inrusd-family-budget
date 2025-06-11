@@ -1014,6 +1014,9 @@ async function loadBudgets() {
         return;
       }
 
+      // Batch DOM updates
+      const tableFragment = document.createDocumentFragment();
+      const tilesFragment = document.createDocumentFragment();
       for (const doc of snapshot.docs) {
         const budget = doc.data();
         let spent = 0;
@@ -1049,7 +1052,7 @@ async function loadBudgets() {
             <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
           </td>
         `;
-        budgetTable.appendChild(tr);
+        tableFragment.appendChild(tr);
         const tile = document.createElement('div');
         tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
         const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
@@ -1064,9 +1067,11 @@ async function loadBudgets() {
             <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
           </div>
         `;
-        budgetTiles.appendChild(tile);
+        tilesFragment.appendChild(tile);
       }
-      console.log('loadBudgets: Tiles and table updated', {
+      budgetTable.appendChild(tableFragment);
+      budgetTiles.appendChild(tilesFragment);
+      console.log('loadBudgets: Tiles and table updated with batched DOM', {
         totalBudgetAmount,
         totalRemainingAmount,
         budgetCount: snapshot.size
@@ -1526,53 +1531,22 @@ async function loadTransactions() {
 
     // Fetch transactions with server-side date filtering
     console.log('loadTransactions: Fetching transactions');
-    const transactionsQuery = query(
-      collection(db, 'transactions'),
-      where('familyCode', '==', familyCode),
-      where('createdAt', '>=', adjustedStart),
-      where('createdAt', '<=', end),
-      orderBy('createdAt', 'desc')
-    );
-    let snapshot;
-    try {
-      snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
-    } catch (error) {
-      console.error('loadTransactions: Failed to fetch transactions', {
-        code: error.code,
-        message: error.message,
-        stack: error.stack
-      });
-      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Failed to load transactions</td></tr>';
-      showError('transactions-filter', `Failed to load transactions: ${error.message}`);
-      return;
-    }
-    console.log('loadTransactions: Transactions fetched', { count: snapshot.size });
+    const transactions = await fetchCachedTransactions(db, familyCode, adjustedStart, end);
+    console.log('loadTransactions: Transactions fetched', { count: transactions.length });
 
     transactionTable.innerHTML = '';
-    if (snapshot.empty) {
+    if (transactions.length === 0) {
       transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found for this period</td></tr>';
       console.log('loadTransactions: No transactions in Firestore');
       return;
     }
 
-    const transactions = [];
-    snapshot.forEach(doc => {
-      const transaction = doc.data();
-      const createdAt = transaction.createdAt && transaction.createdAt.toDate ? new Date(transaction.createdAt.toDate()) : new Date();
-      transactions.push({ id: doc.id, ...transaction, createdAt });
-    });
-    console.log('loadTransactions: Transactions after query', { count: transactions.length });
-
-    if (transactions.length === 0) {
-      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found for this period</td></tr>';
-      console.log('loadTransactions: No transactions in date range');
-      return;
-    }
-
-    // Sort transactions by createdAt in descending order (latest first)
+    // Sort transactions by createdAt in descending order
     transactions.sort((a, b) => b.createdAt - a.createdAt);
     console.log('loadTransactions: Transactions sorted by createdAt', { count: transactions.length });
 
+    // Batch DOM updates
+    const tableFragment = document.createDocumentFragment();
     for (const transaction of transactions) {
       const tr = document.createElement('tr');
       tr.classList.add('table-row');
@@ -1589,9 +1563,10 @@ async function loadTransactions() {
           <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${transaction.id}">Delete</button>
         </td>
       `;
-      transactionTable.appendChild(tr);
+      tableFragment.appendChild(tr);
     }
-    console.log('loadTransactions: Table updated', { rendered: transactions.length });
+    transactionTable.appendChild(tableFragment);
+    console.log('loadTransactions: Table updated with batched DOM', { rendered: transactions.length });
   } catch (error) {
     console.error('loadTransactions error:', {
       code: error.code,
