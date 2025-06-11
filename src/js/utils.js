@@ -1,7 +1,8 @@
 // utils.js
-import { collection, query, where, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { showError } from './core.js';
+
 const transactionCache = new Map();
+
 /**
  * Retries a Firestore operation
  * @param {Function} operation
@@ -11,7 +12,6 @@ const transactionCache = new Map();
  * @returns {Promise<any>}
  */
 async function retryFirestoreOperation(operation, maxRetries = 3, baseDelay = 1000, operationData = null) {
-  const { collection, query, where, getDocs, doc, updateDoc, writeBatch } = await import('firebase/firestore');
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Firestore operation attempt ${attempt}/${maxRetries}`);
@@ -44,7 +44,6 @@ async function fetchExchangeRate(fromCurrency, toCurrency, cache = { rate: null,
   const cacheKey = `exchangeRate_${fromCurrency}_${toCurrency}`;
   const now = Date.now();
 
-  // Check localStorage first
   try {
     const cachedData = localStorage.getItem(cacheKey);
     if (cachedData) {
@@ -60,13 +59,11 @@ async function fetchExchangeRate(fromCurrency, toCurrency, cache = { rate: null,
     console.warn('Failed to access localStorage for exchange rate cache:', error.message);
   }
 
-  // Check in-memory cache
   if (cache.rate != null && cache.timestamp && (now - cache.timestamp) < CACHE_TTL) {
     console.log(`Using in-memory cached exchange rate for ${fromCurrency} to ${toCurrency}:`, cache.rate);
     return cache.rate;
   }
 
-  // Fetch from API
   let attempts = 0;
   const maxAttempts = 3;
   while (attempts < maxAttempts) {
@@ -189,6 +186,43 @@ function getDateRange(filter, startDateInput, endDateInput) {
 }
 
 /**
+ * Fetches and caches transactions for a date range
+ * @param {Firestore} db
+ * @param {string} familyCode
+ * @param {Date} start
+ * @param {Date} end
+ * @returns {Promise<Array>}
+ */
+async function fetchCachedTransactions(db, familyCode, start, end) {
+  const { collection, query, where, getDocs } = await import('firebase/firestore');
+  const cacheKey = `${familyCode}_${start.toISOString()}_${end.toISOString()}`;
+  if (transactionCache.has(cacheKey)) {
+    console.log('fetchCachedTransactions: Using cached transactions', { cacheKey });
+    return transactionCache.get(cacheKey);
+  }
+
+  const transactionsQuery = query(
+    collection(db, 'transactions'),
+    where('familyCode', '==', familyCode),
+    where('createdAt', '>=', start),
+    where('createdAt', '<=', end)
+  );
+  const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
+  const transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt.toDate() }));
+  transactionCache.set(cacheKey, transactions);
+  console.log('fetchCachedTransactions: Cached transactions', { cacheKey, count: transactions.length });
+  return transactions;
+}
+
+/**
+ * Clears transaction cache
+ */
+function clearTransactionCache() {
+  transactionCache.clear();
+  console.log('clearTransactionCache: Cache cleared');
+}
+
+/**
  * Resets budgets for new month
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} familyCode
@@ -290,7 +324,6 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
   }
 }
 
-
 /**
  * Generates unique family code
  * @param {import('firebase/firestore').Firestore} db
@@ -325,6 +358,15 @@ async function generateFamilyCode(db) {
 }
 
 /**
+ * Validates family code format
+ * @param {string} code
+ * @returns {boolean}
+ */
+function isValidFamilyCode(code) {
+  return /^[A-Z0-9]{6}$/.test(code);
+}
+
+/**
  * Checks if family code exists
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} code
@@ -338,46 +380,6 @@ async function familyCodeExists(db, code) {
   const usersQuery = query(collection(db, 'users'), where('familyCode', '==', code));
   const snapshot = await retryFirestoreOperation(() => getDocs(usersQuery));
   return !snapshot.empty;
-}
-
-
-
-
-
-/**
- * Fetches and caches transactions for a date range
- * @param {Firestore} db
- * @param {string} familyCode
- * @param {Date} start
- * @param {Date} end
- * @returns {Promise<Array>}
- */
-async function fetchCachedTransactions(db, familyCode, start, end) {
-  const cacheKey = `${familyCode}_${start.toISOString()}_${end.toISOString()}`;
-  if (transactionCache.has(cacheKey)) {
-    console.log('fetchCachedTransactions: Using cached transactions', { cacheKey });
-    return transactionCache.get(cacheKey);
-  }
-
-  const transactionsQuery = query(
-    collection(db, 'transactions'),
-    where('familyCode', '==', familyCode),
-    where('createdAt', '>=', start),
-    where('createdAt', '<=', end)
-  );
-  const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
-  const transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt.toDate() }));
-  transactionCache.set(cacheKey, transactions);
-  console.log('fetchCachedTransactions: Cached transactions', { cacheKey, count: transactions.length });
-  return transactions;
-}
-
-/**
- * Clears transaction cache
- */
-function clearTransactionCache() {
-  transactionCache.clear();
-  console.log('clearTransactionCache: Cache cleared');
 }
 
 export { retryFirestoreOperation, fetchExchangeRate, getDateRange, resetBudgetsForNewMonth, generateFamilyCode, isValidFamilyCode, familyCodeExists, fetchCachedTransactions, clearTransactionCache };
