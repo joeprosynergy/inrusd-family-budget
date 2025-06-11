@@ -43,22 +43,29 @@ async function fetchExchangeRate(fromCurrency, toCurrency, cache = { rate: null,
   const cacheKey = `exchangeRate_${fromCurrency}_${toCurrency}`;
   const now = Date.now();
 
-  const cachedData = localStorage.getItem(cacheKey);
-  if (cachedData) {
-    const { rate, timestamp } = JSON.parse(cachedData);
-    if (timestamp && (now - timestamp) < CACHE_TTL) {
-      console.log(`Using localStorage cached exchange rate for ${fromCurrency} to ${toCurrency}:`, rate);
-      cache.rate = rate;
-      cache.timestamp = timestamp;
-      return rate;
+  // Check localStorage first
+  try {
+    const cachedData = localStorage.getItem(cacheKey);
+    if (cachedData) {
+      const { rate, timestamp } = JSON.parse(cachedData);
+      if (timestamp && (now - timestamp) < CACHE_TTL && rate != null) {
+        console.log(`Using localStorage cached exchange rate for ${fromCurrency} to ${toCurrency}:`, rate);
+        cache.rate = rate;
+        cache.timestamp = timestamp;
+        return rate;
+      }
     }
+  } catch (error) {
+    console.warn('Failed to access localStorage for exchange rate cache:', error.message);
   }
 
-  if (cache.rate && cache.timestamp && (now - cache.timestamp) < CACHE_TTL) {
+  // Check in-memory cache
+  if (cache.rate != null && cache.timestamp && (now - cache.timestamp) < CACHE_TTL) {
     console.log(`Using in-memory cached exchange rate for ${fromCurrency} to ${toCurrency}:`, cache.rate);
     return cache.rate;
   }
 
+  // Fetch from API
   let attempts = 0;
   const maxAttempts = 3;
   while (attempts < maxAttempts) {
@@ -66,6 +73,9 @@ async function fetchExchangeRate(fromCurrency, toCurrency, cache = { rate: null,
     try {
       console.log(`Fetching exchange rate attempt ${attempts}/${maxAttempts} for ${fromCurrency} to ${toCurrency}`);
       const response = await fetch(`https://v6.exchangerate-api.com/v6/18891e972833c8dd062c1283/latest/${fromCurrency}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
       const data = await response.json();
       if (data.result !== 'success' || !data.conversion_rates?.[toCurrency]) {
         throw new Error(`Invalid API response for ${fromCurrency} to ${toCurrency}`);
@@ -73,16 +83,32 @@ async function fetchExchangeRate(fromCurrency, toCurrency, cache = { rate: null,
       const rate = data.conversion_rates[toCurrency];
       cache.rate = rate;
       cache.timestamp = now;
-      localStorage.setItem(cacheKey, JSON.stringify({ rate, timestamp: now }));
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({ rate, timestamp: now }));
+        console.log(`Cached exchange rate in localStorage for ${fromCurrency} to ${toCurrency}:`, rate);
+      } catch (error) {
+        console.warn('Failed to save exchange rate to localStorage:', error.message);
+      }
       console.log(`Exchange rate fetched:`, rate);
       return rate;
     } catch (error) {
-      console.error(`Exchange rate fetch failed:`, error.message);
+      console.error(`Exchange rate fetch failed on attempt ${attempts}:`, error.message);
       if (attempts === maxAttempts) {
-        const fallbackRates = { INR_USD: 0.012, INR_ZAR: 0.22, USD_ZAR: 18.0 };
+        const fallbackRates = {
+          INR_USD: 0.012,
+          INR_ZAR: 0.22,
+          USD_ZAR: 18.0
+        };
         const key = `${fromCurrency}_${toCurrency}`;
         const fallbackRate = fallbackRates[key] || 1.0;
         console.warn(`Using fallback rate for ${key}:`, fallbackRate);
+        cache.rate = fallbackRate;
+        cache.timestamp = now;
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({ rate: fallbackRate, timestamp: now }));
+        } catch (localStorageError) {
+          console.warn('Failed to save fallback rate to localStorage:', localStorageError.message);
+        }
         return fallbackRate;
       }
       await new Promise(resolve => setTimeout(resolve, 1000));
