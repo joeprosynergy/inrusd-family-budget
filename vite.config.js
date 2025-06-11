@@ -8,7 +8,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         js: 'src/js/index.js', // JavaScript entry point, outputs js.js
-        tailwind: 'src/tailwind.css', // Tailwind CSS entry point
+        tailwind: 'src/css/tailwind.css', // Tailwind CSS entry point
         index: 'src/index.html' // HTML entry point
       },
       output: {
