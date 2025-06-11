@@ -11,6 +11,7 @@ const transactionCache = new Map();
  * @returns {Promise<any>}
  */
 async function retryFirestoreOperation(operation, maxRetries = 3, baseDelay = 1000, operationData = null) {
+  const { collection, query, where, getDocs, doc, updateDoc, writeBatch } = await import('firebase/firestore');
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Firestore operation attempt ${attempt}/${maxRetries}`);
@@ -204,6 +205,7 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
     return;
   }
 
+  const { collection, query, where, getDocs, doc, updateDoc, writeBatch } = await import('firebase/firestore');
   try {
     console.log('resetBudgetsForNewMonth: Using Firebase Firestore SDK for batch updates');
     const now = new Date();
@@ -261,7 +263,6 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
           message: batchError.message,
           stack: batchError.stack
         });
-        // Fallback: Update documents individually
         console.log('resetBudgetsForNewMonth: Falling back to individual updates');
         for (const { ref, data } of updates) {
           try {
@@ -289,6 +290,7 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
   }
 }
 
+
 /**
  * Generates unique family code
  * @param {import('firebase/firestore').Firestore} db
@@ -296,6 +298,7 @@ async function resetBudgetsForNewMonth(db, familyCode, accountType) {
  */
 async function generateFamilyCode(db) {
   console.log('generateFamilyCode: Starting');
+  const { collection, query, where, getDocs } = await import('firebase/firestore');
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code;
   let isUnique = false;
@@ -322,21 +325,13 @@ async function generateFamilyCode(db) {
 }
 
 /**
- * Validates family code format
- * @param {string} code
- * @returns {boolean}
- */
-function isValidFamilyCode(code) {
-  return /^[A-Z0-9]{6}$/.test(code);
-}
-
-/**
  * Checks if family code exists
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} code
  * @returns {Promise<boolean>}
  */
 async function familyCodeExists(db, code) {
+  const { collection, query, where, getDocs } = await import('firebase/firestore');
   if (!isValidFamilyCode(code)) {
     throw new Error('Invalid family code format');
   }
@@ -344,6 +339,10 @@ async function familyCodeExists(db, code) {
   const snapshot = await retryFirestoreOperation(() => getDocs(usersQuery));
   return !snapshot.empty;
 }
+
+
+
+
 
 /**
  * Fetches and caches transactions for a date range
