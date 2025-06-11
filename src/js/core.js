@@ -1,8 +1,5 @@
 // core.js
 // Core module: Firebase initialization, DOM setup, auth state, and utilities
-import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { fetchExchangeRate } from './utils.js';
 
 /** @type {import('firebase/auth').Auth | null} */
@@ -104,6 +101,9 @@ async function initializeFirebase() {
       for (const field of requiredFields) {
         if (!firebaseConfig[field]) throw new Error(`Missing Firebase config: ${field}`);
       }
+      const { initializeApp } = await import('firebase/app');
+      const { getAuth } = await import('firebase/auth');
+      const { getFirestore } = await import('firebase/firestore');
       const app = initializeApp(firebaseConfig);
       auth = getAuth(app);
       db = getFirestore(app);
@@ -157,7 +157,7 @@ function setupDOM() {
  * Sets up auth state listener
  * @param {Function} loadAppDataCallback
  */
-function setupAuthStateListener(loadAppDataCallback) {
+async function setupAuthStateListener(loadAppDataCallback) {
   console.log('setupAuthStateListener: Starting');
   if (!auth || !db) {
     console.error('setupAuthStateListener: Auth or Firestore service not available');
@@ -168,6 +168,8 @@ function setupAuthStateListener(loadAppDataCallback) {
   }
 
   console.log('setupAuthStateListener: Setting up onAuthStateChanged');
+  const { onAuthStateChanged } = await import('firebase/auth');
+  const { doc, getDoc } = await import('firebase/firestore');
   onAuthStateChanged(auth, async user => {
     console.log('Auth state changed:', user ? `User: ${user.uid}` : 'No user');
     try {
