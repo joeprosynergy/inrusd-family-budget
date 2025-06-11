@@ -8,7 +8,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         js: 'src/js/index.js', // JavaScript entry point, outputs js.js
-        tailwind: 'src/css/tailwind.css', // Tailwind CSS entry point
+        tailwind: 'src/tailwind.css', // Tailwind CSS entry point
         index: 'src/index.html' // HTML entry point
       },
       output: {
@@ -16,7 +16,8 @@ export default defineConfig({
         assetFileNames: 'assets/[name].[ext]' // Output CSS to assets/tailwind.css
       }
     },
-    sourcemap: true // Generate sourcemaps
+    sourcemap: true, // Generate sourcemaps
+    cssMinify: true // Minify CSS in production
   },
   publicDir: false, // Disable publicDir to avoid overlap
   envPrefix: 'VITE_', // For Firebase config variables
