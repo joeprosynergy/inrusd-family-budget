@@ -1,25 +1,25 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  root: 'src', // Root is src/ where index.html resides
+  root: 'src',
   build: {
-    outDir: '../public', // Output to public/ relative to src/
-    assetsDir: 'assets', // Subdirectory for CSS
+    outDir: '../public',
+    assetsDir: 'assets',
     rollupOptions: {
       input: {
-        js: 'src/js/index.js', // JavaScript entry point, outputs js.js
-        tailwind: 'src/css/tailwind.css', // Tailwind CSS entry point
-        index: 'src/index.html' // HTML entry point
+        js: 'src/js/index.js',
+        tailwind: 'src/css/tailwind.css',
+        index: 'src/index.html'
       },
       output: {
-        entryFileNames: '[name].js', // Output JS as js.js
-        assetFileNames: 'assets/[name].[ext]' // Output CSS to assets/tailwind.css
+        entryFileNames: '[name].js',
+        assetFileNames: 'assets/[name].[ext]'
       }
     },
-    sourcemap: true, // Generate sourcemaps
-    cssMinify: true // Minify CSS in production
+    sourcemap: true,
+    cssMinify: true
   },
-  publicDir: false, // Disable publicDir to avoid overlap
-  envPrefix: 'VITE_', // For Firebase config variables
-  base: '/' // Base URL for Netlify
+  publicDir: false,
+  envPrefix: 'VITE_',
+  base: '/'
 });
