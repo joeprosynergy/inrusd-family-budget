@@ -99,25 +99,44 @@ function setupTabs() {
     // Update UI
     tabs.forEach(t => {
       const isActive = t.id === tabId;
-      domElements[`${t.id.replace('-', '')}Tab`]?.classList.toggle('bg-blue-800', isActive);
-      t.section?.classList.toggle('hidden', !isActive);
+      const tabElement = domElements[`${t.id.replace('-', '')}Tab`];
+      if (tabElement) {
+        tabElement.classList.toggle('bg-blue-800', isActive);
+      }
+      if (t.section) {
+        t.section.classList.toggle('hidden', !isActive);
+      }
     });
 
-    domElements.pageTitle.textContent = tab.name;
-    tab.show();
-    currentTabIndex = tabs.findIndex(t => t.id === tabId);
+    const pageTitle = domElements.pageTitle;
+    if (pageTitle) {
+      pageTitle.textContent = tab.name;
+    }
 
     // Update mobile menu
-    document.getElementById('current-tab-name')?.textContent = tab.name;
-    if (window.matchMedia('(max-width: 768px)').matches) {
-      document.getElementById('menu-items')?.classList.add('hidden');
-      document.getElementById('menu-toggle')?.setAttribute('aria-expanded', 'false');
+    const currentTabName = document.getElementById('current-tab-name');
+    if (currentTabName) {
+      currentTabName.textContent = tab.name;
     }
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      const menuItems = document.getElementById('menu-items');
+      const menuToggle = document.getElementById('menu-toggle');
+      if (menuItems && menuToggle) {
+        menuItems.classList.add('hidden');
+        menuToggle.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    tab.show();
+    currentTabIndex = tabs.findIndex(t => t.id === tabId);
   };
 
   // Setup event listeners
   tabs.forEach(tab => {
-    domElements[`${tab.id.replace('-', '')}Tab`]?.addEventListener('click', () => switchTab(tab.id));
+    const tabElement = domElements[`${tab.id.replace('-', '')}Tab`];
+    if (tabElement) {
+      tabElement.addEventListener('click', () => switchTab(tab.id));
+    }
   });
 
   // Mobile menu toggle
@@ -174,82 +193,103 @@ async function setupProfile() {
         }
       }
     });
-    domElements.profileFamilyCode?.setAttribute('readonly', 'true');
-    domElements.profileFamilyCode?.classList.add('bg-gray-100');
-    domElements.editProfile?.classList.toggle('hidden', enable);
-    domElements.saveProfile?.classList.toggle('hidden', !enable);
+    const profileFamilyCode = domElements.profileFamilyCode;
+    if (profileFamilyCode) {
+      profileFamilyCode.setAttribute('readonly', 'true');
+      profileFamilyCode.classList.add('bg-gray-100');
+    }
+    if (domElements.editProfile) {
+      domElements.editProfile.classList.toggle('hidden', enable);
+    }
+    if (domElements.saveProfile) {
+      domElements.saveProfile.classList.toggle('hidden', !enable);
+    }
   };
 
-  domElements.editProfile?.addEventListener('click', () => toggleEditMode(true));
+  if (domElements.editProfile) {
+    domElements.editProfile.addEventListener('click', () => toggleEditMode(true));
+  }
 
-  domElements.saveProfile?.addEventListener('click', async () => {
-    clearErrors();
-    const email = domElements.profileEmail?.value.trim();
-    const currency = domElements.profileCurrency?.value;
-    const accountType = domElements.profileAccountType?.value;
+  if (domElements.saveProfile) {
+    domElements.saveProfile.addEventListener('click', async () => {
+      clearErrors();
+      const email = domElements.profileEmail?.value.trim();
+      const currency = domElements.profileCurrency?.value;
+      const accountType = domElements.profileAccountType?.value;
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      showError('profile-email', 'Valid email is required');
-      return;
-    }
-    if (!['INR', 'USD', 'ZAR'].includes(currency)) {
-      showError('profile-currency', 'Valid currency is required');
-      return;
-    }
-    if (!['admin', 'child'].includes(accountType)) {
-      showError('profile-account-type', 'Valid account type is required');
-      return;
-    }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showError('profile-email', 'Valid email is required');
+        return;
+      }
+      if (!currency || !['INR', 'USD', 'ZAR'].includes(currency)) {
+        showError('profile-currency', 'Valid currency is required');
+        return;
+      }
+      if (!accountType || !['admin', 'child'].includes(accountType)) {
+        showError('profile-account-type', 'Valid account type is required');
+        return;
+      }
 
-    try {
-      domElements.saveProfile.disabled = true;
-      domElements.saveProfile.textContent = 'Saving...';
-      
-      if (email !== currentUser.email) await auth.currentUser.updateEmail(email);
-      await retryFirestoreOperation(() => 
-        updateDoc(doc(db, 'users', currentUser.uid), { currency, accountType })
-      );
+      try {
+        domElements.saveProfile.disabled = true;
+        domElements.saveProfile.textContent = 'Saving...';
+        
+        if (email !== currentUser.email) await auth.currentUser.updateEmail(email);
+        await retryFirestoreOperation(() => 
+          updateDoc(doc(db, 'users', currentUser.uid), { currency, accountType })
+        );
 
-      setUserCurrency(currency);
-      toggleEditMode(false);
-      domElements.currencyToggle.value = currency;
-      await Promise.all([loadBudgets(), loadTransactions(), loadChildAccounts(), updateDashboard()]);
-    } catch (error) {
-      const errorMessages = {
-        'auth/email-already-in-use': 'This email is already in use.',
-        'auth/invalid-email': 'Invalid email format.',
-        'auth/requires-recent-login': 'Please log out and log in again to update email.'
-      };
-      showError('profile-email', errorMessages[error.code] || 'Failed to save profile.');
-    } finally {
-      domElements.saveProfile.disabled = false;
-      domElements.saveProfile.textContent = 'Save Profile';
-    }
-  });
+        setUserCurrency(currency);
+        toggleEditMode(false);
+        if (domElements.currencyToggle) {
+          domElements.currencyToggle.value = currency;
+        }
+        await Promise.all([loadBudgets(), loadTransactions(), loadChildAccounts(), updateDashboard()]);
+      } catch (error) {
+        const errorMessages = {
+          'auth/email-already-in-use': 'This email is already in use.',
+          'auth/invalid-email': 'Invalid email format.',
+          'auth/requires-recent-login': 'Please log out and log in again to update email.'
+        };
+        showError('profile-email', errorMessages[error.code] || 'Failed to save profile.');
+      } finally {
+        domElements.saveProfile.disabled = false;
+        domElements.saveProfile.textContent = 'Save Profile';
+      }
+    });
+  }
 
-  domElements.currencyToggle?.addEventListener('change', async () => {
-    const newCurrency = domElements.currencyToggle.value;
-    if (!['INR', 'USD', 'ZAR'].includes(newCurrency)) {
-      showError('currency-toggle', 'Invalid currency selected.');
-      return;
-    }
+  if (domElements.currencyToggle) {
+    domElements.currencyToggle.addEventListener('change', async () => {
+      const newCurrency = domElements.currencyToggle.value;
+      if (!['INR', 'USD', 'ZAR'].includes(newCurrency)) {
+        showError('currency-toggle', 'Invalid currency selected.');
+        return;
+      }
 
-    try {
-      await retryFirestoreOperation(() => 
-        updateDoc(doc(db, 'users', currentUser.uid), { currency: newCurrency })
-      );
-      setUserCurrency(newCurrency);
-      domElements.profileCurrency.value = newCurrency;
-      await Promise.all([loadBudgets(), loadTransactions(), loadChildAccounts(), updateDashboard()]);
-    } catch (error) {
-      showError('currency-toggle', 'Failed to update currency.');
-    }
-  });
+      try {
+        await retryFirestoreOperation(() => 
+          updateDoc(doc(db, 'users', currentUser.uid), { currency: newCurrency })
+        );
+        setUserCurrency(newCurrency);
+        if (domElements.profileCurrency) {
+          domElements.profileCurrency.value = newCurrency;
+        }
+        await Promise.all([loadBudgets(), loadTransactions(), loadChildAccounts(), updateDashboard()]);
+      } catch (error) {
+        showError('currency-toggle', 'Failed to update currency.');
+      }
+    });
+  }
 
-  domElements.dashboardFilter?.addEventListener('change', () => {
-    domElements.customDateRange?.classList.toggle('hidden', domElements.dashboardFilter.value !== 'custom');
-    updateDashboard();
-  });
+  if (domElements.dashboardFilter) {
+    domElements.dashboardFilter.addEventListener('change', () => {
+      if (domElements.customDateRange) {
+        domElements.customDateRange.classList.toggle('hidden', domElements.dashboardFilter.value !== 'custom');
+      }
+      updateDashboard();
+    });
+  }
 }
 
 async function loadProfileData() {
@@ -290,7 +330,9 @@ async function loadCategories() {
 
   if (Object.values(elements).some(el => !el) || !db || !familyCode) {
     showError('category-name', 'Required components not available');
-    elements.categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
+    if (elements.categoryTable) {
+      elements.categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
+    }
     return;
   }
 
@@ -352,7 +394,9 @@ async function loadCategories() {
     elements.categoryTable.appendChild(fragment);
   } catch (error) {
     showError('category-name', `Failed to load categories: ${error.message}`);
-    elements.categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
+    if (elements.categoryTable) {
+      elements.categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
+    }
   }
 }
 
@@ -395,7 +439,9 @@ async function setupCategories() {
       nameInput.value = '';
       typeSelect.value = 'income';
       budgetSelect.value = 'none';
-      if (isModal) domElements.addCategoryModal?.classList.add('hidden');
+      if (isModal && domElements.addCategoryModal) {
+        domElements.addCategoryModal.classList.add('hidden');
+      }
       await loadCategories();
     } catch (error) {
       showError(isModal ? 'new-category-name' : 'category-name', `Failed to add category: ${error.message}`);
@@ -421,7 +467,9 @@ async function setupCategories() {
 
   elements.categorySelect.addEventListener('change', () => {
     if (elements.categorySelect.value === 'add-new') {
-      domElements.addCategoryModal?.classList.remove('hidden');
+      if (domElements.addCategoryModal) {
+        domElements.addCategoryModal.classList.remove('hidden');
+      }
       elements.categorySelect.value = '';
     }
   });
@@ -440,7 +488,9 @@ async function setupCategories() {
   });
 
   elements.cancelCategory.addEventListener('click', () => {
-    domElements.addCategoryModal?.classList.add('hidden');
+    if (domElements.addCategoryModal) {
+      domElements.addCategoryModal.classList.add('hidden');
+    }
     ['new-category-name', 'new-category-type', 'new-category-budget'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = id.includes('type') ? 'income' : id.includes('budget') ? 'none' : '';
@@ -599,9 +649,9 @@ async function loadBudgets() {
       tr.classList.add('table-row');
       tr.innerHTML = `
         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(budget.amount, 'INR')}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(spent, 'INR')}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(budget.amount - spent, 'INR')}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, 'INR')}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, 'INR')}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, 'INR')}</td>
         <td class="px-6 py-4 whitespace-nowrap text-sm">
           <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
           <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
@@ -614,10 +664,10 @@ async function loadBudgets() {
       const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
       tile.innerHTML = `
         <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
-        <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${await formatCurrency(budget.amount, 'INR')}</span></p>
-        <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${await formatCurrency(spent, 'INR')}</span></p>
+        <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, 'INR')}</span></p>
+        <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, 'INR')}</span></p>
         <p class="text-sm font-semibold text-gray-700 mt-2">
-          Remaining: <span id="${doc.id}-remaining">${await formatCurrency(budget.amount - spent, 'INR')}</span>
+          Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, 'INR')}</span>
         </p>
         <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
           <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
@@ -628,8 +678,14 @@ async function loadBudgets() {
 
     elements.budgetTable.appendChild(tableFragment);
     elements.budgetTiles.appendChild(tilesFragment);
-    document.getElementById('total-budget')?.textContent = await formatCurrency(totalBudgetAmount, 'INR');
-    document.getElementById('total-remaining')?.textContent = await formatCurrency(totalRemainingAmount, 'INR');
+    const totalBudgetElement = document.getElementById('total-budget');
+    const totalRemainingElement = document.getElementById('total-remaining');
+    if (totalBudgetElement) {
+      totalBudgetElement.textContent = formatCurrency(totalBudgetAmount, 'INR');
+    }
+    if (totalRemainingElement) {
+      totalRemainingElement.textContent = formatCurrency(totalRemainingAmount, 'INR');
+    }
   } catch (error) {
     showError('budget-name', `Failed to load budgets: ${error.message}`);
     elements.budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading budgets</td></tr>';
@@ -683,7 +739,9 @@ async function setupBudgets() {
       clearTransactionCache();
       nameInput.value = '';
       amountInput.value = '';
-      if (isModal) domElements.addBudgetModal?.classList.add('hidden');
+      if (isModal && domElements.addBudgetModal) {
+        domElements.addBudgetModal.classList.add('hidden');
+      }
       await Promise.all([loadBudgets(), loadCategories()]);
     } catch (error) {
       showError(isModal ? 'new-budget-name' : 'budget-name', `Failed to add budget: ${error.message}`);
@@ -706,12 +764,16 @@ async function setupBudgets() {
     await handleBudgetAdd(inputs.name, inputs.amount);
   });
 
-  domElements.categoryBudgetSelect?.addEventListener('change', () => {
-    if (domElements.categoryBudgetSelect.value === 'add-new') {
-      domElements.addBudgetModal?.classList.remove('hidden');
-      domElements.categoryBudgetSelect.value = 'none';
-    }
-  });
+  if (domElements.categoryBudgetSelect) {
+    domElements.categoryBudgetSelect.addEventListener('change', () => {
+      if (domElements.categoryBudgetSelect.value === 'add-new') {
+        if (domElements.addBudgetModal) {
+          domElements.addBudgetModal.classList.remove('hidden');
+        }
+        domElements.categoryBudgetSelect.value = 'none';
+      }
+    });
+  }
 
   elements.saveBudget.addEventListener('click', async () => {
     const inputs = {
@@ -726,7 +788,9 @@ async function setupBudgets() {
   });
 
   elements.cancelBudget.addEventListener('click', () => {
-    domElements.addBudgetModal?.classList.add('hidden');
+    if (domElements.addBudgetModal) {
+      domElements.addBudgetModal.classList.add('hidden');
+    }
     ['new-budget-name', 'new-budget-amount'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
@@ -817,7 +881,9 @@ async function loadTransactions() {
 
   if (Object.values(elements).some(el => !el) || !db || !familyCode) {
     showError('transactions-filter', 'Required components not available');
-    elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+    if (elements.transactionTable) {
+      elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+    }
     return;
   }
 
@@ -1077,10 +1143,10 @@ async function loadChildAccounts() {
 
   const elements = {
     childSelector: document.getElementById('child-selector'),
-    childUserIdSelect: document.getElementById('child-user-id')
+    childUserIDSelect: document.getElementById('child-user-id')
   };
 
-  if (!elements.childSelector || !elements.childUserIdSelect) {
+  if (!elements.childSelector || !elements.childUserIDSelect) {
     showError('child-user-id', 'Child selector not found');
     return;
   }
@@ -1088,21 +1154,21 @@ async function loadChildAccounts() {
   try {
     if (state.currentAccountType === 'admin') {
       elements.childSelector.classList.remove('hidden');
-      elements.childUserIdSelect.innerHTML = '<option value="">Select a Child</option>';
+      elements.childUserIDSelect.innerHTML = '<option value="">Select a Child</option>';
       const usersQuery = query(collection(db, 'users'), where('familyCode', '==', familyCode), where('accountType', '==', 'child'));
       const snapshot = await retryFirestoreOperation(() => getDocs(usersQuery));
       
       if (snapshot.empty) {
-        elements.childUserIdSelect.innerHTML = '<option value="">No children found</option>';
+        elements.childUserIDSelect.innerHTML = '<option value="">No children found</option>';
       } else {
         snapshot.forEach(doc => {
           const option = document.createElement('option');
           option.value = doc.id;
           option.textContent = doc.data().email || `Child Account ${doc.id.substring(0, 8)}`;
-          elements.childUserIdSelect.appendChild(option);
+          elements.childUserIDSelect.appendChild(option);
         });
       }
-      state.currentChildUserId = elements.childUserIdSelect.value || null;
+      state.currentChildUserId = elements.childUserIDSelect.value || null;
     } else {
       elements.childSelector.classList.add('hidden');
       state.currentChildUserId = currentUser.uid;
@@ -1110,15 +1176,21 @@ async function loadChildAccounts() {
     await loadChildTransactions();
   } catch (error) {
     showError('child-user-id', `Failed to load child accounts: ${error.message}`);
-    elements.childUserIdSelect.innerHTML = '<option value="">Error loading children</option>';
+    elements.childUserIDSelect.innerHTML = '<option value="">Error loading children</option>';
   }
 }
 
 async function loadChildTransactions() {
   if (!db || !state.currentChildUserId) {
     showError('child-transaction-description', 'No user selected');
-    document.getElementById('child-transaction-table')?.innerHTML = '<tr><td colspan="5" class="text-center py-4">No user selected</td></tr>';
-    document.getElementById('child-balance')?.textContent = formatCurrency(0, 'INR');
+    const table = document.getElementById('child-transaction-table');
+    if (table) {
+      table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No user selected</td></tr>';
+    }
+    const balance = document.getElementById('child-balance');
+    if (balance) {
+      balance.textContent = formatCurrency(0, 'INR');
+    }
     return;
   }
 
@@ -1373,7 +1445,8 @@ async function setupChildAccounts() {
     } else {
       const table = document.getElementById('child-transaction-table');
       if (table) table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No child selected</td></tr>';
-      document.getElementById('child-balance')?.textContent = formatCurrency(0, 'INR');
+      const balance = document.getElementById('child-balance');
+      if (balance) balance.textContent = formatCurrency(0, 'INR');
     }
   });
 }
@@ -1425,8 +1498,10 @@ async function updateDashboard() {
       `;
       elements.childTiles.style.display = 'block';
       ['balance', 'afterBudget', 'totalBudget'].forEach(id => {
-        elements[id].parentElement?.classList.add('hidden');
-        elements[id].textContent = 'N/A';
+        if (elements[id].parentElement) {
+          elements[id].parentElement.classList.add('hidden');
+          elements[id].textContent = 'N/A';
+        }
       });
       elements.totalRemaining.textContent = 'N/A';
     } else {
@@ -1527,9 +1602,12 @@ async function setupLogout() {
           if (signOutSuccess) {
             state.currentChildUserId = null;
             state.currentAccountType = null;
-            document.getElementById('login-section')?.classList.remove('hidden');
-            document.getElementById('app-section')?.classList.add('hidden');
-            document.getElementById('page-title')?.textContent = 'Login';
+            const loginSection = document.getElementById('login-section');
+            const appSection = document.getElementById('app-section');
+            const pageTitle = document.getElementById('page-title');
+            if (loginSection) loginSection.classList.remove('hidden');
+            if (appSection) appSection.classList.add('hidden');
+            if (pageTitle) pageTitle.textContent = 'Login';
             logoutButton.classList.add('hidden');
           } else {
             showError('page-title', 'Failed to log out: Connectivity issue');
