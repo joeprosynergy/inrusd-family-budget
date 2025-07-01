@@ -649,9 +649,9 @@ async function loadBudgets() {
       tr.classList.add('table-row');
       tr.innerHTML = `
         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, 'INR')}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, 'INR')}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, 'INR')}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(budget.amount, 'INR')}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(spent, 'INR')}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${await formatCurrency(budget.amount - spent, 'INR')}</td>
         <td class="px-6 py-4 whitespace-nowrap text-sm">
           <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
           <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
@@ -664,10 +664,10 @@ async function loadBudgets() {
       const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
       tile.innerHTML = `
         <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
-        <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, 'INR')}</span></p>
-        <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, 'INR')}</span></p>
+        <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${await formatCurrency(budget.amount, 'INR')}</span></p>
+        <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${await formatCurrency(spent, 'INR')}</span></p>
         <p class="text-sm font-semibold text-gray-700 mt-2">
-          Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, 'INR')}</span>
+          Remaining: <span id="${doc.id}-remaining">${await formatCurrency(budget.amount - spent, 'INR')}</span>
         </p>
         <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
           <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
@@ -681,10 +681,10 @@ async function loadBudgets() {
     const totalBudgetElement = document.getElementById('total-budget');
     const totalRemainingElement = document.getElementById('total-remaining');
     if (totalBudgetElement) {
-      totalBudgetElement.textContent = formatCurrency(totalBudgetAmount, 'INR');
+      totalBudgetElement.textContent = await formatCurrency(totalBudgetAmount, 'INR');
     }
     if (totalRemainingElement) {
-      totalRemainingElement.textContent = formatCurrency(totalRemainingAmount, 'INR');
+      totalRemainingElement.textContent = await formatCurrency(totalRemainingAmount, 'INR');
     }
   } catch (error) {
     showError('budget-name', `Failed to load budgets: ${error.message}`);
@@ -914,13 +914,13 @@ async function loadTransactions() {
     }
 
     const fragment = document.createDocumentFragment();
-    transactions.sort((a, b) => b.createdAt - a.createdAt).forEach(transaction => {
+    for (const transaction of transactions.sort((a, b) => b.createdAt - a.createdAt)) {
       const tr = document.createElement('tr');
       tr.classList.add('table-row');
       const transactionDate = transaction.createdAt.toDate ? transaction.createdAt.toDate() : new Date(transaction.createdAt);
       tr.innerHTML = `
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
-        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formatCurrency(transaction.amount || 0, 'INR')}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${await formatCurrency(transaction.amount || 0, 'INR')}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.categoryId ? categoryMap.get(transaction.categoryId) || 'Unknown' : 'None'}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
         <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transactionDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
@@ -930,7 +930,7 @@ async function loadTransactions() {
         </td>
       `;
       fragment.appendChild(tr);
-    });
+    }
     elements.transactionTable.appendChild(fragment);
   } catch (error) {
     showError('transactions-filter', `Failed to load transactions: ${error.message}`);
@@ -1143,10 +1143,10 @@ async function loadChildAccounts() {
 
   const elements = {
     childSelector: document.getElementById('child-selector'),
-    childUserIDSelect: document.getElementById('child-user-id')
+    childUserIdSelect: document.getElementById('child-user-id')
   };
 
-  if (!elements.childSelector || !elements.childUserIDSelect) {
+  if (!elements.childSelector || !elements.childUserIdSelect) {
     showError('child-user-id', 'Child selector not found');
     return;
   }
@@ -1154,21 +1154,21 @@ async function loadChildAccounts() {
   try {
     if (state.currentAccountType === 'admin') {
       elements.childSelector.classList.remove('hidden');
-      elements.childUserIDSelect.innerHTML = '<option value="">Select a Child</option>';
+      elements.childUserIdSelect.innerHTML = '<option value="">Select a Child</option>';
       const usersQuery = query(collection(db, 'users'), where('familyCode', '==', familyCode), where('accountType', '==', 'child'));
       const snapshot = await retryFirestoreOperation(() => getDocs(usersQuery));
       
       if (snapshot.empty) {
-        elements.childUserIDSelect.innerHTML = '<option value="">No children found</option>';
+        elements.childUserIdSelect.innerHTML = '<option value="">No children found</option>';
       } else {
         snapshot.forEach(doc => {
           const option = document.createElement('option');
           option.value = doc.id;
           option.textContent = doc.data().email || `Child Account ${doc.id.substring(0, 8)}`;
-          elements.childUserIDSelect.appendChild(option);
+          elements.childUserIdSelect.appendChild(option);
         });
       }
-      state.currentChildUserId = elements.childUserIDSelect.value || null;
+      state.currentChildUserId = elements.childUserIdSelect.value || null;
     } else {
       elements.childSelector.classList.add('hidden');
       state.currentChildUserId = currentUser.uid;
@@ -1176,7 +1176,7 @@ async function loadChildAccounts() {
     await loadChildTransactions();
   } catch (error) {
     showError('child-user-id', `Failed to load child accounts: ${error.message}`);
-    elements.childUserIDSelect.innerHTML = '<option value="">Error loading children</option>';
+    elements.childUserIdSelect.innerHTML = '<option value="">Error loading children</option>';
   }
 }
 
@@ -1189,7 +1189,7 @@ async function loadChildTransactions() {
     }
     const balance = document.getElementById('child-balance');
     if (balance) {
-      balance.textContent = formatCurrency(0, 'INR');
+      balance.textContent = await formatCurrency(0, 'INR');
     }
     return;
   }
@@ -1224,13 +1224,13 @@ async function loadChildTransactions() {
       elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
     } else {
       const fragment = document.createDocumentFragment();
-      transactions.forEach(tx => {
+      for (const tx of transactions) {
         totalBalance += tx.type === 'credit' ? tx.amount : -tx.amount;
         const tr = document.createElement('tr');
         tr.classList.add('table-row');
         tr.innerHTML = `
           <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.type || 'Unknown'}</td>
-          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formatCurrency(tx.amount || 0, 'INR')}</td>
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${await formatCurrency(tx.amount || 0, 'INR')}</td>
           <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.description || ''}</td>
           <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.createdAt.toLocaleString('en-US', { day: 'numeric' })}</td>
           <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
@@ -1239,14 +1239,14 @@ async function loadChildTransactions() {
           </td>
         `;
         fragment.appendChild(tr);
-      });
+      }
       elements.table.appendChild(fragment);
     }
-    elements.balance.textContent = formatCurrency(totalBalance, 'INR');
+    elements.balance.textContent = await formatCurrency(totalBalance, 'INR');
   } catch (error) {
     showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
     elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-    elements.balance.textContent = formatCurrency(0, 'INR');
+    elements.balance.textContent = await formatCurrency(0, 'INR');
   }
 }
 
@@ -1290,7 +1290,7 @@ async function loadChildTiles() {
       tile.innerHTML = `
         <h3 class="text-lg font-semibold text-gray-700">${email}</h3>
         <p class="text-sm font-semibold text-gray-700 mt-2">
-          Balance: <span id="child-${userId}-balance">${formatCurrency(balance, 'INR')}</span>
+          Balance: <span id="child-${userId}-balance">${await formatCurrency(balance, 'INR')}</span>
         </p>
       `;
       fragment.appendChild(tile);
@@ -1446,7 +1446,7 @@ async function setupChildAccounts() {
       const table = document.getElementById('child-transaction-table');
       if (table) table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No child selected</td></tr>';
       const balance = document.getElementById('child-balance');
-      if (balance) balance.textContent = formatCurrency(0, 'INR');
+      if (balance) balance.textContent = '₹0'; // Fallback to static value if formatCurrency fails
     }
   });
 }
@@ -1493,7 +1493,7 @@ async function updateDashboard() {
       elements.childTiles.innerHTML = `
         <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
           <h3 class="text-base sm:text-lg font-semibold text-gray-700">Your Balance</h3>
-          <p class="text-lg sm:text-2xl font-bold text-gray-900">${formatCurrency(childBalance, 'INR')}</p>
+          <p class="text-lg sm:text-2xl font-bold text-gray-900">${await formatCurrency(childBalance, 'INR')}</p>
         </div>
       `;
       elements.childTiles.style.display = 'block';
@@ -1559,12 +1559,12 @@ async function updateDashboard() {
         }
       }
 
-      elements.balance.textContent = formatCurrency(totalBalance, 'INR');
+      elements.balance.textContent = await formatCurrency(totalBalance, 'INR');
       elements.balance.parentElement.classList.remove('hidden');
-      elements.totalBudget.textContent = formatCurrency(totalBudgetAmount, 'INR');
-      elements.totalRemaining.textContent = formatCurrency(totalBudgetAmount - totalSpent, 'INR');
+      elements.totalBudget.textContent = await formatCurrency(totalBudgetAmount, 'INR');
+      elements.totalRemaining.textContent = await formatCurrency(totalBudgetAmount - totalSpent, 'INR');
       elements.totalBudget.parentElement.classList.remove('hidden');
-      elements.afterBudget.textContent = formatCurrency(totalBalance - (totalBudgetAmount - totalSpent), 'INR');
+      elements.afterBudget.textContent = await formatCurrency(totalBalance - (totalBudgetAmount - totalSpent), 'INR');
       elements.afterBudget.parentElement.classList.remove('hidden');
       await loadBudgets();
       elements.childTiles.innerHTML = '';
@@ -1642,4 +1642,4 @@ async function initApp() {
   }
 }
 
-export { loadAppData, initApp };
+export { loadAppData, initApp
