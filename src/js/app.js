@@ -70,31 +70,48 @@ function setupTabs() {
     { id: 'dashboard', name: 'Budget Dashboard', section: domElements.dashboardSection, show: () => updateDashboard() },
     { id: 'transactions', name: 'Transactions', section: domElements.transactionsSection, show: async () => {
       if (!state.loadedTabs.transactions) {
+        console.log('Loading transactions tab');
         await loadTransactions();
         state.loadedTabs.transactions = true;
       }
     }},
     { id: 'budgets', name: 'Budgets', section: domElements.budgetsSection, show: async () => {
       if (!state.loadedTabs.budgets) {
+        console.log('Loading budgets tab');
         await loadBudgets();
         state.loadedTabs.budgets = true;
       }
     }},
-    { id: 'categories', name: 'Categories', section: domElements.categoriesSection, show: () => {} },
+    { id: 'categories', name: 'Categories', section: domElements.categoriesSection, show: () => {
+      console.log('Loading categories tab');
+    }},
     { id: 'child-accounts', name: 'Child Accounts', section: domElements.childAccountsSection, show: async () => {
+      console.log('Attempting to load child accounts tab');
       if (!state.loadedTabs.childAccounts) {
-        await loadChildAccounts();
-        state.loadedTabs.childAccounts = true;
+        try {
+          await loadChildAccounts();
+          state.loadedTabs.childAccounts = true;
+        } catch (error) {
+          console.error('Failed to load child accounts:', error);
+          showError('child-user-id', 'Failed to initialize child accounts tab.');
+        }
       }
     }},
-    { id: 'profile', name: 'User Profile', section: domElements.profileSection, show: loadProfileData }
+    { id: 'profile', name: 'User Profile', section: domElements.profileSection, show: () => {
+      console.log('Loading profile tab');
+      loadProfileData();
+    }}
   ];
 
   let currentTabIndex = 0;
 
   const switchTab = (tabId) => {
+    console.log(`Switching to tab: ${tabId}`);
     const tab = tabs.find(t => t.id === tabId);
-    if (!tab) return;
+    if (!tab) {
+      console.error(`Tab not found: ${tabId}`);
+      return;
+    }
 
     // Update UI
     tabs.forEach(t => {
@@ -102,15 +119,21 @@ function setupTabs() {
       const tabElement = domElements[`${t.id.replace('-', '')}Tab`];
       if (tabElement) {
         tabElement.classList.toggle('bg-blue-800', isActive);
+      } else {
+        console.warn(`Tab element not found for ${t.id}`);
       }
       if (t.section) {
         t.section.classList.toggle('hidden', !isActive);
+      } else {
+        console.warn(`Section not found for ${t.id}`);
       }
     });
 
     const pageTitle = domElements.pageTitle;
     if (pageTitle) {
       pageTitle.textContent = tab.name;
+    } else {
+      console.warn('Page title element not found');
     }
 
     // Update mobile menu
@@ -135,7 +158,12 @@ function setupTabs() {
   tabs.forEach(tab => {
     const tabElement = domElements[`${tab.id.replace('-', '')}Tab`];
     if (tabElement) {
-      tabElement.addEventListener('click', () => switchTab(tab.id));
+      tabElement.addEventListener('click', () => {
+        console.log(`Tab clicked: ${tab.id}`);
+        switchTab(tab.id);
+      });
+    } else {
+      console.warn(`Tab element not found for ${tab.id}`);
     }
   });
 
@@ -144,10 +172,13 @@ function setupTabs() {
   const menuItems = document.getElementById('menu-items');
   if (menuToggle && menuItems) {
     menuToggle.addEventListener('click', () => {
+      console.log('Mobile menu toggled');
       const isExpanded = !menuItems.classList.contains('hidden');
       menuItems.classList.toggle('hidden');
       menuToggle.setAttribute('aria-expanded', !isExpanded);
     });
+  } else {
+    console.warn('Mobile menu elements not found');
   }
 
   // Swipe detection
@@ -159,6 +190,7 @@ function setupTabs() {
     swipeContainer.addEventListener('touchstart', (e) => {
       if (e.target.closest('.no-swipe')) return;
       touchStartX = e.touches[0].clientX;
+      console.log('Swipe started');
     });
 
     swipeContainer.addEventListener('touchend', (e) => {
@@ -166,6 +198,7 @@ function setupTabs() {
       const deltaX = e.changedTouches[0].clientX - touchStartX;
       if (Math.abs(deltaX) < minSwipeDistance || Math.abs(e.changedTouches[0].clientY - e.touches[0].clientY) > 50) return;
 
+      console.log(`Swipe detected: deltaX=${deltaX}`);
       if (deltaX < 0 && currentTabIndex < tabs.length - 1) {
         switchTab(tabs[currentTabIndex + 1].id);
       } else if (deltaX > 0 && currentTabIndex > 0) {
@@ -1136,8 +1169,10 @@ async function setupTransactions() {
 
 // Child Accounts
 async function loadChildAccounts() {
+  console.log('loadChildAccounts: Starting');
   if (!currentUser || !db || !familyCode) {
-    showError('child-user-id', 'Unable to load child accounts.');
+    console.error('loadChildAccounts: Missing dependencies', { currentUser, db, familyCode });
+    showError('child-user-id', 'Unable to load child accounts. Missing user or database configuration.');
     return;
   }
 
@@ -1147,20 +1182,25 @@ async function loadChildAccounts() {
   };
 
   if (!elements.childSelector || !elements.childUserIdSelect) {
-    showError('child-user-id', 'Child selector not found');
+    console.error('loadChildAccounts: Child selector elements not found', elements);
+    showError('child-user-id', 'Child selector not found in the DOM.');
     return;
   }
 
   try {
+    console.log('loadChildAccounts: Checking account type', state.currentAccountType);
     if (state.currentAccountType === 'admin') {
+      console.log('loadChildAccounts: Admin mode, loading child accounts');
       elements.childSelector.classList.remove('hidden');
       elements.childUserIdSelect.innerHTML = '<option value="">Select a Child</option>';
       const usersQuery = query(collection(db, 'users'), where('familyCode', '==', familyCode), where('accountType', '==', 'child'));
       const snapshot = await retryFirestoreOperation(() => getDocs(usersQuery));
       
       if (snapshot.empty) {
+        console.log('loadChildAccounts: No child accounts found');
         elements.childUserIdSelect.innerHTML = '<option value="">No children found</option>';
       } else {
+        console.log(`loadChildAccounts: Found ${snapshot.docs.length} child accounts`);
         snapshot.forEach(doc => {
           const option = document.createElement('option');
           option.value = doc.id;
@@ -1170,18 +1210,23 @@ async function loadChildAccounts() {
       }
       state.currentChildUserId = elements.childUserIdSelect.value || null;
     } else {
+      console.log('loadChildAccounts: Child mode, setting current user');
       elements.childSelector.classList.add('hidden');
       state.currentChildUserId = currentUser.uid;
     }
+    console.log('loadChildAccounts: Loading child transactions');
     await loadChildTransactions();
   } catch (error) {
+    console.error('loadChildAccounts: Error loading child accounts', error);
     showError('child-user-id', `Failed to load child accounts: ${error.message}`);
     elements.childUserIdSelect.innerHTML = '<option value="">Error loading children</option>';
   }
 }
 
 async function loadChildTransactions() {
+  console.log('loadChildTransactions: Starting', { currentChildUserId: state.currentChildUserId });
   if (!db || !state.currentChildUserId) {
+    console.error('loadChildTransactions: Missing database or user ID');
     showError('child-transaction-description', 'No user selected');
     const table = document.getElementById('child-transaction-table');
     if (table) {
@@ -1201,6 +1246,7 @@ async function loadChildTransactions() {
   };
 
   if (Object.values(elements).some(el => !el)) {
+    console.error('loadChildTransactions: Required DOM elements not found', elements);
     showError('child-transaction-description', 'Required components not found');
     return;
   }
@@ -1212,6 +1258,7 @@ async function loadChildTransactions() {
 
     let totalBalance = 0;
     const transactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', state.currentChildUserId));
+    console.log('loadChildTransactions: Fetching transactions for user', state.currentChildUserId);
     const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
     elements.table.innerHTML = '';
 
@@ -1220,6 +1267,7 @@ async function loadChildTransactions() {
       .filter(tx => tx.createdAt >= start && tx.createdAt <= end)
       .sort((a, b) => b.createdAt - a.createdAt);
 
+    console.log(`loadChildTransactions: Found ${transactions.length} transactions`);
     if (transactions.length === 0) {
       elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
     } else {
@@ -1244,6 +1292,7 @@ async function loadChildTransactions() {
     }
     elements.balance.textContent = await formatCurrency(totalBalance, 'INR');
   } catch (error) {
+    console.error('loadChildTransactions: Error loading transactions', error);
     showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
     elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
     elements.balance.textContent = await formatCurrency(0, 'INR');
@@ -1251,13 +1300,18 @@ async function loadChildTransactions() {
 }
 
 async function loadChildTiles() {
+  console.log('loadChildTiles: Starting');
   if (!db || !familyCode) {
+    console.error('loadChildTiles: Missing database or family code');
     showError('child-tiles', 'No family data');
     return;
   }
 
   const childTiles = document.getElementById('child-tiles');
-  if (!childTiles) return;
+  if (!childTiles) {
+    console.error('loadChildTiles: Child tiles element not found');
+    return;
+  }
 
   try {
     childTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
@@ -1266,10 +1320,12 @@ async function loadChildTiles() {
     
     childTiles.innerHTML = '';
     if (snapshot.empty) {
+      console.log('loadChildTiles: No child accounts found');
       childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
       return;
     }
 
+    console.log(`loadChildTiles: Found ${snapshot.docs.length} child accounts`);
     const childBalances = new Map();
     await Promise.all(snapshot.docs.map(async doc => {
       const userId = doc.id;
@@ -1297,12 +1353,14 @@ async function loadChildTiles() {
     }
     childTiles.appendChild(fragment);
   } catch (error) {
+    console.error('loadChildTiles: Error loading child balances', error);
     showError('child-tiles', `Failed to load child balances: ${error.message}`);
     childTiles.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
   }
 }
 
 async function setupChildAccounts() {
+  console.log('setupChildAccounts: Starting');
   const elements = {
     addChildTransaction: document.getElementById('add-child-transaction'),
     childTransactionTable: document.getElementById('child-transaction-table'),
@@ -1310,6 +1368,7 @@ async function setupChildAccounts() {
   };
 
   if (Object.values(elements).some(el => !el)) {
+    console.error('setupChildAccounts: Child transaction components not found', elements);
     showError('child-transaction-description', 'Child transaction components not found');
     return;
   }
@@ -1439,6 +1498,7 @@ async function setupChildAccounts() {
   });
 
   elements.childUserId.addEventListener('change', () => {
+    console.log('childUserId: Change event triggered', elements.childUserId.value);
     state.currentChildUserId = elements.childUserId.value || null;
     if (state.currentChildUserId) {
       loadChildTransactions();
@@ -1446,13 +1506,16 @@ async function setupChildAccounts() {
       const table = document.getElementById('child-transaction-table');
       if (table) table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No child selected</td></tr>';
       const balance = document.getElementById('child-balance');
-      if (balance) balance.textContent = '₹0'; // Fallback to static value if formatCurrency fails
+      if (balance) balance.textContent = '₹0';
     }
   });
 }
 
 async function calculateChildBalance(userId) {
-  if (!db || !userId) return 0;
+  if (!db || !userId) {
+    console.error('calculateChildBalance: Missing database or user ID');
+    return 0;
+  }
 
   try {
     const transactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', userId));
@@ -1462,12 +1525,20 @@ async function calculateChildBalance(userId) {
       return sum + (tx.type === 'credit' ? tx.amount : -tx.amount);
     }, 0);
   } catch (error) {
+    console.error('calculateChildBalance: Error calculating balance', error);
     return 0;
   }
 }
 
+
+
+
+
+
 async function updateDashboard() {
+  console.log('updateDashboard: Starting');
   if (!db || !currentUser) {
+    console.error('updateDashboard: Missing database or user');
     showError('balance', 'Required components not available');
     return;
   }
@@ -1481,6 +1552,7 @@ async function updateDashboard() {
   };
 
   if (Object.values(elements).some(el => !el)) {
+    console.error('updateDashboard: Dashboard elements not found', elements);
     showError('balance', 'Dashboard elements not found');
     return;
   }
@@ -1489,6 +1561,7 @@ async function updateDashboard() {
     const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
 
     if (state.currentAccountType === 'child') {
+      console.log('updateDashboard: Child account mode');
       const childBalance = await calculateChildBalance(currentUser.uid);
       elements.childTiles.innerHTML = `
         <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
@@ -1505,6 +1578,7 @@ async function updateDashboard() {
       });
       elements.totalRemaining.textContent = 'N/A';
     } else {
+      console.log('updateDashboard: Admin account mode');
       let totalBalance = 0, totalBudgetAmount = 0, totalSpent = 0;
       const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
       const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
@@ -1571,19 +1645,25 @@ async function updateDashboard() {
       await loadChildTiles();
     }
   } catch (error) {
+    console.error('updateDashboard: Error updating dashboard', error);
     showError('balance', `Failed to update dashboard: ${error.message}`);
   }
 }
 
 async function setupLogout() {
+  console.log('setupLogout: Starting');
   const maxAttempts = 10;
   let attempts = 0;
   const poll = setInterval(() => {
     const logoutButton = document.getElementById('logout-button');
     if (logoutButton) {
+      console.log('setupLogout: Logout button found, setting up listener');
       clearInterval(poll);
       logoutButton.addEventListener('click', async () => {
-        if (!auth) return showError('page-title', 'Authentication service not available');
+        if (!auth) {
+          console.error('setupLogout: Authentication service not available');
+          return showError('page-title', 'Authentication service not available');
+        }
         
         try {
           logoutButton.disabled = true;
@@ -1593,8 +1673,10 @@ async function setupLogout() {
             try {
               await signOut(auth);
               signOutSuccess = true;
+              console.log('setupLogout: Sign out successful');
               break;
             } catch (error) {
+              console.warn(`setupLogout: Sign out attempt ${attempt} failed`, error);
               if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 1000));
             }
           }
@@ -1610,9 +1692,11 @@ async function setupLogout() {
             if (pageTitle) pageTitle.textContent = 'Login';
             logoutButton.classList.add('hidden');
           } else {
+            console.error('setupLogout: All sign out attempts failed');
             showError('page-title', 'Failed to log out: Connectivity issue');
           }
         } catch (error) {
+          console.error('setupLogout: Error during logout', error);
           showError('page-title', `Failed to log out: ${error.message}`);
         } finally {
           logoutButton.disabled = false;
@@ -1620,14 +1704,17 @@ async function setupLogout() {
         }
       });
     } else if (attempts++ >= maxAttempts) {
+      console.warn('setupLogout: Logout button not found after max attempts');
       clearInterval(poll);
     }
   }, 500);
 }
 
 async function initApp() {
+  console.log('initApp: Starting');
   try {
     if (currentUser && state.currentAccountType === 'admin' && db && familyCode) {
+      console.log('initApp: Resetting budgets for admin');
       await resetBudgetsForNewMonth(db, familyCode);
     }
     setupTabs();
@@ -1638,6 +1725,7 @@ async function initApp() {
     setupChildAccounts();
     setupLogout();
   } catch (error) {
+    console.error('initApp: Failed to initialize app', error);
     showError('page-title', 'Failed to initialize app.');
   }
 }
