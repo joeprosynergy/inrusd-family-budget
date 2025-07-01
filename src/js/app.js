@@ -31,7 +31,7 @@ const getDateRangeWrapper = (filter) => getDateRange(filter, domElements.filterS
 async function loadAppData() {
   console.log('loadAppData: Starting');
   if (!currentUser || !familyCode || !db) {
-    console.error('loadAppData: Missing dependencies');
+    console.error('loadAppData: Missing dependencies', { currentUser, familyCode, db });
     showError('page-title', 'Failed to load app data.');
     return;
   }
@@ -66,39 +66,46 @@ async function loadAppData() {
 
 // Tab management
 function setupTabs() {
+  console.log('setupTabs: Initializing tabs');
   const tabs = [
-    { id: 'dashboard', name: 'Budget Dashboard', section: domElements.dashboardSection, show: () => updateDashboard() },
+    { id: 'dashboard', name: 'Budget Dashboard', section: domElements.dashboardSection, show: () => {
+      console.log('setupTabs: Showing dashboard');
+      updateDashboard();
+    }},
     { id: 'transactions', name: 'Transactions', section: domElements.transactionsSection, show: async () => {
+      console.log('setupTabs: Showing transactions');
       if (!state.loadedTabs.transactions) {
-        console.log('Loading transactions tab');
         await loadTransactions();
         state.loadedTabs.transactions = true;
       }
     }},
     { id: 'budgets', name: 'Budgets', section: domElements.budgetsSection, show: async () => {
+      console.log('setupTabs: Showing budgets');
       if (!state.loadedTabs.budgets) {
-        console.log('Loading budgets tab');
         await loadBudgets();
         state.loadedTabs.budgets = true;
       }
     }},
     { id: 'categories', name: 'Categories', section: domElements.categoriesSection, show: () => {
-      console.log('Loading categories tab');
+      console.log('setupTabs: Showing categories');
     }},
     { id: 'child-accounts', name: 'Child Accounts', section: domElements.childAccountsSection, show: async () => {
-      console.log('Attempting to load child accounts tab');
+      console.log('setupTabs: Showing child-accounts');
       if (!state.loadedTabs.childAccounts) {
         try {
           await loadChildAccounts();
           state.loadedTabs.childAccounts = true;
         } catch (error) {
-          console.error('Failed to load child accounts:', error);
-          showError('child-user-id', 'Failed to initialize child accounts tab.');
+          console.error('setupTabs: Failed to load child accounts', error);
+          showError('child-user-id', 'Failed to load child accounts tab.');
         }
+      } else {
+        console.log('setupTabs: Child accounts already loaded, refreshing');
+        await loadChildAccounts();
       }
     }},
     { id: 'profile', name: 'User Profile', section: domElements.profileSection, show: () => {
-      console.log('Loading profile tab');
+      console.log('setupTabs: Showing profile');
       loadProfileData();
     }}
   ];
@@ -106,10 +113,10 @@ function setupTabs() {
   let currentTabIndex = 0;
 
   const switchTab = (tabId) => {
-    console.log(`Switching to tab: ${tabId}`);
+    console.log(`switchTab: Switching to ${tabId}`);
     const tab = tabs.find(t => t.id === tabId);
     if (!tab) {
-      console.error(`Tab not found: ${tabId}`);
+      console.error(`switchTab: Tab not found: ${tabId}`);
       return;
     }
 
@@ -119,13 +126,14 @@ function setupTabs() {
       const tabElement = domElements[`${t.id.replace('-', '')}Tab`];
       if (tabElement) {
         tabElement.classList.toggle('bg-blue-800', isActive);
+        tabElement.setAttribute('aria-selected', isActive);
       } else {
-        console.warn(`Tab element not found for ${t.id}`);
+        console.warn(`switchTab: Tab element not found for ${t.id}`);
       }
       if (t.section) {
         t.section.classList.toggle('hidden', !isActive);
       } else {
-        console.warn(`Section not found for ${t.id}`);
+        console.warn(`switchTab: Section not found for ${t.id}`);
       }
     });
 
@@ -133,7 +141,7 @@ function setupTabs() {
     if (pageTitle) {
       pageTitle.textContent = tab.name;
     } else {
-      console.warn('Page title element not found');
+      console.warn('switchTab: Page title element not found');
     }
 
     // Update mobile menu
@@ -158,12 +166,13 @@ function setupTabs() {
   tabs.forEach(tab => {
     const tabElement = domElements[`${tab.id.replace('-', '')}Tab`];
     if (tabElement) {
+      console.log(`setupTabs: Attaching listener to ${tab.id}`);
       tabElement.addEventListener('click', () => {
-        console.log(`Tab clicked: ${tab.id}`);
+        console.log(`setupTabs: ${tab.id} clicked`);
         switchTab(tab.id);
       });
     } else {
-      console.warn(`Tab element not found for ${tab.id}`);
+      console.error(`setupTabs: Tab element not found for ${tab.id}`);
     }
   });
 
@@ -171,14 +180,15 @@ function setupTabs() {
   const menuToggle = document.getElementById('menu-toggle');
   const menuItems = document.getElementById('menu-items');
   if (menuToggle && menuItems) {
+    console.log('setupTabs: Setting up mobile menu toggle');
     menuToggle.addEventListener('click', () => {
-      console.log('Mobile menu toggled');
+      console.log('setupTabs: Mobile menu toggled');
       const isExpanded = !menuItems.classList.contains('hidden');
       menuItems.classList.toggle('hidden');
       menuToggle.setAttribute('aria-expanded', !isExpanded);
     });
   } else {
-    console.warn('Mobile menu elements not found');
+    console.warn('setupTabs: Mobile menu elements not found', { menuToggle, menuItems });
   }
 
   // Swipe detection
@@ -190,7 +200,7 @@ function setupTabs() {
     swipeContainer.addEventListener('touchstart', (e) => {
       if (e.target.closest('.no-swipe')) return;
       touchStartX = e.touches[0].clientX;
-      console.log('Swipe started');
+      console.log('setupTabs: Swipe started');
     });
 
     swipeContainer.addEventListener('touchend', (e) => {
@@ -198,15 +208,18 @@ function setupTabs() {
       const deltaX = e.changedTouches[0].clientX - touchStartX;
       if (Math.abs(deltaX) < minSwipeDistance || Math.abs(e.changedTouches[0].clientY - e.touches[0].clientY) > 50) return;
 
-      console.log(`Swipe detected: deltaX=${deltaX}`);
+      console.log(`setupTabs: Swipe detected: deltaX=${deltaX}`);
       if (deltaX < 0 && currentTabIndex < tabs.length - 1) {
         switchTab(tabs[currentTabIndex + 1].id);
       } else if (deltaX > 0 && currentTabIndex > 0) {
         switchTab(tabs[currentTabIndex - 1].id);
       }
     });
+  } else {
+    console.warn('setupTabs: Swipe container not found or not in mobile view', { swipeContainer });
   }
 
+  console.log('setupTabs: Initializing default tab: dashboard');
   switchTab('dashboard');
 }
 
@@ -1170,6 +1183,15 @@ async function setupTransactions() {
 // Child Accounts
 async function loadChildAccounts() {
   console.log('loadChildAccounts: Starting');
+  if (!domElements.childAccountsSection) {
+    console.error('loadChildAccounts: Child accounts section not found');
+    showError('child-user-id', 'Child accounts section not found in the DOM.');
+    return;
+  }
+
+  // Force show the section to ensure visibility
+  domElements.childAccountsSection.classList.remove('hidden');
+
   if (!currentUser || !db || !familyCode) {
     console.error('loadChildAccounts: Missing dependencies', { currentUser, db, familyCode });
     showError('child-user-id', 'Unable to load child accounts. Missing user or database configuration.');
