@@ -161,7 +161,7 @@ function setupTabs() {
 // Profile management
 async function setupProfile() {
   const toggleEditMode = (enable) => {
-    isEditing.profile = enable;
+    state.isEditing.profile = enable;
     ['profileEmail', 'profileCurrency', 'profileAccountType'].forEach(id => {
       const el = domElements[id];
       if (el) {
@@ -851,12 +851,13 @@ async function loadTransactions() {
     transactions.sort((a, b) => b.createdAt - a.createdAt).forEach(transaction => {
       const tr = document.createElement('tr');
       tr.classList.add('table-row');
+      const transactionDate = transaction.createdAt.toDate ? transaction.createdAt.toDate() : new Date(transaction.createdAt);
       tr.innerHTML = `
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formatCurrency(transaction.amount || 0, 'INR')}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.categoryId ? categoryMap.get(transaction.categoryId) || 'Unknown' : 'None'}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
-        <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.createdAt.toLocaleString('en-US', { day: 'numeric' })}</td>
+        <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transactionDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
           <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${transaction.id}">Edit</button>
           <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${transaction.id}">Delete</button>
@@ -887,11 +888,13 @@ async function setupTransactions() {
 
   const handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
     clearErrors();
-    const { type, amount, category, description } = inputs;
+    const { type, amount, category, description, date } = inputs;
     const amountVal = parseFloat(amount.value);
+    const transactionDate = date.value ? new Date(date.value) : new Date();
 
     if (!amountVal || amountVal <= 0) return showError('amount', 'Valid amount is required');
     if (!category.value) return showError('category', 'Category is required');
+    if (!date.value || isNaN(transactionDate)) return showError('transaction-date', 'Valid date is required');
     if (!currentUser || !db) return showError('category', 'Database service not available');
 
     try {
@@ -935,7 +938,8 @@ async function setupTransactions() {
             type: type.value,
             amount: amountVal,
             categoryId: category.value,
-            description: description.value.trim()
+            description: description.value.trim(),
+            createdAt: transactionDate
           })
         );
       } else {
@@ -946,7 +950,7 @@ async function setupTransactions() {
             categoryId: category.value,
             description: description.value.trim(),
             familyCode,
-            createdAt: serverTimestamp()
+            createdAt: transactionDate
           })
         );
 
@@ -980,7 +984,8 @@ async function setupTransactions() {
       type: document.getElementById('type'),
       amount: document.getElementById('amount'),
       category: document.getElementById('category'),
-      description: document.getElementById('description')
+      description: document.getElementById('description'),
+      date: document.getElementById('transaction-date')
     };
     if (Object.values(inputs).some(el => !el)) {
       showError('category', 'Form elements not found');
@@ -1000,12 +1005,15 @@ async function setupTransactions() {
             type: document.getElementById('type'),
             amount: document.getElementById('amount'),
             category: document.getElementById('category'),
-            description: document.getElementById('description')
+            description: document.getElementById('description'),
+            date: document.getElementById('transaction-date')
           };
           inputs.type.value = data.type;
           inputs.amount.value = data.amount;
           inputs.category.value = data.categoryId;
           inputs.description.value = data.description || '';
+          const transactionDate = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+          inputs.date.value = transactionDate.toISOString().split('T')[0];
           elements.addTransaction.innerHTML = 'Update Transaction';
           state.isEditing.transaction = true;
 
