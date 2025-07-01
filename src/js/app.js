@@ -1642,4 +1642,4 @@ async function initApp() {
   }
 }
 
-export { loadAppData, initApp
+export { loadAppData, initApp };
