@@ -661,11 +661,11 @@ async function loadBudgets() {
     elements.budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
 
     const filter = domElements.dashboardFilter?.value || 'thisMonth';
-    let { start, end } = getDateRangeWrapper(filter);
-    start = new Date(start.getTime() - 5.5 * 60 * 60 * 1000);
+    const { start, end } = getDateRangeWrapper(filter);
 
     const transactions = await fetchCachedTransactions(db, familyCode, start, end);
-    const categoriesQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
+    console.log(`loadBudgets: Fetched ${transactions.length} transactions for budget calculations`);
+    const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
     const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
     const budgetToCategories = new Map();
     categoriesSnapshot.forEach(doc => {
@@ -809,7 +809,7 @@ async function setupBudgets() {
       name: document.getElementById('budget-name'),
       amount: document.getElementById('budget-amount')
     };
-    if (Object.keys(inputs).some(key => !inputs[key])) {
+    if (Object.values(inputs).some(el => !el)) {
       showError('budget-name', 'Form inputs not found');
       return;
     }
@@ -832,7 +832,7 @@ async function setupBudgets() {
       name: document.getElementById('new-budget-name'),
       amount: document.getElementById('new-budget-amount')
     };
-    if (Object.keys(inputs).some(key => !inputs[key])) {
+    if (Object.values(inputs).some(el => !el)) {
       showError('new-budget-name', 'Modal form inputs not found');
       return;
     }
@@ -921,6 +921,84 @@ async function setupBudgets() {
       domElements.cancelDelete.addEventListener('click', cancelHandler, { once: true });
     }
   });
+}
+
+// Transactions
+async function loadTransactions() {
+  console.log('loadTransactions: Starting');
+  const elements = {
+    transactionTable: document.getElementById('transaction-table'),
+    dateHeader: document.getElementById('transaction-date-header'),
+    transactionsFilter: document.getElementById('transactions-filter')
+  };
+
+  if (Object.values(elements).some(el => !el) || !db || !familyCode) {
+    console.error('loadTransactions: Required components not available', { elements, db, familyCode });
+    showError('transactions-filter', 'Required components not available');
+    if (elements.transactionTable) {
+      elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+    }
+    return;
+  }
+
+  try {
+    elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">Loading...</td></tr>';
+    elements.transactionsFilter.value = elements.transactionsFilter.value || 'thisMonth';
+    const filter = elements.transactionsFilter.value;
+    const { start, end } = getDateRangeWrapper(filter);
+    console.log('loadTransactions: Date range', { start: start.toISOString(), end: end.toISOString() });
+
+    elements.dateHeader.textContent = {
+      thisMonth: new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' }),
+      lastMonth: new Date(start).toLocaleString('en-US', { month: 'short', year: 'numeric' }),
+      thisYear: start.getFullYear().toString(),
+      lastYear: start.getFullYear().toString(),
+      custom: 'Date'
+    }[filter];
+
+    const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
+    const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
+    const categoryMap = new Map(categoriesSnapshot.docs.map(doc => [doc.id, doc.data().name]));
+    console.log('loadTransactions: Fetched categories', categoryMap.size);
+
+    const transactions = await fetchCachedTransactions(db, familyCode, start, end);
+    console.log('loadTransactions: Fetched transactions', transactions.length);
+    elements.transactionTable.innerHTML = '';
+    if (transactions.length === 0) {
+      console.log('loadTransactions: No transactions found for this period');
+      elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found for this period</td></tr>';
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (const transaction of transactions.sort((a, b) => {
+      const dateA = a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+      const dateB = b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+      return dateB - dateA;
+    })) {
+      const transactionDate = transaction.createdAt.toDate ? transaction.createdAt.toDate() : new Date(transaction.createdAt);
+      console.log('loadTransactions: Processing transaction', { id: transaction.id, date: transactionDate.toISOString() });
+      const tr = document.createElement('tr');
+      tr.classList.add('table-row');
+      tr.innerHTML = `
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${await formatCurrency(transaction.amount || 0, 'INR')}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.categoryId ? categoryMap.get(transaction.categoryId) || 'Unknown' : 'None'}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
+        <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transactionDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
+          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${transaction.id}">Edit</button>
+          <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${transaction.id}">Delete</button>
+        </td>
+      `;
+      fragment.appendChild(tr);
+    }
+    elements.transactionTable.appendChild(fragment);
+  } catch (error) {
+    console.error('loadTransactions: Error loading transactions', error);
+    showError('transactions-filter', `Failed to load transactions: ${error.message}`);
+    elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+  }
 }
 
 async function setupTransactions() {
@@ -1397,7 +1475,7 @@ async function setupChildAccounts() {
     }
   });
 
-  elements.childUserId.addEventListener('click', () => {
+  elements.childUserId.addEventListener('change', () => {
     console.log('childUserId: Change event triggered', elements.childUserId.value);
     state.currentChildUserId = elements.childUserId.value || null;
     if (state.currentChildUserId) {
