@@ -1,15 +1,15 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
-    './src/**/*.{html,js}',
-    './index.html'
+    "./src/**/*.{html,js}",
+    "./src/index.html"
   ],
   theme: {
-    extend: {}
+    extend: {},
   },
   plugins: [],
-  purge: {
-    enabled: process.env.NODE_ENV === 'production',
-    content: ['./src/**/*.{html,js}', './index.html']
+  corePlugins: {
+    // Disable unused core plugins to reduce bundle size
+    preflight: true,
   }
-};
+}
