@@ -12,37 +12,9 @@ import {
   setUserCurrency,
   setFamilyCode
 } from './core.js';
+import { signOut } from 'firebase/auth';
 import { retryFirestoreOperation, fetchExchangeRate, getDateRange, resetBudgetsForNewMonth, fetchCachedTransactions, clearTransactionCache } from './utils.js';
-
-// Firebase functions cache for dynamic imports
-const firebaseCache = {};
-
-/**
- * Dynamically imports Firebase functions with caching
- * @param {string} module - Firebase module ('auth' or 'firestore')
- * @param {string[]} functions - Function names to import
- * @returns {Promise<Object>} Imported functions
- */
-async function getFirebaseFunctions(module, functions) {
-  const cacheKey = `${module}_${functions.join('_')}`;
-  if (firebaseCache[cacheKey]) {
-    return firebaseCache[cacheKey];
-  }
-  
-  const moduleMap = {
-    auth: 'firebase/auth',
-    firestore: 'firebase/firestore'
-  };
-  
-  const imported = await import(moduleMap[module]);
-  const result = {};
-  functions.forEach(fn => {
-    result[fn] = imported[fn];
-  });
-  
-  firebaseCache[cacheKey] = result;
-  return result;
-}
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, serverTimestamp, increment } from 'firebase/firestore';
 
 // State management
 const state = {
@@ -315,7 +287,6 @@ async function setupProfile() {
         domElements.saveProfile.textContent = 'Saving...';
         
         if (email !== currentUser.email) await auth.currentUser.updateEmail(email);
-        const { updateDoc, doc } = await getFirebaseFunctions('firestore', ['updateDoc', 'doc']);
         await retryFirestoreOperation(() => 
           updateDoc(doc(db, 'users', currentUser.uid), { currency, accountType })
         );
@@ -349,7 +320,6 @@ async function setupProfile() {
       }
 
       try {
-        const { updateDoc, doc } = await getFirebaseFunctions('firestore', ['updateDoc', 'doc']);
         await retryFirestoreOperation(() => 
           updateDoc(doc(db, 'users', currentUser.uid), { currency: newCurrency })
         );
@@ -386,7 +356,6 @@ async function loadProfileData() {
     domElements.profileFamilyCode.value = familyCode || '--';
     domElements.profileAccountType.value = '--';
 
-    const { getDoc, doc } = await getFirebaseFunctions('firestore', ['getDoc', 'doc']);
     const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'users', currentUser.uid)));
     if (docSnap.exists()) {
       const data = docSnap.data();
@@ -427,7 +396,6 @@ async function loadCategories() {
     elements.categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
 
     // Fetch budgets
-    const { collection, getDocs, query, where } = await getFirebaseFunctions('firestore', ['collection', 'getDocs', 'query', 'where']);
     const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
     const budgetsSnapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
     const budgetMap = new Map();
@@ -511,7 +479,6 @@ async function setupCategories() {
     try {
       elements.addCategory.disabled = true;
       elements.addCategory.textContent = isModal ? 'Saving...' : 'Adding...';
-      const { addDoc, collection, serverTimestamp } = await getFirebaseFunctions('firestore', ['addDoc', 'collection', 'serverTimestamp']);
       await retryFirestoreOperation(() => 
         addDoc(collection(db, 'categories'), {
           name,
@@ -1742,7 +1709,6 @@ async function setupLogout() {
           let signOutSuccess = false;
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-              const { signOut } = await getFirebaseFunctions('auth', ['signOut']);
               await signOut(auth);
               signOutSuccess = true;
               console.log('setupLogout: Sign out successful');
