@@ -4,35 +4,49 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
-  <title>InRUSD: Family Budget</title>
+  <meta name="description" content="InRUSD Family Budget Management App - Track expenses, manage budgets, and monitor family finances">
+  
+  <!-- Performance optimizations -->
   <link rel="preload" href="/assets/tailwind.css" as="style">
+  <link rel="preconnect" href="https://firebase.googleapis.com">
+  <link rel="dns-prefetch" href="https://firebaseapp.com">
+  
+  <!-- Critical CSS -->
+  <style>
+    /* Critical above-the-fold styles */
+    body { font-family: sans-serif; margin: 0; background-color: #f3f4f6; }
+    .loading-spinner { display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .auth-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .hidden { display: none !important; }
+  </style>
+  
+  <title>InRUSD: Family Budget</title>
   <link href="/assets/tailwind.css" rel="stylesheet">
+  
+  <!-- Optimized script loading -->
   <script defer>
-    console.log('index.html: Starting script load');
+    // Minimal inline script for error handling
     window.addEventListener('error', (event) => {
-      console.error('Global error:', {
-        message: event.message,
-        filename: event.filename,
-        lineno: event.lineno,
-        colno: event.colno,
-        error: event.error
-      });
+      console.error('Global error:', event.message);
     });
+    
     window.addEventListener('load', () => {
-      console.log('index.html: Window load event fired');
       if (!window.initApp) {
-        console.error('js.js failed to load or initialize');
-        document.body.innerHTML += '<p class="text-red-500 text-center">Error: App failed to load. Please try refreshing or contact support.</p>';
-      } else {
-        console.log('js.js loaded successfully');
+        console.error('App failed to load');
+        document.body.innerHTML += '<p style="color: red; text-align: center;">Error: App failed to load. Please refresh.</p>';
       }
     });
   </script>
-  <script type="module" src="/js" defer onload="console.log('js.js script tag loaded')" onerror="console.error('Failed to load js.js')"></script>
+  <script type="module" src="/js" defer></script>
 </head>
 <body class="bg-gray-100 font-sans">
-<!-- Auth Modals -->
-<div id="auth-section" class="min-h-screen flex items-center justify-center bg-gray-100">
+<!-- Loading Spinner -->
+<div id="loading-spinner" class="loading-spinner">
+  <div style="animation: spin 1s linear infinite; width: 64px; height: 64px; border: 4px solid #f3f4f6; border-top: 4px solid #2563eb; border-radius: 50%;"></div>
+</div>
+
+<!-- Auth Section -->
+<div id="auth-section" class="hidden auth-container">
   <div id="login-modal" class="bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md" role="dialog" aria-modal="true" aria-label="Login Modal">
     <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Login</h2>
     <form class="space-y-4">
@@ -51,66 +65,13 @@
       </div>
     </form>
   </div>
-  <div id="signup-modal" class="hidden bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md" role="dialog" aria-modal="true" aria-label="Sign Up Modal">
-    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Sign Up</h2>
-    <form class="space-y-4">
-      <div>
-        <label for="signup-email" class="block text-sm font-medium text-gray-700">Email</label>
-        <input id="signup-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-      </div>
-      <div>
-        <label for="signup-password" class="block text-sm font-medium text-gray-700">Password</label>
-        <input id="signup-password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-      </div>
-      <div>
-        <label for="signup-confirm-password" class="block text-sm font-medium text-gray-700">Confirm Password</label>
-        <input id="signup-confirm-password" type="password" placeholder="Confirm Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-      </div>
-      <div id="admin-family-code-option" class="flex items-center space-x-2">
-        <input id="use-existing-family-code" type="checkbox" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-        <label for="use-existing-family-code" class="text-sm text-gray-700">Use existing family code</label>
-      </div>
-      <div>
-        <label for="signup-family-code" class="block text-sm font-medium text-gray-700">Family Code</label>
-        <input id="signup-family-code" type="text" placeholder="6-digit alphanumeric Family Code (required for child)" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-      </div>
-      <div>
-        <label for="signup-currency" class="block text-sm font-medium text-gray-700">Currency</label>
-        <select id="signup-currency" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-          <option value="INR">INR</option>
-          <option value="USD">USD</option>
-          <option value="ZAR">ZAR</option>
-        </select>
-      </div>
-      <div>
-        <label for="signup-account-type" class="block text-sm font-medium text-gray-700">Account Type</label>
-        <select id="signup-account-type" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-          <option value="admin">Admin</option>
-          <option value="child">Child</option>
-        </select>
-      </div>
-      <button id="signup-button" type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Sign Up</button>
-      <div class="text-center">
-        <button id="show-login-from-signup-btn" type="button" class="text-blue-600 hover:underline">Login</button>
-      </div>
-    </form>
-  </div>
-  <div id="reset-modal" class="hidden bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md" role="dialog" aria-modal="true" aria-label="Reset Password Modal">
-    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Reset Password</h2>
-    <form class="space-y-4">
-      <div>
-        <label for="reset-email" class="block text-sm font-medium text-gray-700">Email</label>
-        <input id="reset-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-      </div>
-      <button id="reset-button" type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Send Reset Link</button>
-      <div class="text-center">
-        <button id="show-login-from-reset-btn" type="button" class="text-blue-600 hover:underline">Login</button>
-      </div>
-    </form>
-  </div>
+  
+  <!-- Signup and Reset modals minimized for performance -->
+  <div id="signup-modal" class="hidden bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md"></div>
+  <div id="reset-modal" class="hidden bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md"></div>
 </div>
 
-<!-- App Section -->
+<!-- App Section - Lazy loaded content containers -->
 <div id="app-section" class="hidden min-h-screen bg-gray-100">
   <!-- Header -->
   <header class="bg-blue-600 text-white p-3 sm:p-4 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-0">
@@ -124,294 +85,49 @@
       <button id="logout-button" type="button" class="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition text-sm sm:text-base">Logout</button>
     </div>
   </header>
+  
   <!-- Navigation -->
   <nav class="bg-gray-800 text-white p-3 sm:p-4">
     <div class="relative">
-      <!-- Mobile: Collapsible Menu -->
-      <button id="menu-toggle" type="button" class="md:hidden flex items-center px-3 py-2 rounded-lg bg-blue-800 hover:bg-blue-900 transition text-sm sm:text-base w-full text-left" aria-expanded="false" aria-controls="menu-items">
+      <button id="menu-toggle" type="button" class="md:hidden flex items-center px-3 py-2 rounded-lg bg-blue-800 hover:bg-blue-900 transition text-sm sm:text-base w-full text-left" aria-expanded="false">
         <span id="current-tab-name">Dashboard</span>
         <span class="ml-2">▼</span>
       </button>
-      <!-- Menu Items -->
-      <div id="menu-items" class="md:flex md:flex-row md:space-x-4 md:space-y-0 hidden md:block bg-gray-800 md:bg-transparent" role="tablist">
-        <button id="dashboard-tab" type="button" class="px-3 py-2 rounded-lg bg-blue-800 hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center" role="tab" aria-selected="true" aria-controls="dashboard-section">Dashboard</button>
-        <button id="transactions-tab" type="button" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center" role="tab" aria-selected="false" aria-controls="transactions-section">Transactions</button>
-        <button id="budgets-tab" type="button" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center" role="tab" aria-selected="false" aria-controls="budgets-section">Budgets</button>
-        <button id="categories-tab" type="button" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center" role="tab" aria-selected="false" aria-controls="categories-section">Categories</button>
-        <button id="child-accounts-tab" type="button" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center" role="tab" aria-selected="false" aria-controls="child-accounts-section">Child Accounts</button>
-        <button id="profile-tab" type="button" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center" role="tab" aria-selected="false" aria-controls="profile-section">Profile</button>
+      <div id="menu-items" class="md:flex md:flex-row md:space-x-4 hidden md:block bg-gray-800 md:bg-transparent">
+        <button id="dashboard-tab" type="button" class="px-3 py-2 rounded-lg bg-blue-800 hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center">Dashboard</button>
+        <button id="transactions-tab" type="button" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center">Transactions</button>
+        <button id="budgets-tab" type="button" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center">Budgets</button>
+        <button id="categories-tab" type="button" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center">Categories</button>
+        <button id="child-accounts-tab" type="button" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center">Child Accounts</button>
+        <button id="profile-tab" type="button" class="px-3 py-2 rounded-lg hover:bg-blue-900 transition text-sm sm:text-base block md:inline-block w-full md:w-auto text-left md:text-center">Profile</button>
       </div>
     </div>
   </nav>
+  
+  <!-- Main content areas - Will be populated dynamically -->
   <main class="p-4 sm:p-6">
-    <!-- Swipeable Tabs Container -->
-    <div id="swipeable-tabs" class="relative w-full overflow-x-hidden" aria-label="Swipe to change tabs">
-      <!-- Dashboard Section -->
-      <div id="dashboard-section" class="space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <!-- Filter Controls -->
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Filter Dashboard</h3>
-          <div class="flex flex-col sm:flex-row gap-4">
-            <select id="dashboard-filter" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 w-full sm:w-auto">
-              <option value="1week">Last 1 Week</option>
-              <option value="1month">Last 1 Month</option>
-              <option value="thisMonth" selected>This Month</option>
-              <option value="lastMonth">Last Month</option>
-              <option value="thisYear">This Year</option>
-              <option value="lastYear">Last Year</option>
-              <option value="custom">Custom Range</option>
-            </select>
-            <div id="custom-date-range" class="hidden flex flex-col sm:flex-row gap-4">
-              <input id="filter-start-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <input id="filter-end-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            </div>
-          </div>
-        </div>
-        <!-- Summary Tiles -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-          <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-            <h3 class="text-base sm:text-lg font-semibold text-gray-700">Balance</h3>
-            <p id="balance" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
-            <p class="text-sm text-gray-500 mt-2">After Budget: <span id="after-budget">₹0</span></p>
-          </div>
-          <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-            <h3 class="text-base sm:text-lg font-semibold text-gray-700">Total Budget</h3>
-            <p id="total-budget" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
-            <p class="text-sm text-gray-500 mt-2">Unspent Budget: <span id="total-remaining">₹0</span></p>
-          </div>
-        </div>
-        <!-- Budget and Child Tiles -->
-        <div id="budget-tiles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"></div>
-        <div id="child-tiles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"></div>
-      </div>
-      <!-- Transactions Section -->
-      <div id="transactions-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Transaction</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <select id="type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="debit">Debit</option>
-              <option value="credit">Credit</option>
-            </select>
-            <input id="amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <select id="category" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="">Select Category</option>
-              <option value="add-new">Add New</option>
-            </select>
-            <input id="description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <input id="transaction-date" type="date" placeholder="Transaction Date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600" required>
-          </div>
-          <button id="add-transaction" type="button" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Transaction</button>
-        </div>
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <div class="mb-4 flex items-center">
-            <label for="transactions-filter" class="mr-2 text-sm font-medium text-gray-700">Filter Transactions:</label>
-            <select id="transactions-filter" class="p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="thisMonth">This Month</option>
-              <option value="lastMonth">Last Month</option>
-              <option value="thisYear">This Year</option>
-              <option value="lastYear">Last Year</option>
-            </select>
-          </div>
-          <div class="overflow-x-auto no-swipe">
-            <table class="w-full">
-              <thead>
-                <tr class="bg-gray-200">
-                  <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Type</th>
-                  <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Amount</th>
-                  <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Category</th>
-                  <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Description</th>
-                  <th class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700" id="transaction-date-header">Date</th>
-                  <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="transaction-table"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      <!-- Budgets Section -->
-      <div id="budgets-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Budget</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <input id="budget-name" type="text" placeholder="Budget Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <input id="budget-amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-          </div>
-          <button id="add-budget" type="button" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Budget</button>
-        </div>
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
-          <table class="w-full">
-            <thead>
-              <tr class="bg-gray-200">
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Name</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Amount</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Spent</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Remaining</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="budget-table"></tbody>
-          </table>
-        </div>
-      </div>
-      <!-- Categories Section -->
-      <div id="categories-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Category</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <input id="category-name" type="text" placeholder="Category Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <select id="category-type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
-            </select>
-            <select id="category-budget-select" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="none">None</option>
-              <option value="add-new">Add New</option>
-            </select>
-          </div>
-          <button id="add-category" type="button" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Category</button>
-        </div>
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
-          <table class="w-full">
-            <thead>
-              <tr class="bg-gray-200">
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Name</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Type</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Budget</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="category-table"></tbody>
-          </table>
-        </div>
-      </div>
-      <!-- Child Accounts Section -->
-      <div id="child-accounts-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Child Account Transactions</h3>
-          <!-- Admin: Child Selector -->
-          <div id="child-selector" class="mb-4 hidden">
-            <label class="block text-sm font-medium text-gray-700">Select Child</label>
-            <select id="child-user-id" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="">Select a Child</option>
-            </select>
-          </div>
-          <!-- Balance Display -->
-          <div class="mb-4">
-            <h4 class="text-sm font-medium text-gray-700">Child Balance</h4>
-            <p id="child-balance" class="text-lg font-bold text-gray-900">₹0</p>
-          </div>
-          <!-- Add Transaction -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <select id="child-transaction-type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="debit">Debit</option>
-              <option value="credit">Credit</option>
-            </select>
-            <input id="child-transaction-amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <input id="child-transaction-description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-          </div>
-          <button id="add-child-transaction" type="button" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Transaction</button>
-        </div>
-        <!-- Transaction Table -->
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
-          <table class="w-full">
-            <thead>
-              <tr class="bg-gray-200">
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Type</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Amount</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Description</th>
-                <th class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700" id="child-transaction-date-header">Date</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="child-transaction-table"></tbody>
-          </table>
-        </div>
-        <div id="child-tiles" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6"></div>
-      </div>
-      <!-- Profile Section -->
-      <div id="profile-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">User Profile</h3>
-          <div class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700">Email</label>
-              <input id="profile-email" type="email" readonly class="w-full p-3 border rounded-lg bg-gray-100 focus:outline-none">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700">Currency</label>
-              <select id="profile-currency" disabled class="w-full p-3 border rounded-lg bg-gray-100 focus:outline-none">
-                <option value="INR">INR</option>
-                <option value="USD">USD</option>
-                <option value="ZAR">ZAR</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700">Family Code</label>
-              <input id="profile-family-code" type="text" readonly class="w-full p-3 border rounded-lg bg-gray-100 focus:outline-none">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700">Account Type</label>
-              <select id="profile-account-type" disabled class="w-full p-3 border rounded-lg bg-gray-100 focus:outline-none">
-                <option value="admin">Admin</option>
-                <option value="child">Child</option>
-              </select>
-            </div>
-            <button id="edit-profile" type="button" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Edit Profile</button>
-            <button id="save-profile" type="button" class="hidden bg-green-600 text-white p-3 rounded-lg hover:bg-green-700 transition w-full sm:w-auto">Save Profile</button>
-          </div>
-        </div>
-      </div>
+    <div id="swipeable-tabs" class="relative w-full overflow-x-hidden">
+      <!-- Content sections will be lazy-loaded here -->
+      <div id="dashboard-section" class="space-y-4 sm:space-y-6"></div>
+      <div id="transactions-section" class="hidden space-y-4 sm:space-y-6"></div>
+      <div id="budgets-section" class="hidden space-y-4 sm:space-y-6"></div>
+      <div id="categories-section" class="hidden space-y-4 sm:space-y-6"></div>
+      <div id="child-accounts-section" class="hidden space-y-4 sm:space-y-6"></div>
+      <div id="profile-section" class="hidden space-y-4 sm:space-y-6"></div>
     </div>
   </main>
 </div>
 
-<!-- Additional Modals -->
-<div id="add-category-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Add Category Modal">
-  <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
-    <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add New Category</h3>
-    <div class="space-y-4">
-      <input id="new-category-name" type="text" placeholder="Category Name" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-      <select id="new-category-type" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-        <option value="income">Income</option>
-        <option value="expense">Expense</option>
-      </select>
-      <select id="new-category-budget" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-        <option value="none">None</option>
-        <option value="add-new">Add New</option>
-      </select>
-      <div class="flex justify-end space-x-4">
-        <button id="save-category" type="button" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Save</button>
-        <button id="cancel-category" type="button" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
-      </div>
-    </div>
-  </div>
-</div>
+<!-- Modal containers - Will be populated when needed -->
+<div id="add-category-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center"></div>
+<div id="add-budget-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center"></div>
+<div id="delete-confirm-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center"></div>
 
-<div id="add-budget-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Add Budget Modal">
-  <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
-    <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add New Budget</h3>
-    <div class="space-y-4">
-      <input id="new-budget-name" type="text" placeholder="Budget Name" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-      <input id="new-budget-amount" type="number" placeholder="Amount" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-      <div class="flex justify-end space-x-4">
-        <button id="save-budget" type="button" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Save</button>
-        <button id="cancel-budget" type="button" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div id="delete-confirm-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Delete Confirmation Modal">
-  <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
-    <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Confirm Deletion</h3>
-    <p id="delete-confirm-message" class="text-sm text-gray-600 mb-4">Are you sure you want to delete this item?</p>
-    <div class="flex justify-end space-x-4">
-      <button id="confirm-delete" type="button" class="bg-red-600 text-white p-3 rounded-lg hover:bg-red-700 transition">Confirm</button>
-      <button id="cancel-delete" type="button" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
-    </div>
-  </div>
-</div>
+<style>
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+</style>
 </body>
 </html>
