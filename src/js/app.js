@@ -63,7 +63,10 @@ function getDateRangeWrapper(filter) {
   return getDateRange(filter, domElements.filterStartDate, domElements.filterEndDate);
 }
 
-// Tab Switching
+
+
+
+
 function setupTabs() {
   console.log('Setting up tab navigation');
   const tabs = [
@@ -223,7 +226,6 @@ function setupTabs() {
     loadProfileData();
   }
 
-  // Attach click event listeners
   domElements.dashboardTab?.addEventListener('click', () => switchTab('dashboard'));
   domElements.transactionsTab?.addEventListener('click', () => switchTab('transactions'));
   domElements.budgetsTab?.addEventListener('click', () => switchTab('budgets'));
@@ -231,7 +233,6 @@ function setupTabs() {
   domElements.childAccountsTab?.addEventListener('click', () => switchTab('child-accounts'));
   domElements.profileTab?.addEventListener('click', () => switchTab('profile'));
 
-  // Setup mobile menu toggle
   const menuToggle = document.getElementById('menu-toggle');
   const menuItems = document.getElementById('menu-items');
   if (menuToggle && menuItems) {
@@ -243,7 +244,6 @@ function setupTabs() {
     });
   }
 
-  // Swipe detection for mobile
   const swipeContainer = document.getElementById('swipeable-tabs');
   if (swipeContainer && window.matchMedia('(max-width: 768px)').matches) {
     let touchStartX = 0;
@@ -276,6 +276,8 @@ function setupTabs() {
         return;
       }
 
+      event.preventDefault(); // Prevent browser navigation for valid swipes
+
       if (deltaX < 0 && currentTabIndex < tabs.length - 1) {
         console.log('Left swipe detected, moving to next tab:', tabs[currentTabIndex + 1].id);
         switchTab(tabs[currentTabIndex + 1].id);
@@ -290,9 +292,9 @@ function setupTabs() {
     console.warn('Swipe detection not enabled: swipe container not found or not in mobile view');
   }
 
-  // Initialize with Dashboard
   switchTab('dashboard');
 }
+
 
 // Profile Management
 async function setupProfile() {
