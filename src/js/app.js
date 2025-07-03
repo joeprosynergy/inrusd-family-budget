@@ -1522,7 +1522,6 @@ async function loadTransactions() {
 
 
 
-
 async function setupTransactions() {
   console.log('setupTransactions: Starting');
   try {
@@ -1924,7 +1923,8 @@ async function loadChildTransactions() {
       }
       const balance = document.getElementById('child-balance');
       if (balance) {
-        balance.textContent = await formatCurrency(0, 'INR');
+        // Use synchronous fallback to avoid await in non-async context
+        balance.textContent = '₹0';
       }
       return;
     }
@@ -2010,7 +2010,7 @@ async function loadChildTransactions() {
       });
       showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
       childTransactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-      childBalance.textContent = await formatCurrency(0, 'INR');
+      childBalance.textContent = '₹0'; // Synchronous fallback
     }
   } catch (error) {
     console.error('loadChildTransactions error:', {
@@ -2025,7 +2025,7 @@ async function loadChildTransactions() {
     }
     const balance = document.getElementById('child-balance');
     if (balance) {
-      balance.textContent = await formatCurrency(0, 'INR');
+      balance.textContent = '₹0'; // Synchronous fallback
     }
   }
 }
@@ -2414,7 +2414,7 @@ async function setupChildAccounts() {
         }
         const balance = document.getElementById('child-balance');
         if (balance) {
-          balance.textContent = await formatCurrency(0, 'INR');
+          balance.textContent = '₹0';
         }
       }
     });
