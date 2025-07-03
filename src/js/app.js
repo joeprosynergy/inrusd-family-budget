@@ -34,6 +34,79 @@ function debounce(func, wait) {
   };
 }
 
+// Tab Functions
+async function showDashboard() {
+  tabs.forEach(t => {
+    domElements[`${t.id.replace('-', '')}Tab`]?.classList.toggle('bg-blue-800', t.id === 'dashboard');
+    domElements[t.section]?.classList.toggle('hidden', t.id !== 'dashboard');
+  });
+  if (domElements.pageTitle) domElements.pageTitle.textContent = 'Dashboard';
+  await updateDashboard();
+}
+
+async function showTransactions() {
+  tabs.forEach(t => {
+    domElements[`${t.id.replace('-', '')}Tab`]?.classList.toggle('bg-blue-800', t.id === 'transactions');
+    domElements[t.section]?.classList.toggle('hidden', t.id !== 'transactions');
+  });
+  if (domElements.pageTitle) domElements.pageTitle.textContent = 'Transactions';
+  if (!loadedTabs.transactions) {
+    await loadTransactions();
+    loadedTabs.transactions = true;
+  }
+}
+
+async function showBudgets() {
+  tabs.forEach(t => {
+    domElements[`${t.id.replace('-', '')}Tab`]?.classList.toggle('bg-blue-800', t.id === 'budgets');
+    domElements[t.section]?.classList.toggle('hidden', t.id !== 'budgets');
+  });
+  if (domElements.pageTitle) domElements.pageTitle.textContent = 'Budgets';
+  if (!loadedTabs.budgets) {
+    await loadBudgets();
+    loadedTabs.budgets = true;
+  }
+}
+
+function showCategories() {
+  tabs.forEach(t => {
+    domElements[`${t.id.replace('-', '')}Tab`]?.classList.toggle('bg-blue-800', t.id === 'categories');
+    domElements[t.section]?.classList.toggle('hidden', t.id !== 'categories');
+  });
+  if (domElements.pageTitle) domElements.pageTitle.textContent = 'Categories';
+}
+
+async function showChildAccounts() {
+  tabs.forEach(t => {
+    domElements[`${t.id.replace('-', '')}Tab`]?.classList.toggle('bg-blue-800', t.id === 'child-accounts');
+    domElements[t.section]?.classList.toggle('hidden', t.id !== 'child-accounts');
+  });
+  if (domElements.pageTitle) domElements.pageTitle.textContent = 'Child Accounts';
+  if (!loadedTabs.childAccounts) {
+    await loadChildAccounts();
+    loadedTabs.childAccounts = true;
+  }
+}
+
+function showProfile() {
+  tabs.forEach(t => {
+    domElements[`${t.id.replace('-', '')}Tab`]?.classList.toggle('bg-blue-800', t.id === 'profile');
+    domElements[t.section]?.classList.toggle('hidden', t.id !== 'profile');
+  });
+  if (domElements.pageTitle) domElements.pageTitle.textContent = 'User Profile';
+  loadProfileData();
+}
+
+// Tab Configuration
+const tabs = [
+  { id: 'dashboard', name: 'Dashboard', show: showDashboard, section: 'dashboardSection' },
+  { id: 'transactions', name: 'Transactions', show: showTransactions, section: 'transactionsSection' },
+  { id: 'budgets', name: 'Budgets', show: showBudgets, section: 'budgetsSection' },
+  { id: 'categories', name: 'Categories', show: showCategories, section: 'categoriesSection' },
+  { id: 'child-accounts', name: 'Child Accounts', show: showChildAccounts, section: 'childAccountsSection' },
+  { id: 'profile', name: 'Profile', show: showProfile, section: 'profileSection' }
+];
+
 // Load App Data
 async function loadAppData() {
   console.log('loadAppData: Starting');
@@ -59,16 +132,6 @@ async function loadAppData() {
   }
 }
 
-// Tab Management
-const tabs = [
-  { id: 'dashboard', name: 'Dashboard', show: showDashboard, section: 'dashboardSection' },
-  { id: 'transactions', name: 'Transactions', show: showTransactions, section: 'transactionsSection', load: loadTransactions },
-  { id: 'budgets', name: 'Budgets', show: showBudgets, section: 'budgetsSection', load: loadBudgets },
-  { id: 'categories', name: 'Categories', show: showCategories, section: 'categoriesSection' },
-  { id: 'child-accounts', name: 'Child Accounts', show: showChildAccounts, section: 'childAccountsSection', load: loadChildAccounts },
-  { id: 'profile', name: 'Profile', show: showProfile, section: 'profileSection', load: loadProfileData }
-];
-
 function setupTabs() {
   console.log('Setting up tab navigation');
   let currentTabIndex = 0;
@@ -91,7 +154,6 @@ function setupTabs() {
         tabButton.setAttribute('aria-selected', t.id === tabId);
         tabButton.classList.toggle('bg-blue-800', t.id === tabId);
       }
-      domElements[t.section]?.classList.toggle('hidden', t.id !== tabId);
     });
     const tab = tabs.find(t => t.id === tabId);
     if (domElements.pageTitle) domElements.pageTitle.textContent = tab.name;
@@ -101,37 +163,6 @@ function setupTabs() {
       menuItems.classList.add('hidden');
       menuToggle.setAttribute('aria-expanded', 'false');
     }
-  }
-
-  async function showDashboard() {
-    await updateDashboard();
-  }
-
-  async function showTransactions() {
-    if (!loadedTabs.transactions) {
-      await loadTransactions();
-      loadedTabs.transactions = true;
-    }
-  }
-
-  async function showBudgets() {
-    if (!loadedTabs.budgets) {
-      await loadBudgets();
-      loadedTabs.budgets = true;
-    }
-  }
-
-  function showCategories() {}
-
-  async function showChildAccounts() {
-    if (!loadedTabs.childAccounts) {
-      await loadChildAccounts();
-      loadedTabs.childAccounts = true;
-    }
-  }
-
-  function showProfile() {
-    loadProfileData();
   }
 
   tabs.forEach(tab => {
@@ -1388,16 +1419,24 @@ async function setupLogout() {
 }
 
 async function initApp() {
-  if (currentUser && currentAccountType === 'admin' && db && familyCode) {
-    await resetBudgetsForNewMonth(db, familyCode);
+  try {
+    if (currentUser && currentAccountType === 'admin' && db && familyCode) {
+      await resetBudgetsForNewMonth(db, familyCode);
+    }
+    setupTabs();
+    setupProfile();
+    setupCategories();
+    setupBudgets();
+    setupTransactions();
+    setupChildAccounts();
+    setupLogout();
+    await loadAppData();
+    document.getElementById('login-section')?.classList.add('hidden');
+    document.getElementById('app-section')?.classList.remove('hidden');
+  } catch (error) {
+    console.error('initApp error:', error);
+    showError('page-title', 'Failed to initialize app. Please try logging in again.');
   }
-  setupTabs();
-  setupProfile();
-  setupCategories();
-  setupBudgets();
-  setupTransactions();
-  setupChildAccounts();
-  setupLogout();
 }
 
 export { loadAppData, initApp };
