@@ -70,10 +70,12 @@ export async function setupAuth(loadAppDataCallback) {
   });
 
   // Login handler
+  const loginForm = checkElement('login-form');
   const loginButton = checkElement('login-button');
-  if (loginButton) {
-    const handleLogin = debounce(async () => {
-      console.log('Login button clicked');
+  if (loginForm && loginButton) {
+    const handleLogin = debounce(async (event) => {
+      event.preventDefault(); // Prevent form submission reload
+      console.log('Login form submitted');
       clearErrors();
       const email = checkElement('login-email')?.value.trim();
       const password = checkElement('login-password')?.value;
@@ -104,9 +106,9 @@ export async function setupAuth(loadAppDataCallback) {
         loginButton.textContent = 'Login';
       }
     }, DEBOUNCE_MS);
-    loginButton.addEventListener('click', handleLogin);
+    loginForm.addEventListener('submit', handleLogin);
   } else {
-    console.error('Cannot setup login: login-button missing');
+    console.error('Cannot setup login: login-form or login-button missing');
   }
 
   // Signup handler
