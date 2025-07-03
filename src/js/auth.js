@@ -72,10 +72,10 @@ export async function setupAuth(loadAppDataCallback) {
   // Login handler
   const loginForm = checkElement('login-form');
   const loginButton = checkElement('login-button');
-  if (loginForm && loginButton) {
+  if (loginButton) {
     const handleLogin = debounce(async (event) => {
-      event.preventDefault(); // Prevent form submission reload
-      console.log('Login form submitted');
+      event.preventDefault(); // Prevent default behavior (form submit or button click)
+      console.log(loginForm ? 'Login form submitted' : 'Login button clicked');
       clearErrors();
       const email = checkElement('login-email')?.value.trim();
       const password = checkElement('login-password')?.value;
@@ -106,9 +106,16 @@ export async function setupAuth(loadAppDataCallback) {
         loginButton.textContent = 'Login';
       }
     }, DEBOUNCE_MS);
-    loginForm.addEventListener('submit', handleLogin);
+
+    if (loginForm) {
+      console.log('Attaching login handler to login-form submit');
+      loginForm.addEventListener('submit', handleLogin);
+    } else {
+      console.log('No login-form found, attaching login handler to login-button click');
+      loginButton.addEventListener('click', handleLogin);
+    }
   } else {
-    console.error('Cannot setup login: login-form or login-button missing');
+    console.error('Cannot setup login: login-button missing');
   }
 
   // Signup handler
