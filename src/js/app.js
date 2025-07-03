@@ -19,7 +19,7 @@ import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
 let isEditing = { transaction: false, budget: false, category: false, profile: false, childTransaction: false };
 let currentChildUserId = null;
 let currentAccountType = null;
-let loadedTabs = { budgets: false, transactions: false, childAccounts: false }; // Removed categories from lazy-loading
+let loadedTabs = { budgets: false, transactions: false, childAccounts: false };
 
 // Load App Data
 async function loadAppData() {
@@ -30,14 +30,12 @@ async function loadAppData() {
   }
   try {
     console.log('Fetching exchange rates');
-    // Fetch all rates in parallel
     const [inrUsdRate, inrZarRate, usdZarRate] = await Promise.all([
       fetchExchangeRate('INR', 'USD', exchangeRateCache.get('INR_USD')),
       fetchExchangeRate('INR', 'ZAR', exchangeRateCache.get('INR_ZAR')),
       fetchExchangeRate('USD', 'ZAR', exchangeRateCache.get('USD_ZAR'))
     ]);
     console.log('Exchange rates loaded:', { INR_USD: inrUsdRate, INR_ZAR: inrZarRate, USD_ZAR: usdZarRate });
-    // Update cache entries
     exchangeRateCache.set('INR_USD', { rate: inrUsdRate, timestamp: Date.now() });
     exchangeRateCache.set('INR_ZAR', { rate: inrZarRate, timestamp: Date.now() });
     exchangeRateCache.set('USD_ZAR', { rate: usdZarRate, timestamp: Date.now() });
@@ -68,8 +66,6 @@ function getDateRangeWrapper(filter) {
 // Tab Switching
 function setupTabs() {
   console.log('Setting up tab navigation');
-  
-  // Define tabs and their corresponding show functions
   const tabs = [
     { id: 'dashboard', name: 'Dashboard', show: showDashboard },
     { id: 'transactions', name: 'Transactions', show: showTransactions },
@@ -78,9 +74,8 @@ function setupTabs() {
     { id: 'child-accounts', name: 'Child Accounts', show: showChildAccounts },
     { id: 'profile', name: 'Profile', show: showProfile }
   ];
-  let currentTabIndex = 0; // Start at Dashboard
+  let currentTabIndex = 0;
 
-  // Reusable switchTab function
   function switchTab(tabId) {
     const tab = tabs.find(t => t.id === tabId);
     if (!tab) {
@@ -91,21 +86,19 @@ function setupTabs() {
     tab.show();
     currentTabIndex = tabs.findIndex(t => t.id === tabId);
     
-    // Update ARIA attributes and menu
     tabs.forEach(t => {
       const tabButton = domElements[`${t.id.replace('-', '')}Tab`];
       if (tabButton) {
         tabButton.setAttribute('aria-selected', t.id === tabId);
+        tabButton.classList.toggle('bg-blue-800', t.id === tabId);
       }
     });
     
-    // Update mobile menu display
     const currentTabName = document.getElementById('current-tab-name');
     if (currentTabName) {
       currentTabName.textContent = tab.name;
     }
     
-    // Collapse menu on mobile after selection
     const menuItems = document.getElementById('menu-items');
     const menuToggle = document.getElementById('menu-toggle');
     if (menuItems && menuToggle && window.matchMedia('(max-width: 768px)').matches) {
@@ -114,7 +107,6 @@ function setupTabs() {
     }
   }
 
-  // Tab show functions
   function showDashboard() {
     console.log('Showing dashboard');
     domElements.dashboardTab?.classList.add('bg-blue-800');
@@ -130,6 +122,7 @@ function setupTabs() {
     domElements.childAccountsSection?.classList.add('hidden');
     domElements.profileSection?.classList.add('hidden');
     if (domElements.pageTitle) domElements.pageTitle.textContent = 'Budget Dashboard';
+    updateDashboard();
   }
 
   async function showTransactions() {
@@ -174,24 +167,22 @@ function setupTabs() {
     }
   }
 
- // Tab Switching (only showCategories updated)
-async function showCategories() {
-  console.log('Showing categories');
-  domElements.categoriesTab?.classList.add('bg-blue-800');
-  domElements.dashboardTab?.classList.remove('bg-blue-800');
-  domElements.transactionsTab?.classList.remove('bg-blue-800');
-  domElements.budgetsTab?.classList.remove('bg-blue-800');
-  domElements.childAccountsTab?.classList.remove('bg-blue-800');
-  domElements.profileTab?.classList.remove('bg-blue-800');
-  domElements.categoriesSection?.classList.remove('hidden');
-  domElements.dashboardSection?.classList.add('hidden');
-  domElements.transactionsSection?.classList.add('hidden');
-  domElements.budgetsSection?.classList.add('hidden');
-  domElements.childAccountsSection?.classList.add('hidden');
-  domElements.profileSection?.classList.add('hidden');
-  if (domElements.pageTitle) domElements.pageTitle.textContent = 'Categories';
-  // Removed loadCategories call since it's pre-loaded in loadAppData
-}
+  async function showCategories() {
+    console.log('Showing categories');
+    domElements.categoriesTab?.classList.add('bg-blue-800');
+    domElements.dashboardTab?.classList.remove('bg-blue-800');
+    domElements.transactionsTab?.classList.remove('bg-blue-800');
+    domElements.budgetsTab?.classList.remove('bg-blue-800');
+    domElements.childAccountsTab?.classList.remove('bg-blue-800');
+    domElements.profileTab?.classList.remove('bg-blue-800');
+    domElements.categoriesSection?.classList.remove('hidden');
+    domElements.dashboardSection?.classList.add('hidden');
+    domElements.transactionsSection?.classList.add('hidden');
+    domElements.budgetsSection?.classList.add('hidden');
+    domElements.childAccountsSection?.classList.add('hidden');
+    domElements.profileSection?.classList.add('hidden');
+    if (domElements.pageTitle) domElements.pageTitle.textContent = 'Categories';
+  }
 
   async function showChildAccounts() {
     console.log('Showing child accounts');
@@ -257,12 +248,11 @@ async function showCategories() {
   if (swipeContainer && window.matchMedia('(max-width: 768px)').matches) {
     let touchStartX = 0;
     let touchStartY = 0;
-    const minSwipeDistance = 50; // Minimum pixels to consider a swipe
+    const minSwipeDistance = 50;
 
     swipeContainer.addEventListener('touchstart', (event) => {
-      // Ignore swipes starting on tables (no-swipe class)
       if (event.target.closest('.no-swipe')) {
-        console.log('Touch ignored: started on table with no-swipe class');
+        console.log('Touch ignored: started on no-swipe element');
         return;
       }
       touchStartX = event.touches[0].clientX;
@@ -271,8 +261,8 @@ async function showCategories() {
     });
 
     swipeContainer.addEventListener('touchend', (event) => {
-      // Ignore if touchstart was on a table
       if (event.target.closest('.no-swipe')) {
+        console.log('Touch ignored: ended on no-swipe element');
         return;
       }
       const touchEndX = event.changedTouches[0].clientX;
@@ -281,24 +271,23 @@ async function showCategories() {
       const deltaY = Math.abs(touchEndY - touchStartY);
       console.log('Touch end:', { x: touchEndX, y: touchEndY, deltaX, deltaY });
 
-      // Ignore if vertical scroll (deltaY too large) or swipe too small
       if (deltaY > 50 || Math.abs(deltaX) < minSwipeDistance) {
         console.log('Ignoring touch: vertical scroll or too small');
         return;
       }
 
       if (deltaX < 0 && currentTabIndex < tabs.length - 1) {
-        // Left swipe: go to next tab
-        console.log('Left swipe detected, moving to next tab');
+        console.log('Left swipe detected, moving to next tab:', tabs[currentTabIndex + 1].id);
         switchTab(tabs[currentTabIndex + 1].id);
       } else if (deltaX > 0 && currentTabIndex > 0) {
-        // Right swipe: go to previous tab
-        console.log('Right swipe detected, moving to previous tab');
+        console.log('Right swipe detected, moving to previous tab:', tabs[currentTabIndex - 1].id);
         switchTab(tabs[currentTabIndex - 1].id);
       } else {
         console.log('Swipe ignored: at tab boundary');
       }
     });
+  } else {
+    console.warn('Swipe detection not enabled: swipe container not found or not in mobile view');
   }
 
   // Initialize with Dashboard
@@ -317,7 +306,6 @@ async function setupProfile() {
     domElements.profileEmail?.classList.remove('bg-gray-100');
     domElements.profileCurrency?.classList.remove('bg-gray-100');
     domElements.profileAccountType?.classList.remove('bg-gray-100');
-    // Keep family code read-only
     domElements.profileFamilyCode?.setAttribute('readonly', 'true');
     domElements.profileFamilyCode?.classList.add('bg-gray-100');
     domElements.editProfile?.classList.add('hidden');
@@ -361,6 +349,7 @@ async function setupProfile() {
       );
       console.log('Profile updated:', { email, currency, accountType });
       setUserCurrency(currency);
+      currentAccountType = accountType;
       isEditing.profile = false;
       domElements.profileEmail?.setAttribute('readonly', 'true');
       domElements.profileCurrency?.setAttribute('disabled', 'true');
@@ -411,7 +400,6 @@ async function setupProfile() {
       );
       setUserCurrency(newCurrency);
       domElements.profileCurrency.value = newCurrency;
-      // Refresh UI with new currency
       await Promise.all([
         loadBudgets(),
         loadTransactions(),
@@ -471,18 +459,15 @@ async function loadProfileData() {
   }
 }
 
-// Categories
 async function loadCategories() {
   console.log('loadCategories: Starting');
   try {
-    // Verify Firestore and familyCode
     if (!db || !familyCode) {
       console.error('loadCategories: Firestore or familyCode not available', { db: !!db, familyCode });
       showError('category-name', 'Database service not available');
       return;
     }
 
-    // Verify DOM elements
     const categorySelect = document.getElementById('category');
     const categoryBudgetSelect = document.getElementById('category-budget-select');
     const newCategoryBudgetSelect = document.getElementById('new-category-budget');
@@ -497,7 +482,6 @@ async function loadCategories() {
       return;
     }
 
-    // Initialize DOM
     categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
     categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
     if (newCategoryBudgetSelect) {
@@ -505,7 +489,6 @@ async function loadCategories() {
     }
     categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
 
-    // Pre-fetch budgets
     console.log('loadCategories: Fetching budgets');
     const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
     let budgetsSnapshot;
@@ -516,7 +499,7 @@ async function loadCategories() {
         code: error.code,
         message: error.message
       });
-      budgetsSnapshot = { docs: [] }; // Fallback to empty budgets
+      budgetsSnapshot = { docs: [] };
     }
     const budgetMap = new Map();
     budgetsSnapshot.forEach(doc => {
@@ -534,7 +517,6 @@ async function loadCategories() {
     });
     console.log('loadCategories: Budgets loaded', { count: budgetsSnapshot.size });
 
-    // Fetch categories
     console.log('loadCategories: Fetching categories');
     const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
     let categoriesSnapshot;
@@ -552,16 +534,6 @@ async function loadCategories() {
     }
     console.log('loadCategories: Categories fetched', { count: categoriesSnapshot.size });
 
-    // Update category select
-    categoriesSnapshot.forEach(doc => {
-      const category = doc.data();
-      const option = document.createElement('option');
-      option.value = doc.id;
-      option.textContent = category.name;
-      categorySelect.insertBefore(option, categorySelect.querySelector('option[value="add-new"]'));
-    });
-
-    // Update category table
     categoryTable.innerHTML = '';
     if (categoriesSnapshot.empty) {
       categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No categories found</td></tr>';
@@ -571,6 +543,11 @@ async function loadCategories() {
 
     categoriesSnapshot.forEach(doc => {
       const category = doc.data();
+      const option = document.createElement('option');
+      option.value = doc.id;
+      option.textContent = category.name;
+      categorySelect.insertBefore(option, categorySelect.querySelector('option[value="add-new"]'));
+
       const tr = document.createElement('tr');
       tr.classList.add('table-row');
       const budgetName = category.budgetId ? budgetMap.get(category.budgetId) || 'Unknown' : 'None';
@@ -603,7 +580,6 @@ async function loadCategories() {
 async function setupCategories() {
   console.log('setupCategories: Starting');
   try {
-    // Verify DOM elements
     const addCategory = document.getElementById('add-category');
     const categorySelect = document.getElementById('category');
     const saveCategory = document.getElementById('save-category');
@@ -621,7 +597,6 @@ async function setupCategories() {
       return;
     }
 
-    // Add Category
     addCategory.addEventListener('click', async () => {
       console.log('addCategory: Clicked', { isEditing: isEditing.category });
       if (isEditing.category) {
@@ -689,7 +664,6 @@ async function setupCategories() {
       }
     });
 
-    // Category Select Change
     categorySelect.addEventListener('change', () => {
       console.log('categorySelect: Changed', { value: categorySelect.value });
       if (categorySelect.value === 'add-new') {
@@ -704,7 +678,6 @@ async function setupCategories() {
       }
     });
 
-    // Save Category (Modal)
     saveCategory.addEventListener('click', async () => {
       console.log('saveCategory: Clicked');
       clearErrors();
@@ -770,7 +743,6 @@ async function setupCategories() {
       }
     });
 
-    // Cancel Category (Modal)
     cancelCategory.addEventListener('click', () => {
       console.log('cancelCategory: Clicked');
       try {
@@ -793,7 +765,6 @@ async function setupCategories() {
       }
     });
 
-    // Table Actions (Edit/Delete)
     categoryTable.addEventListener('click', async (e) => {
       if (e.target.classList.contains('edit-category')) {
         console.log('editCategory: Clicked', { id: e.target.dataset.id });
@@ -930,14 +901,6 @@ async function setupCategories() {
   }
 }
 
-
-
-
-
-
-// Replaces the entire loadBudgets function in app.js from artifact fb62ddf1-9743-4243-a80d-4455248f490c
-// Includes credit transactions to reduce spent amount
-
 async function loadBudgets() {
   console.log('loadBudgets: Starting', { familyCode });
   if (!db) {
@@ -977,14 +940,11 @@ async function loadBudgets() {
     const filter = domElements.dashboardFilter?.value || 'thisMonth';
     let { start, end } = getDateRangeWrapper(filter);
     console.log('loadBudgets: Filter applied', { filter, start: start.toISOString(), end: end.toISOString() });
-    start = new Date(start.getTime() - 5.5 * 60 * 60 * 1000); // Adjust for IST to UTC
-    console.log('loadBudgets: Adjusted start date for UTC', { adjustedStart: start.toISOString() });
+    start = new Date(start.getTime() - 5.5 * 60 * 60 * 1000);
 
-    // Fetch all transactions once
     const transactions = await fetchCachedTransactions(db, familyCode, start, end);
     console.log('loadBudgets: Transactions fetched', { count: transactions.length });
 
-    // Fetch categories
     const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
     const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
     const budgetToCategories = new Map();
@@ -1014,7 +974,6 @@ async function loadBudgets() {
         return;
       }
 
-      // Batch DOM updates
       const tableFragment = document.createDocumentFragment();
       const tilesFragment = document.createDocumentFragment();
       for (const doc of snapshot.docs) {
@@ -1101,12 +1060,6 @@ async function loadBudgets() {
   }
 }
 
-
-
-
-
-// Replaces the entire setupBudgets function in app.js from artifact c4f2e6a9-8b7d-4e2f-9c3a-5e7b2d1a6f0e
-
 async function setupBudgets() {
   console.log('setupBudgets: Starting');
   const addBudget = document.getElementById('add-budget');
@@ -1114,7 +1067,6 @@ async function setupBudgets() {
   const cancelBudget = document.getElementById('cancel-budget');
   const budgetTable = document.getElementById('budget-table');
 
-  // Verify DOM elements
   if (!addBudget || !saveBudget || !cancelBudget || !budgetTable) {
     console.error('setupBudgets: Missing DOM elements', {
       addBudget: !!addBudget,
@@ -1166,7 +1118,6 @@ async function setupBudgets() {
       return;
     }
 
-    // Fetch familyCode from Firestore to ensure correctness
     let verifiedFamilyCode;
     try {
       const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
@@ -1276,7 +1227,6 @@ async function setupBudgets() {
       return;
     }
 
-    // Fetch familyCode from Firestore
     let verifiedFamilyCode;
     try {
       const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
@@ -1449,13 +1399,9 @@ async function setupBudgets() {
   });
 }
 
-
-
-
 async function loadTransactions() {
   console.log('loadTransactions: Starting', { familyCode });
   try {
-    // Verify DOM elements
     const transactionTable = document.getElementById('transaction-table');
     const dateHeader = document.getElementById('transaction-date-header');
     const transactionsFilter = document.getElementById('transactions-filter');
@@ -1470,7 +1416,6 @@ async function loadTransactions() {
     }
     transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">Loading...</td></tr>';
 
-    // Verify Firestore and familyCode
     if (!db || !familyCode) {
       console.error('loadTransactions: Firestore or familyCode not available', { db: !!db, familyCode });
       showError('transactions-filter', 'Database service not available');
@@ -1478,20 +1423,16 @@ async function loadTransactions() {
       return;
     }
 
-    // Set default filter to 'thisMonth'
     transactionsFilter.value = transactionsFilter.value || 'thisMonth';
     const filter = transactionsFilter.value;
     console.log('loadTransactions: Filter selected', { filter });
 
-    // Get date range from filter
     const { start, end } = getDateRangeWrapper(filter);
     console.log('loadTransactions: Date range', { start: start.toISOString(), end: end.toISOString() });
 
-    // Adjust start date for UTC (subtract IST offset)
     const adjustedStart = new Date(start.getTime() - 5.5 * 60 * 60 * 1000);
     console.log('loadTransactions: Adjusted start date for UTC', { adjustedStart: adjustedStart.toISOString() });
 
-    // Set date header based on filter
     let headerText;
     switch (filter) {
       case 'thisMonth':
@@ -1510,7 +1451,6 @@ async function loadTransactions() {
     dateHeader.textContent = headerText;
     console.log('loadTransactions: Set date header', { headerText });
 
-    // Pre-fetch categories
     console.log('loadTransactions: Fetching categories');
     const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
     let categoriesSnapshot;
@@ -1529,7 +1469,6 @@ async function loadTransactions() {
     });
     console.log('loadTransactions: Categories loaded', { count: categoriesSnapshot.size });
 
-    // Fetch transactions with server-side date filtering
     console.log('loadTransactions: Fetching transactions');
     const transactions = await fetchCachedTransactions(db, familyCode, adjustedStart, end);
     console.log('loadTransactions: Transactions fetched', { count: transactions.length });
@@ -1541,11 +1480,9 @@ async function loadTransactions() {
       return;
     }
 
-    // Sort transactions by createdAt in descending order
     transactions.sort((a, b) => b.createdAt - a.createdAt);
     console.log('loadTransactions: Transactions sorted by createdAt', { count: transactions.length });
 
-    // Batch DOM updates
     const tableFragment = document.createDocumentFragment();
     for (const transaction of transactions) {
       const tr = document.createElement('tr');
