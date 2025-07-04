@@ -3821,8 +3821,8 @@ async function setupLogout() {
   }, 500);
 }
 
-function setupAddItemMenu() {
-  console.log('setupAddItemMenu: Starting');
+function setupAddItemButton() {
+  console.log('setupAddItemButton: Starting');
   const addItemButton = document.getElementById('add-item-button');
   const addItemMenu = document.getElementById('add-item-menu');
   const addTransactionMenu = document.getElementById('add-transaction-menu');
@@ -3830,7 +3830,7 @@ function setupAddItemMenu() {
   const addCategoryMenu = document.getElementById('add-category-menu');
 
   if (!addItemButton || !addItemMenu || !addTransactionMenu || !addBudgetMenu || !addCategoryMenu) {
-    console.error('setupAddItemMenu: Missing DOM elements', {
+    console.error('setupAddItemButton: Missing DOM elements', {
       addItemButton: !!addItemButton,
       addItemMenu: !!addItemMenu,
       addTransactionMenu: !!addTransactionMenu,
@@ -3841,15 +3841,15 @@ function setupAddItemMenu() {
   }
 
   addItemButton.addEventListener('click', () => {
-    console.log('addItemButton: Clicked');
     const isHidden = addItemMenu.classList.contains('hidden');
     addItemMenu.classList.toggle('hidden', !isHidden);
+    console.log('addItemButton: Toggled menu', { isVisible: isHidden });
   });
 
   addTransactionMenu.addEventListener('click', () => {
     console.log('addTransactionMenu: Clicked');
-    addItemMenu.classList.add('hidden');
     domElements.addTransactionModal.classList.remove('hidden');
+    addItemMenu.classList.add('hidden');
   });
 
   addBudgetMenu.addEventListener('click', () => {
@@ -3858,19 +3858,19 @@ function setupAddItemMenu() {
       showError('new-budget-name', 'Only admins can add budgets');
       return;
     }
-    addItemMenu.classList.add('hidden');
     domElements.addBudgetModal.classList.remove('hidden');
+    addItemMenu.classList.add('hidden');
   });
 
   addCategoryMenu.addEventListener('click', () => {
     console.log('addCategoryMenu: Clicked');
-    addItemMenu.classList.add('hidden');
     domElements.addCategoryModal.classList.remove('hidden');
+    addItemMenu.classList.add('hidden');
   });
 
   // Close menu when clicking outside
   document.addEventListener('click', (e) => {
-    if (!addItemMenu.classList.contains('hidden') && !addItemButton.contains(e.target) && !addItemMenu.contains(e.target)) {
+    if (!addItemButton.contains(e.target) && !addItemMenu.contains(e.target)) {
       addItemMenu.classList.add('hidden');
       console.log('addItemMenu: Closed due to outside click');
     }
@@ -3893,7 +3893,7 @@ async function initApp() {
     setupTransactions();
     setupChildAccounts();
     setupLogout();
-    setupAddItemMenu();
+    setupAddItemButton();
     console.log('initApp: Complete');
   } catch (error) {
     console.error('initApp error:', {
