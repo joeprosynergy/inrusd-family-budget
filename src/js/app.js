@@ -63,6 +63,88 @@ function getDateRangeWrapper(filter) {
   return getDateRange(filter, domElements.filterStartDate, domElements.filterEndDate);
 }
 
+// Setup Floating Action Button
+function setupFloatingActionButton(currentTabId) {
+  console.log('setupFloatingActionButton: Starting for tab:', currentTabId);
+  const floatingButton = document.getElementById('floating-action-button');
+  const actionMenu = document.getElementById('action-menu');
+  if (!floatingButton || !actionMenu) {
+    console.error('setupFloatingActionButton: Missing DOM elements', {
+      floatingButton: !!floatingButton,
+      actionMenu: !!actionMenu
+    });
+    return;
+  }
+
+  // Define available actions based on the current tab
+  const actions = {
+    transactions: [
+      { id: 'add-transaction', label: 'Add Transaction', modal: 'addTransactionModal' }
+    ],
+    budgets: currentAccountType === 'admin' ? [
+      { id: 'add-budget', label: 'Add Budget', modal: 'addBudgetModal' }
+    ] : [],
+    categories: [
+      { id: 'add-category', label: 'Add Category', modal: 'addCategoryModal' }
+    ],
+    dashboard: [
+      { id: 'add-transaction', label: 'Add Transaction', modal: 'addTransactionModal' },
+      ...(currentAccountType === 'admin' ? [{ id: 'add-budget', label: 'Add Budget', modal: 'addBudgetModal' }] : []),
+      { id: 'add-category', label: 'Add Category', modal: 'addCategoryModal' }
+    ],
+    'child-accounts': [
+      { id: 'add-child-transaction', label: 'Add Child Transaction', modal: 'addChildTransactionModal' }
+    ],
+    profile: []
+  };
+
+  floatingButton.addEventListener('click', () => {
+    console.log('Floating button clicked, current tab:', currentTabId);
+    clearErrors();
+    const availableActions = actions[currentTabId] || [];
+    if (availableActions.length === 0) {
+      console.log('No actions available for tab:', currentTabId);
+      return;
+    }
+
+    // Populate action menu
+    actionMenu.innerHTML = availableActions.map(action => `
+      <button class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 action-item" data-action="${action.id}" data-modal="${action.modal}">
+        ${action.label}
+      </button>
+    `).join('');
+    actionMenu.classList.toggle('hidden');
+    console.log('Action menu toggled, actions:', availableActions.length);
+  });
+
+  // Handle action selection
+  actionMenu.addEventListener('click', (e) => {
+    const button = e.target.closest('.action-item');
+    if (!button) return;
+    const actionId = button.dataset.action;
+    const modalId = button.dataset.modal;
+    console.log('Action selected:', { actionId, modalId });
+
+    const modal = document.getElementById(modalId);
+    if (modal && domElements[modalId]) {
+      domElements[modalId].classList.remove('hidden');
+      actionMenu.classList.add('hidden');
+      console.log('Modal opened:', modalId);
+    } else {
+      console.error('Modal not found:', modalId);
+      showError('page-title', 'Action not available');
+    }
+  });
+
+  // Close action menu when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!floatingButton.contains(e.target) && !actionMenu.contains(e.target)) {
+      actionMenu.classList.add('hidden');
+      console.log('Action menu closed due to outside click');
+    }
+  });
+}
+
 function setupTabs() {
   console.log('Setting up tab navigation');
   const tabs = [
@@ -109,6 +191,9 @@ function setupTabs() {
       menuItems.classList.add('hidden');
       menuToggle.setAttribute('aria-expanded', 'false');
     }
+
+    // Setup floating action button for the current tab
+    setupFloatingActionButton(tabId);
   }
 
   function showDashboard() {
@@ -1556,6 +1641,9 @@ async function setupBudgets() {
     document.getElementById('edit-budget-id').value = '';
   });
 }
+
+
+
 
 async function loadTransactions() {
   console.log('loadTransactions: Starting', { familyCode });
