@@ -1609,7 +1609,6 @@ async function setupBudgets() {
 
 
 
-
 async function loadTransactions() {
   console.log('loadTransactions: Starting', { familyCode });
   try {
@@ -1728,10 +1727,6 @@ async function loadTransactions() {
     }
   }
 }
-
-
-
-
 
 async function setupTransactions() {
   console.log('setupTransactions: Starting');
@@ -2712,7 +2707,7 @@ async function setupChildAccounts() {
         }
         const balance = document.getElementById('child-balance');
         if (balance) {
-          balance.textContent = '₹0';
+          return '₹0';
         }
       }
     });
@@ -3121,7 +3116,12 @@ function setupAddItemButton() {
   addTransactionMenu.addEventListener('click', () => {
     console.log('addTransactionMenu: Clicked');
     addItemMenu.classList.add('hidden');
-    domElements.addTransactionModal.classList.remove('hidden');
+    if (domElements.addTransactionModal) {
+      domElements.addTransactionModal.classList.remove('hidden');
+    } else {
+      console.error('addTransactionMenu: Transaction modal not found');
+      showError('new-transaction-category', 'Transaction modal not found');
+    }
   });
 
   addBudgetMenu.addEventListener('click', () => {
@@ -3131,13 +3131,23 @@ function setupAddItemButton() {
       return;
     }
     addItemMenu.classList.add('hidden');
-    domElements.addBudgetModal.classList.remove('hidden');
+    if (domElements.addBudgetModal) {
+      domElements.addBudgetModal.classList.remove('hidden');
+    } else {
+      console.error('addBudgetMenu: Budget modal not found');
+      showError('new-budget-name', 'Budget modal not found');
+    }
   });
 
   addCategoryMenu.addEventListener('click', () => {
     console.log('addCategoryMenu: Clicked');
     addItemMenu.classList.add('hidden');
-    domElements.addCategoryModal.classList.remove('hidden');
+    if (domElements.addCategoryModal) {
+      domElements.addCategoryModal.classList.remove('hidden');
+    } else {
+      console.error('addCategoryMenu: Category modal not found');
+      showError('new-category-name', 'Category modal not found');
+    }
   });
 
   // Close menu when clicking outside
