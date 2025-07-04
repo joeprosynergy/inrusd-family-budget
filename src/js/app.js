@@ -3714,61 +3714,6 @@ async function updateDashboard() {
   }
 }
 
-function setupAddItemButton() {
-  console.log('setupAddItemButton: Starting');
-  const addItemButton = document.getElementById('add-item-button');
-  const addItemMenu = document.getElementById('add-item-menu');
-  const addTransactionMenu = document.getElementById('add-transaction-menu');
-  const addBudgetMenu = document.getElementById('add-budget-menu');
-  const addCategoryMenu = document.getElementById('add-category-menu');
-
-  if (!addItemButton || !addItemMenu || !addTransactionMenu || !addBudgetMenu || !addCategoryMenu) {
-    console.error('setupAddItemButton: Missing DOM elements', {
-      addItemButton: !!addItemButton,
-      addItemMenu: !!addItemMenu,
-      addTransactionMenu: !!addTransactionMenu,
-      addBudgetMenu: !!addBudgetMenu,
-      addCategoryMenu: !!addCategoryMenu
-    });
-    return;
-  }
-
-  addItemButton.addEventListener('click', () => {
-    console.log('addItemButton: Clicked');
-    const isHidden = addItemMenu.classList.contains('hidden');
-    addItemMenu.classList.toggle('hidden', !isHidden);
-  });
-
-  addTransactionMenu.addEventListener('click', () => {
-    console.log('addTransactionMenu: Clicked');
-    addItemMenu.classList.add('hidden');
-    domElements.addTransactionModal.classList.remove('hidden');
-  });
-
-  addBudgetMenu.addEventListener('click', () => {
-    console.log('addBudgetMenu: Clicked');
-    if (currentAccountType !== 'admin') {
-      showError('new-budget-name', 'Only admins can add budgets');
-      return;
-    }
-    addItemMenu.classList.add('hidden');
-    domElements.addBudgetModal.classList.remove('hidden');
-  });
-
-  addCategoryMenu.addEventListener('click', () => {
-    console.log('addCategoryMenu: Clicked');
-    addItemMenu.classList.add('hidden');
-    domElements.addCategoryModal.classList.remove('hidden');
-  });
-
-  // Close menu when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!addItemButton.contains(e.target) && !addItemMenu.contains(e.target)) {
-      addItemMenu.classList.add('hidden');
-    }
-  });
-}
-
 async function setupLogout() {
   console.log('setupLogout: Starting');
   const maxAttempts = 10;
@@ -3876,6 +3821,62 @@ async function setupLogout() {
   }, 500);
 }
 
+function setupAddItemMenu() {
+  console.log('setupAddItemMenu: Starting');
+  const addItemButton = document.getElementById('add-item-button');
+  const addItemMenu = document.getElementById('add-item-menu');
+  const addTransactionMenu = document.getElementById('add-transaction-menu');
+  const addBudgetMenu = document.getElementById('add-budget-menu');
+  const addCategoryMenu = document.getElementById('add-category-menu');
+
+  if (!addItemButton || !addItemMenu || !addTransactionMenu || !addBudgetMenu || !addCategoryMenu) {
+    console.error('setupAddItemMenu: Missing DOM elements', {
+      addItemButton: !!addItemButton,
+      addItemMenu: !!addItemMenu,
+      addTransactionMenu: !!addTransactionMenu,
+      addBudgetMenu: !!addBudgetMenu,
+      addCategoryMenu: !!addCategoryMenu
+    });
+    return;
+  }
+
+  addItemButton.addEventListener('click', () => {
+    console.log('addItemButton: Clicked');
+    const isHidden = addItemMenu.classList.contains('hidden');
+    addItemMenu.classList.toggle('hidden', !isHidden);
+  });
+
+  addTransactionMenu.addEventListener('click', () => {
+    console.log('addTransactionMenu: Clicked');
+    addItemMenu.classList.add('hidden');
+    domElements.addTransactionModal.classList.remove('hidden');
+  });
+
+  addBudgetMenu.addEventListener('click', () => {
+    console.log('addBudgetMenu: Clicked');
+    if (currentAccountType !== 'admin') {
+      showError('new-budget-name', 'Only admins can add budgets');
+      return;
+    }
+    addItemMenu.classList.add('hidden');
+    domElements.addBudgetModal.classList.remove('hidden');
+  });
+
+  addCategoryMenu.addEventListener('click', () => {
+    console.log('addCategoryMenu: Clicked');
+    addItemMenu.classList.add('hidden');
+    domElements.addCategoryModal.classList.remove('hidden');
+  });
+
+  // Close menu when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!addItemMenu.classList.contains('hidden') && !addItemButton.contains(e.target) && !addItemMenu.contains(e.target)) {
+      addItemMenu.classList.add('hidden');
+      console.log('addItemMenu: Closed due to outside click');
+    }
+  });
+}
+
 async function initApp() {
   console.log('initApp: Starting');
   try {
@@ -3891,8 +3892,8 @@ async function initApp() {
     setupBudgets();
     setupTransactions();
     setupChildAccounts();
-    setupAddItemButton();
     setupLogout();
+    setupAddItemMenu();
     console.log('initApp: Complete');
   } catch (error) {
     console.error('initApp error:', {
