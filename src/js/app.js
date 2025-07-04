@@ -63,10 +63,6 @@ function getDateRangeWrapper(filter) {
   return getDateRange(filter, domElements.filterStartDate, domElements.filterEndDate);
 }
 
-
-
-
-
 function setupTabs() {
   console.log('Setting up tab navigation');
   const tabs = [
@@ -91,9 +87,14 @@ function setupTabs() {
     
     tabs.forEach(t => {
       const tabButton = domElements[`${t.id.replace('-', '')}Tab`];
+      const mobileTabButton = domElements[`${t.id.replace('-', '')}TabMobile`];
       if (tabButton) {
         tabButton.setAttribute('aria-selected', t.id === tabId);
         tabButton.classList.toggle('bg-blue-800', t.id === tabId);
+      }
+      if (mobileTabButton) {
+        mobileTabButton.setAttribute('aria-selected', t.id === tabId);
+        mobileTabButton.classList.toggle('bg-blue-800', t.id === tabId);
       }
     });
     
@@ -104,7 +105,7 @@ function setupTabs() {
     
     const menuItems = document.getElementById('menu-items');
     const menuToggle = document.getElementById('menu-toggle');
-    if (menuItems && menuToggle && window.matchMedia('(max-width: 768px)').matches) {
+    if (menuItems && menuToggle && window.matchMedia('(max-width: 1023px)').matches) {
       menuItems.classList.add('hidden');
       menuToggle.setAttribute('aria-expanded', 'false');
     }
@@ -113,11 +114,17 @@ function setupTabs() {
   function showDashboard() {
     console.log('Showing dashboard');
     domElements.dashboardTab?.classList.add('bg-blue-800');
+    domElements.dashboardTabMobile?.classList.add('bg-blue-800');
     domElements.transactionsTab?.classList.remove('bg-blue-800');
+    domElements.transactionsTabMobile?.classList.remove('bg-blue-800');
     domElements.budgetsTab?.classList.remove('bg-blue-800');
+    domElements.budgetsTabMobile?.classList.remove('bg-blue-800');
     domElements.categoriesTab?.classList.remove('bg-blue-800');
+    domElements.categoriesTabMobile?.classList.remove('bg-blue-800');
     domElements.childAccountsTab?.classList.remove('bg-blue-800');
+    domElements.childAccountsTabMobile?.classList.remove('bg-blue-800');
     domElements.profileTab?.classList.remove('bg-blue-800');
+    domElements.profileTabMobile?.classList.remove('bg-blue-800');
     domElements.dashboardSection?.classList.remove('hidden');
     domElements.transactionsSection?.classList.add('hidden');
     domElements.budgetsSection?.classList.add('hidden');
@@ -131,11 +138,17 @@ function setupTabs() {
   async function showTransactions() {
     console.log('Showing transactions');
     domElements.transactionsTab?.classList.add('bg-blue-800');
+    domElements.transactionsTabMobile?.classList.add('bg-blue-800');
     domElements.dashboardTab?.classList.remove('bg-blue-800');
+    domElements.dashboardTabMobile?.classList.remove('bg-blue-800');
     domElements.budgetsTab?.classList.remove('bg-blue-800');
+    domElements.budgetsTabMobile?.classList.remove('bg-blue-800');
     domElements.categoriesTab?.classList.remove('bg-blue-800');
+    domElements.categoriesTabMobile?.classList.remove('bg-blue-800');
     domElements.childAccountsTab?.classList.remove('bg-blue-800');
+    domElements.childAccountsTabMobile?.classList.remove('bg-blue-800');
     domElements.profileTab?.classList.remove('bg-blue-800');
+    domElements.profileTabMobile?.classList.remove('bg-blue-800');
     domElements.transactionsSection?.classList.remove('hidden');
     domElements.dashboardSection?.classList.add('hidden');
     domElements.budgetsSection?.classList.add('hidden');
@@ -152,11 +165,17 @@ function setupTabs() {
   async function showBudgets() {
     console.log('Showing budgets');
     domElements.budgetsTab?.classList.add('bg-blue-800');
+    domElements.budgetsTabMobile?.classList.add('bg-blue-800');
     domElements.dashboardTab?.classList.remove('bg-blue-800');
+    domElements.dashboardTabMobile?.classList.remove('bg-blue-800');
     domElements.transactionsTab?.classList.remove('bg-blue-800');
+    domElements.transactionsTabMobile?.classList.remove('bg-blue-800');
     domElements.categoriesTab?.classList.remove('bg-blue-800');
+    domElements.categoriesTabMobile?.classList.remove('bg-blue-800');
     domElements.childAccountsTab?.classList.remove('bg-blue-800');
+    domElements.childAccountsTabMobile?.classList.remove('bg-blue-800');
     domElements.profileTab?.classList.remove('bg-blue-800');
+    domElements.profileTabMobile?.classList.remove('bg-blue-800');
     domElements.budgetsSection?.classList.remove('hidden');
     domElements.dashboardSection?.classList.add('hidden');
     domElements.transactionsSection?.classList.add('hidden');
@@ -173,11 +192,17 @@ function setupTabs() {
   async function showCategories() {
     console.log('Showing categories');
     domElements.categoriesTab?.classList.add('bg-blue-800');
+    domElements.categoriesTabMobile?.classList.add('bg-blue-800');
     domElements.dashboardTab?.classList.remove('bg-blue-800');
+    domElements.dashboardTabMobile?.classList.remove('bg-blue-800');
     domElements.transactionsTab?.classList.remove('bg-blue-800');
+    domElements.transactionsTabMobile?.classList.remove('bg-blue-800');
     domElements.budgetsTab?.classList.remove('bg-blue-800');
+    domElements.budgetsTabMobile?.classList.remove('bg-blue-800');
     domElements.childAccountsTab?.classList.remove('bg-blue-800');
+    domElements.childAccountsTabMobile?.classList.remove('bg-blue-800');
     domElements.profileTab?.classList.remove('bg-blue-800');
+    domElements.profileTabMobile?.classList.remove('bg-blue-800');
     domElements.categoriesSection?.classList.remove('hidden');
     domElements.dashboardSection?.classList.add('hidden');
     domElements.transactionsSection?.classList.add('hidden');
@@ -190,11 +215,17 @@ function setupTabs() {
   async function showChildAccounts() {
     console.log('Showing child accounts');
     domElements.childAccountsTab?.classList.add('bg-blue-800');
+    domElements.childAccountsTabMobile?.classList.add('bg-blue-800');
     domElements.dashboardTab?.classList.remove('bg-blue-800');
+    domElements.dashboardTabMobile?.classList.remove('bg-blue-800');
     domElements.transactionsTab?.classList.remove('bg-blue-800');
+    domElements.transactionsTabMobile?.classList.remove('bg-blue-800');
     domElements.budgetsTab?.classList.remove('bg-blue-800');
+    domElements.budgetsTabMobile?.classList.remove('bg-blue-800');
     domElements.categoriesTab?.classList.remove('bg-blue-800');
+    domElements.categoriesTabMobile?.classList.remove('bg-blue-800');
     domElements.profileTab?.classList.remove('bg-blue-800');
+    domElements.profileTabMobile?.classList.remove('bg-blue-800');
     domElements.childAccountsSection?.classList.remove('hidden');
     domElements.dashboardSection?.classList.add('hidden');
     domElements.transactionsSection?.classList.add('hidden');
@@ -211,11 +242,17 @@ function setupTabs() {
   function showProfile() {
     console.log('Showing profile');
     domElements.profileTab?.classList.add('bg-blue-800');
+    domElements.profileTabMobile?.classList.add('bg-blue-800');
     domElements.dashboardTab?.classList.remove('bg-blue-800');
+    domElements.dashboardTabMobile?.classList.remove('bg-blue-800');
     domElements.transactionsTab?.classList.remove('bg-blue-800');
+    domElements.transactionsTabMobile?.classList.remove('bg-blue-800');
     domElements.budgetsTab?.classList.remove('bg-blue-800');
+    domElements.budgetsTabMobile?.classList.remove('bg-blue-800');
     domElements.categoriesTab?.classList.remove('bg-blue-800');
+    domElements.categoriesTabMobile?.classList.remove('bg-blue-800');
     domElements.childAccountsTab?.classList.remove('bg-blue-800');
+    domElements.childAccountsTabMobile?.classList.remove('bg-blue-800');
     domElements.profileSection?.classList.remove('hidden');
     domElements.dashboardSection?.classList.add('hidden');
     domElements.transactionsSection?.classList.add('hidden');
@@ -232,6 +269,12 @@ function setupTabs() {
   domElements.categoriesTab?.addEventListener('click', () => switchTab('categories'));
   domElements.childAccountsTab?.addEventListener('click', () => switchTab('child-accounts'));
   domElements.profileTab?.addEventListener('click', () => switchTab('profile'));
+  domElements.dashboardTabMobile?.addEventListener('click', () => switchTab('dashboard'));
+  domElements.transactionsTabMobile?.addEventListener('click', () => switchTab('transactions'));
+  domElements.budgetsTabMobile?.addEventListener('click', () => switchTab('budgets'));
+  domElements.categoriesTabMobile?.addEventListener('click', () => switchTab('categories'));
+  domElements.childAccountsTabMobile?.addEventListener('click', () => switchTab('child-accounts'));
+  domElements.profileTabMobile?.addEventListener('click', () => switchTab('profile'));
 
   const menuToggle = document.getElementById('menu-toggle');
   const menuItems = document.getElementById('menu-items');
@@ -245,7 +288,7 @@ function setupTabs() {
   }
 
   const swipeContainer = document.getElementById('swipeable-tabs');
-  if (swipeContainer && window.matchMedia('(max-width: 768px)').matches) {
+  if (swipeContainer && window.matchMedia('(max-width: 1023px)').matches) {
     let touchStartX = 0;
     let touchStartY = 0;
     const minSwipeDistance = 50;
@@ -276,7 +319,7 @@ function setupTabs() {
         return;
       }
 
-      event.preventDefault(); // Prevent browser navigation for valid swipes
+      event.preventDefault();
 
       if (deltaX < 0 && currentTabIndex < tabs.length - 1) {
         console.log('Left swipe detected, moving to next tab:', tabs[currentTabIndex + 1].id);
@@ -294,7 +337,6 @@ function setupTabs() {
 
   switchTab('dashboard');
 }
-
 
 // Profile Management
 async function setupProfile() {
@@ -471,12 +513,14 @@ async function loadCategories() {
     }
 
     const categorySelect = document.getElementById('category');
+    const newCategorySelect = document.getElementById('new-transaction-category');
     const categoryBudgetSelect = document.getElementById('category-budget-select');
     const newCategoryBudgetSelect = document.getElementById('new-category-budget');
     const categoryTable = document.getElementById('category-table');
-    if (!categorySelect || !categoryBudgetSelect || !categoryTable) {
+    if (!categorySelect || !newCategorySelect || !categoryBudgetSelect || !categoryTable) {
       console.error('loadCategories: Missing DOM elements', {
         categorySelect: !!categorySelect,
+        newCategorySelect: !!newCategorySelect,
         categoryBudgetSelect: !!categoryBudgetSelect,
         categoryTable: !!categoryTable
       });
@@ -485,6 +529,7 @@ async function loadCategories() {
     }
 
     categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
+    newCategorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
     categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
     if (newCategoryBudgetSelect) {
       newCategoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
@@ -549,6 +594,7 @@ async function loadCategories() {
       option.value = doc.id;
       option.textContent = category.name;
       categorySelect.insertBefore(option, categorySelect.querySelector('option[value="add-new"]'));
+      newCategorySelect.insertBefore(option.cloneNode(true), newCategorySelect.querySelector('option[value="add-new"]'));
 
       const tr = document.createElement('tr');
       tr.classList.add('table-row');
@@ -584,13 +630,15 @@ async function setupCategories() {
   try {
     const addCategory = document.getElementById('add-category');
     const categorySelect = document.getElementById('category');
+    const newCategorySelect = document.getElementById('new-transaction-category');
     const saveCategory = document.getElementById('save-category');
     const cancelCategory = document.getElementById('cancel-category');
     const categoryTable = document.getElementById('category-table');
-    if (!addCategory || !categorySelect || !saveCategory || !cancelCategory || !categoryTable) {
+    if (!addCategory || !categorySelect || !newCategorySelect || !saveCategory || !cancelCategory || !categoryTable) {
       console.error('setupCategories: Missing DOM elements', {
         addCategory: !!addCategory,
         categorySelect: !!categorySelect,
+        newCategorySelect: !!newCategorySelect,
         saveCategory: !!saveCategory,
         cancelCategory: !!cancelCategory,
         categoryTable: !!categoryTable
@@ -676,6 +724,20 @@ async function setupCategories() {
         } else {
           console.error('categorySelect: Add category modal not found');
           showError('category', 'Add category modal not found');
+        }
+      }
+    });
+
+    newCategorySelect.addEventListener('change', () => {
+      console.log('newCategorySelect: Changed', { value: newCategorySelect.value });
+      if (newCategorySelect.value === 'add-new') {
+        if (domElements.addCategoryModal) {
+          domElements.addCategoryModal.classList.remove('hidden');
+          newCategorySelect.value = '';
+          console.log('newCategorySelect: Opened add category modal');
+        } else {
+          console.error('newCategorySelect: Add category modal not found');
+          showError('new-transaction-category', 'Add category modal not found');
         }
       }
     });
@@ -1015,7 +1077,8 @@ async function loadBudgets() {
         `;
         tableFragment.appendChild(tr);
         const tile = document.createElement('div');
-        tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
+        tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile', 'cursor-pointer');
+        tile.dataset.id = doc.id;
         const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
         tile.innerHTML = `
           <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
@@ -1068,15 +1131,21 @@ async function setupBudgets() {
   const saveBudget = document.getElementById('save-budget');
   const cancelBudget = document.getElementById('cancel-budget');
   const budgetTable = document.getElementById('budget-table');
+  const budgetTiles = document.getElementById('budget-tiles');
+  const saveEditBudget = document.getElementById('save-edit-budget');
+  const cancelEditBudget = document.getElementById('cancel-edit-budget');
 
-  if (!addBudget || !saveBudget || !cancelBudget || !budgetTable) {
+  if (!addBudget || !saveBudget || !cancelBudget || !budgetTable || !budgetTiles || !saveEditBudget || !cancelEditBudget) {
     console.error('setupBudgets: Missing DOM elements', {
       addBudget: !!addBudget,
       saveBudget: !!saveBudget,
       cancelBudget: !!cancelBudget,
-      budgetTable: !!budgetTable
+      budgetTable: !!budgetTable,
+      budgetTiles: !!budgetTiles,
+      saveEditBudget: !!saveEditBudget,
+      cancelEditBudget: !!cancelEditBudget
     });
-    showError('budget-name', 'Budget form or table not found');
+    showError('budget-name', 'Budget form, table, tiles, or edit modal not found');
     return;
   }
 
@@ -1398,6 +1467,93 @@ async function setupBudgets() {
         domElements.cancelDelete.addEventListener('click', cancelHandler, { once: true });
       }
     }
+  });
+
+  budgetTiles.addEventListener('click', async (e) => {
+    const tile = e.target.closest('.budget-tile');
+    if (!tile || !tile.dataset.id || currentAccountType !== 'admin') return;
+    const id = tile.dataset.id;
+    console.log('budgetTile: Clicked', { id });
+    try {
+      const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'budgets', id)));
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const nameInput = document.getElementById('edit-budget-name');
+        const amountInput = document.getElementById('edit-budget-amount');
+        const idInput = document.getElementById('edit-budget-id');
+        if (!nameInput || !amountInput || !idInput) {
+          console.error('budgetTile: Missing edit modal elements');
+          showError('edit-budget-name', 'Edit form not found');
+          return;
+        }
+        nameInput.value = data.name;
+        amountInput.value = data.amount;
+        idInput.value = id;
+        domElements.editBudgetModal.classList.remove('hidden');
+      }
+    } catch (error) {
+      console.error('budgetTile: Error fetching budget', error);
+      showError('edit-budget-name', `Failed to fetch budget: ${error.message}`);
+    }
+  });
+
+  saveEditBudget.addEventListener('click', async () => {
+    console.log('saveEditBudget: Clicked');
+    clearErrors();
+    const nameInput = document.getElementById('edit-budget-name');
+    const amountInput = document.getElementById('edit-budget-amount');
+    const idInput = document.getElementById('edit-budget-id');
+    if (!nameInput || !amountInput || !idInput) {
+      console.error('saveEditBudget: Missing modal input elements');
+      showError('edit-budget-name', 'Modal form inputs not found');
+      return;
+    }
+    const name = nameInput.value.trim();
+    const amountRaw = amountInput.value.trim();
+    const amount = parseFloat(amountRaw);
+    const id = idInput.value;
+
+    if (!name) {
+      showError('edit-budget-name', 'Budget name is required');
+      return;
+    }
+    if (!amountRaw || isNaN(amount) || amount <= 0) {
+      showError('edit-budget-amount', 'Valid positive amount is required');
+      return;
+    }
+    if (!id) {
+      showError('edit-budget-name', 'Invalid budget ID');
+      return;
+    }
+    try {
+      saveEditBudget.disabled = true;
+      saveEditBudget.textContent = 'Updating...';
+      await retryFirestoreOperation(() => 
+        updateDoc(doc(db, 'budgets', id), { name, amount })
+      );
+      clearTransactionCache();
+      console.log('saveEditBudget: Budget updated', { id, name, amount });
+      domElements.editBudgetModal.classList.add('hidden');
+      nameInput.value = '';
+      amountInput.value = '';
+      idInput.value = '';
+      await loadBudgets();
+      await loadCategories();
+    } catch (error) {
+      console.error('saveEditBudget: Error updating budget', error);
+      showError('edit-budget-name', `Failed to update budget: ${error.message}`);
+    } finally {
+      saveEditBudget.disabled = false;
+      saveEditBudget.textContent = 'Save';
+    }
+  });
+
+  cancelEditBudget.addEventListener('click', () => {
+    console.log('cancelEditBudget: Clicked');
+    domElements.editBudgetModal.classList.add('hidden');
+    document.getElementById('edit-budget-name').value = '';
+    document.getElementById('edit-budget-amount').value = '';
+    document.getElementById('edit-budget-id').value = '';
   });
 }
 
