@@ -1539,6 +1539,7 @@ async function setupBudgets() {
       idInput.value = '';
       await loadBudgets();
       await loadCategories();
+      await updateDashboard();
     } catch (error) {
       console.error('saveEditBudget: Error updating budget', error);
       showError('edit-budget-name', `Failed to update budget: ${error.message}`);
@@ -1555,7 +1556,59 @@ async function setupBudgets() {
     document.getElementById('edit-budget-amount').value = '';
     document.getElementById('edit-budget-id').value = '';
   });
+
+  // Add delete button functionality in edit modal
+  const deleteBudgetButton = document.createElement('button');
+  deleteBudgetButton.id = 'delete-budget-modal';
+  deleteBudgetButton.type = 'button';
+  deleteBudgetButton.className = 'bg-red-600 text-white p-3 rounded-lg hover:bg-red-700 transition';
+  deleteBudgetButton.textContent = 'Delete';
+  const modalActions = domElements.editBudgetModal.querySelector('.flex.justify-end');
+  modalActions.insertBefore(deleteBudgetButton, cancelEditBudget);
+
+  deleteBudgetButton.addEventListener('click', async () => {
+    console.log('deleteBudgetModal: Clicked');
+    const idInput = document.getElementById('edit-budget-id');
+    const id = idInput.value;
+    if (!id) {
+      showError('edit-budget-name', 'Invalid budget ID');
+      return;
+    }
+    if (domElements.deleteConfirmModal && db) {
+      domElements.deleteConfirmMessage.textContent = 'Are you sure you want to delete this budget?';
+      domElements.deleteConfirmModal.classList.remove('hidden');
+      domElements.editBudgetModal.classList.add('hidden');
+      const confirmHandler = async () => {
+        try {
+          await retryFirestoreOperation(() => deleteDoc(doc(db, 'budgets', id)));
+          clearTransactionCache();
+          console.log('deleteBudgetModal: Budget deleted', { id });
+          await loadBudgets();
+          await loadCategories();
+          await updateDashboard();
+          domElements.deleteConfirmModal.classList.add('hidden');
+        } catch (error) {
+          console.error('deleteBudgetModal: Error deleting budget', error);
+          showError('edit-budget-name', `Failed to delete budget: ${error.message}`);
+        }
+        domElements.confirmDelete.removeEventListener('click', confirmHandler);
+      };
+      const cancelHandler = () => {
+        console.log('deleteBudgetModal: Cancelled');
+        domElements.deleteConfirmModal.classList.add('hidden');
+        domElements.cancelDelete.removeEventListener('click', cancelHandler);
+      };
+      domElements.confirmDelete.addEventListener('click', confirmHandler, { once: true });
+      domElements.cancelDelete.addEventListener('click', cancelHandler, { once: true });
+    }
+  });
 }
+
+
+
+
+
+
 
 async function loadTransactions() {
   console.log('loadTransactions: Starting', { familyCode });
