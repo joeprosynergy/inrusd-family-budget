@@ -1728,6 +1728,10 @@ async function loadTransactions() {
   }
 }
 
+
+
+
+
 async function setupTransactions() {
   console.log('setupTransactions: Starting');
   try {
@@ -1738,14 +1742,13 @@ async function setupTransactions() {
     const transactionsFilter = document.getElementById('transactions-filter');
 
     if (!addTransaction || !saveTransaction || !cancelTransaction || !transactionTable || !transactionsFilter) {
-      console.error('setupTransactions: Missing DOM elements', {
+      console.warn('setupTransactions: Missing DOM elements, skipping setup', {
         addTransaction: !!addTransaction,
         saveTransaction: !!saveTransaction,
         cancelTransaction: !!cancelTransaction,
         transactionTable: !!transactionTable,
         transactionsFilter: !!transactionsFilter
       });
-      showError('category', 'Transaction form, table, or filter not found');
       return;
     }
 
@@ -1763,6 +1766,7 @@ async function setupTransactions() {
       const descriptionInput = document.getElementById('description');
       const dateInput = document.getElementById('transaction-date');
       if (!typeInput || !amountInput || !categoryInput || !descriptionInput || !dateInput) {
+        console.error('addTransaction: Missing form elements');
         showError('category', 'Form elements not found');
         return;
       }
@@ -1784,7 +1788,8 @@ async function setupTransactions() {
         return;
       }
       if (!currentUser || !db) {
-        showError('category', 'Database service not available');
+        console.error('addTransaction: Missing user or Firestore');
+        showError('category', 'User not authenticated or database unavailable');
         return;
       }
       try {
@@ -1821,6 +1826,7 @@ async function setupTransactions() {
         await loadTransactions();
         await updateDashboard();
       } catch (error) {
+        console.error('addTransaction error:', { code: error.code, message: error.message });
         showError('category', `Failed to add transaction: ${error.message}`);
       } finally {
         addTransaction.disabled = false;
@@ -1837,7 +1843,8 @@ async function setupTransactions() {
       const descriptionInput = document.getElementById('new-transaction-description');
       const dateInput = document.getElementById('new-transaction-date');
       if (!typeInput || !amountInput || !categoryInput || !descriptionInput || !dateInput) {
-        showError('new-transaction-category', 'Form elements not found');
+        console.error('saveTransaction: Missing modal form elements');
+        showError('new-transaction-category', 'Modal form elements not found');
         return;
       }
       const type = typeInput.value;
@@ -1858,7 +1865,8 @@ async function setupTransactions() {
         return;
       }
       if (!currentUser || !db) {
-        showError('new-transaction-category', 'Database service not available');
+        console.error('saveTransaction: Missing user or Firestore');
+        showError('new-transaction-category', 'User not authenticated or database unavailable');
         return;
       }
       try {
@@ -1895,6 +1903,7 @@ async function setupTransactions() {
         await loadTransactions();
         await updateDashboard();
       } catch (error) {
+        console.error('saveTransaction error:', { code: error.code, message: error.message });
         showError('new-transaction-category', `Failed to add transaction: ${error.message}`);
       } finally {
         saveTransaction.disabled = false;
@@ -1931,13 +1940,7 @@ async function setupTransactions() {
             const descriptionInput = document.getElementById('description');
             const dateInput = document.getElementById('transaction-date');
             if (!typeInput || !amountInput || !categoryInput || !descriptionInput || !dateInput) {
-              console.error('editTransaction: Missing form elements', {
-                typeInput: !!typeInput,
-                amountInput: !!amountInput,
-                categoryInput: !!categoryInput,
-                descriptionInput: !!descriptionInput,
-                dateInput: !!dateInput
-              });
+              console.error('editTransaction: Missing form elements');
               showError('category', 'Form elements not found');
               return;
             }
@@ -2031,6 +2034,7 @@ async function setupTransactions() {
                 await loadTransactions();
                 await updateDashboard();
               } catch (error) {
+                console.error('editTransaction error:', { code: error.code, message: error.message });
                 showError('category', `Failed to update transaction: ${error.message}`);
               } finally {
                 addTransaction.disabled = false;
@@ -2046,11 +2050,7 @@ async function setupTransactions() {
             showError('category', 'Transaction not found');
           }
         } catch (error) {
-          console.error('editTransaction error:', {
-            code: error.code,
-            message: error.message,
-            stack: error.stack
-          });
+          console.error('editTransaction error:', { code: error.code, message: error.message });
           showError('category', `Failed to fetch transaction: ${error.message}`);
         }
       }
@@ -2058,10 +2058,7 @@ async function setupTransactions() {
         console.log('deleteTransaction: Clicked', { id: e.target.dataset.id });
         const id = e.target.dataset.id;
         if (!domElements.deleteConfirmModal || !db) {
-          console.error('deleteTransaction: Missing modal or Firestore', {
-            deleteConfirmModal: !!domElements.deleteConfirmModal,
-            db: !!db
-          });
+          console.error('deleteTransaction: Missing modal or Firestore');
           showError('category', 'Cannot delete: Missing components');
           return;
         }
@@ -2093,6 +2090,7 @@ async function setupTransactions() {
               showError('category', 'Transaction not found');
             }
           } catch (error) {
+            console.error('deleteTransaction error:', { code: error.code, message: error.message });
             showError('category', `Failed to delete transaction: ${error.message}`);
           }
           domElements.confirmDelete.removeEventListener('click', confirmHandler);
@@ -2132,11 +2130,10 @@ async function loadChildAccounts() {
     const childSelector = document.getElementById('child-selector');
     const childUserIdSelect = document.getElementById('child-user-id');
     if (!childSelector || !childUserIdSelect) {
-      console.error('loadChildAccounts: Missing DOM elements', {
+      console.warn('loadChildAccounts: Missing DOM elements, skipping', {
         childSelector: !!childSelector,
         childUserIdSelect: !!childUserIdSelect
       });
-      showError('child-user-id', 'Child selector not found');
       return;
     }
 
@@ -2170,11 +2167,7 @@ async function loadChildAccounts() {
           }
         });
       } catch (error) {
-        console.error('loadChildAccounts: Failed to fetch child users', {
-          code: error.code,
-          message: error.message,
-          stack: error.stack
-        });
+        console.error('loadChildAccounts: Failed to fetch child users', { code: error.code, message: error.message });
         childUserIdSelect.innerHTML = '<option value="">Error loading children</option>';
         showError('child-user-id', `Failed to load child accounts: ${error.message}`);
         return;
@@ -2195,10 +2188,6 @@ async function loadChildAccounts() {
       stack: error.stack
     });
     showError('child-user-id', `Failed to load child accounts: ${error.message}`);
-    const childUserIdSelect = document.getElementById('child-user-id');
-    if (childUserIdSelect) {
-      childUserIdSelect.innerHTML = '<option value="">Error loading children</option>';
-    }
   }
 }
 
@@ -2226,12 +2215,11 @@ async function loadChildTransactions() {
     const childBalance = document.getElementById('child-balance');
     const dateHeader = document.getElementById('child-transaction-date-header');
     if (!childTransactionTable || !childBalance || !dateHeader) {
-      console.error('loadChildTransactions: Missing DOM elements', {
+      console.warn('loadChildTransactions: Missing DOM elements, skipping', {
         childTransactionTable: !!childTransactionTable,
         childBalance: !!childBalance,
         dateHeader: !!dateHeader
       });
-      showError('child-transaction-description', 'Transaction table, balance, or date header not found');
       return;
     }
 
@@ -2296,11 +2284,7 @@ async function loadChildTransactions() {
         childBalance.textContent = await formatCurrency(totalBalance, 'INR');
       });
     } catch (error) {
-      console.error('loadChildTransactions error:', {
-        code: error.code,
-        message: error.message,
-        stack: error.stack
-      });
+      console.error('loadChildTransactions error:', { code: error.code, message: error.message });
       showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
       childTransactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
       childBalance.textContent = '₹0';
@@ -2312,14 +2296,6 @@ async function loadChildTransactions() {
       stack: error.stack
     });
     showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
-    const table = document.getElementById('child-transaction-table');
-    if (table) {
-      table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-    }
-    const balance = document.getElementById('child-balance');
-    if (balance) {
-      balance.textContent = '₹0';
-    }
   }
 }
 
@@ -2363,22 +2339,14 @@ async function loadChildTiles() {
             });
             childBalances.set(userId, { email, balance });
           } catch (error) {
-            console.warn('loadChildTiles: No transactions for child', {
-              userId,
-              email,
-              error: error.message
-            });
+            console.warn('loadChildTiles: No transactions for child', { userId, email, error: error.message });
             childBalances.set(userId, { email, balance: 0 });
           }
         });
         return Promise.all(promises);
       });
     } catch (error) {
-      console.error('loadChildTiles: Failed to fetch child users', {
-        code: error.code,
-        message: error.message,
-        stack: error.stack
-      });
+      console.error('loadChildTiles: Failed to fetch child users', { code: error.code, message: error.message });
       childTiles.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
       showError('child-tiles', `Failed to load child balances: ${error.message}`);
       return;
@@ -2422,12 +2390,11 @@ async function setupChildAccounts() {
     const childTransactionTable = document.getElementById('child-transaction-table');
     const childUserId = document.getElementById('child-user-id');
     if (!addChildTransaction || !childTransactionTable || !childUserId) {
-      console.error('setupChildAccounts: Missing DOM elements', {
+      console.warn('setupChildAccounts: Missing DOM elements, skipping', {
         addChildTransaction: !!addChildTransaction,
         childTransactionTable: !!childTransactionTable,
         childUserId: !!childUserId
       });
-      showError('child-transaction-description', 'Child transaction form or table not found');
       return;
     }
 
@@ -2466,11 +2433,7 @@ async function setupChildAccounts() {
         const amountInput = document.getElementById('child-transaction-amount');
         const descriptionInput = document.getElementById('child-transaction-description');
         if (!typeInput || !amountInput || !descriptionInput) {
-          console.error('addChildTransaction: Missing form elements', {
-            typeInput: !!typeInput,
-            amountInput: !!amountInput,
-            descriptionInput: !!descriptionInput
-          });
+          console.error('addChildTransaction: Missing form elements');
           showError('child-transaction-description', 'Form elements not found');
           isProcessing = false;
           return;
@@ -2493,11 +2456,8 @@ async function setupChildAccounts() {
           return;
         }
         if (!currentUser || !db) {
-          console.error('addChildTransaction: Missing user or Firestore', {
-            currentUser: !!currentUser,
-            db: !!db
-          });
-          showError('child-transaction-description', 'Database service not available');
+          console.error('addChildTransaction: Missing user or Firestore');
+          showError('child-transaction-description', 'User not authenticated or database unavailable');
           isProcessing = false;
           return;
         }
@@ -2531,12 +2491,7 @@ async function setupChildAccounts() {
             writeSuccess = true;
             break;
           } catch (error) {
-            console.error('addChildTransaction: Write attempt failed', {
-              attempt,
-              code: error.code,
-              message: error.message,
-              stack: error.stack
-            });
+            console.error('addChildTransaction: Write attempt failed', { attempt, code: error.code, message: error.message });
             if (attempt < 3) {
               console.log('addChildTransaction: Retrying after delay');
               await new Promise(resolve => setTimeout(resolve, 1000));
@@ -2582,11 +2537,7 @@ async function setupChildAccounts() {
             const amountInput = document.getElementById('child-transaction-amount');
             const descriptionInput = document.getElementById('child-transaction-description');
             if (!typeInput || !amountInput || !descriptionInput) {
-              console.error('editChildTransaction: Missing form elements', {
-                typeInput: !!typeInput,
-                amountInput: !!amountInput,
-                descriptionInput: !!descriptionInput
-              });
+              console.error('editChildTransaction: Missing form elements');
               showError('child-transaction-description', 'Form elements not found');
               return;
             }
@@ -2624,11 +2575,7 @@ async function setupChildAccounts() {
                 await loadChildTransactions();
                 await loadChildTiles();
               } catch (error) {
-                console.error('editChildTransaction error:', {
-                  code: error.code,
-                  message: error.message,
-                  stack: error.stack
-                });
+                console.error('editChildTransaction error:', { code: error.code, message: error.message });
                 showError('child-transaction-description', `Failed to update transaction: ${error.message}`);
               } finally {
                 addChildTransaction.disabled = false;
@@ -2644,11 +2591,7 @@ async function setupChildAccounts() {
             showError('child-transaction-description', 'Transaction not found');
           }
         } catch (error) {
-          console.error('editChildTransaction error:', {
-            code: error.code,
-            message: error.message,
-            stack: error.stack
-          });
+          console.error('editChildTransaction error:', { code: error.code, message: error.message });
           showError('child-transaction-description', `Failed to fetch transaction: ${error.message}`);
         }
       }
@@ -2656,10 +2599,7 @@ async function setupChildAccounts() {
         console.log('deleteChildTransaction: Clicked', { id: e.target.dataset.id });
         const id = e.target.dataset.id;
         if (!domElements.deleteConfirmModal || !db) {
-          console.error('deleteChildTransaction: Missing modal or Firestore', {
-            deleteConfirmModal: !!domElements.deleteConfirmModal,
-            db: !!db
-          });
+          console.error('deleteChildTransaction: Missing modal or Firestore');
           showError('child-transaction-description', 'Cannot delete: Missing components');
           return;
         }
@@ -2674,11 +2614,7 @@ async function setupChildAccounts() {
             await loadChildTiles();
             domElements.deleteConfirmModal.classList.add('hidden');
           } catch (error) {
-            console.error('deleteChildTransaction error:', {
-              code: error.code,
-              message: error.message,
-              stack: error.stack
-            });
+            console.error('deleteChildTransaction error:', { code: error.code, message: error.message });
             showError('child-transaction-description', `Failed to delete transaction: ${error.message}`);
           }
           domElements.confirmDelete.removeEventListener('click', confirmHandler);
@@ -2707,7 +2643,7 @@ async function setupChildAccounts() {
         }
         const balance = document.getElementById('child-balance');
         if (balance) {
-          return '₹0';
+          balance.textContent = '₹0';
         }
       }
     });
@@ -2782,14 +2718,13 @@ async function updateDashboard() {
     const totalRemainingElement = document.getElementById('total-remaining');
     const childTilesElement = document.getElementById('child-tiles');
     if (!balanceElement || !afterBudgetElement || !totalBudgetElement || !totalRemainingElement || !childTilesElement) {
-      console.error('updateDashboard: Missing DOM elements', {
+      console.warn('updateDashboard: Missing DOM elements, skipping', {
         balanceElement: !!balanceElement,
         afterBudgetElement: !!afterBudgetElement,
         totalBudgetElement: !!totalBudgetElement,
         totalRemainingElement: !!totalRemainingElement,
         childTilesElement: !!childTilesElement
       });
-      showError('balance', 'Dashboard elements not found');
       return;
     }
 
@@ -2815,8 +2750,7 @@ async function updateDashboard() {
       childTilesElement.offsetHeight;
       console.log('updateDashboard: Child tiles element updated', {
         display: childTilesElement.style.display,
-        childCount: childTilesElement.children.length,
-        innerHTML: childTilesElement.innerHTML.substring(0, 100) + '...'
+        childCount: childTilesElement.children.length
       });
 
       if (balanceElement.parentElement) {
@@ -2903,11 +2837,7 @@ async function updateDashboard() {
                   debitAmount: debitTotal
                 });
               } catch (error) {
-                console.error('updateDashboard: Failed to fetch debit transactions', {
-                  budgetId: doc.id,
-                  code: error.code,
-                  message: error.message
-                });
+                console.error('updateDashboard: Failed to fetch debit transactions', { budgetId: doc.id, code: error.code, message: error.message });
               }
 
               const creditQuery = query(
@@ -2928,11 +2858,7 @@ async function updateDashboard() {
                   creditAmount: creditTotal
                 });
               } catch (error) {
-                console.error('updateDashboard: Failed to fetch credit transactions', {
-                  budgetId: doc.id,
-                  code: error.code,
-                  message: error.message
-                });
+                console.error('updateDashboard: Failed to fetch credit transactions', { budgetId: doc.id, code: error.code, message: error.message });
               }
             }
             totalSpent += debitTotal - creditTotal;
@@ -2997,7 +2923,7 @@ async function setupLogout() {
           console.log('logoutButton: Clicked', { authAvailable: !!auth });
           try {
             if (!auth) {
-              console.error('logoutButton: Firebase auth not available', { auth });
+              console.error('logoutButton: Firebase auth not available');
               showError('page-title', 'Authentication service not available');
               return;
             }
@@ -3012,12 +2938,7 @@ async function setupLogout() {
                 signOutSuccess = true;
                 break;
               } catch (error) {
-                console.error('logoutButton: Sign out attempt failed', {
-                  attempt,
-                  code: error.code,
-                  message: error.message,
-                  stack: error.stack
-                });
+                console.error('logoutButton: Sign out attempt failed', { attempt, code: error.code, message: error.message });
                 if (attempt < 3) {
                   await new Promise(resolve => setTimeout(resolve, 1000));
                 }
@@ -3029,15 +2950,15 @@ async function setupLogout() {
               currentChildUserId = null;
               currentAccountType = null;
 
-              const loginSection = document.getElementById('login-section');
+              const loginSection = document.getElementById('auth-section'); // Changed to auth-section to match index.html
               const appSection = document.getElementById('app-section');
               const pageTitle = document.getElementById('page-title');
 
               if (loginSection) {
                 loginSection.classList.remove('hidden');
-                console.log('logoutButton: login-section shown');
+                console.log('logoutButton: auth-section shown');
               } else {
-                console.warn('logoutButton: login-section not found');
+                console.warn('logoutButton: auth-section not found');
               }
               if (appSection) {
                 appSection.classList.add('hidden');
@@ -3062,11 +2983,7 @@ async function setupLogout() {
               showError('page-title', 'Failed to log out: Connectivity issue');
             }
           } catch (error) {
-            console.error('logoutButton: Error', {
-              code: error.code,
-              message: error.message,
-              stack: error.stack
-            });
+            console.error('logoutButton: Error', { code: error.code, message: error.message });
             showError('page-title', `Failed to log out: ${error.message}`);
           } finally {
             logoutButton.disabled = false;
@@ -3075,11 +2992,7 @@ async function setupLogout() {
         });
         console.log('setupLogout: Event listener added');
       } catch (error) {
-        console.error('setupLogout: Error attaching listener', {
-          code: error.code,
-          message: error.message,
-          stack: error.stack
-        });
+        console.error('setupLogout: Error attaching listener', { code: error.code, message: error.message });
       }
     } else if (attempts >= maxAttempts) {
       clearInterval(pollInterval);
@@ -3097,7 +3010,7 @@ function setupAddItemButton() {
   const addCategoryMenu = document.getElementById('add-category-menu');
 
   if (!addItemButton || !addItemMenu || !addTransactionMenu || !addBudgetMenu || !addCategoryMenu) {
-    console.error('setupAddItemButton: Missing DOM elements', {
+    console.warn('setupAddItemButton: Missing DOM elements, skipping', {
       addItemButton: !!addItemButton,
       addItemMenu: !!addItemMenu,
       addTransactionMenu: !!addTransactionMenu,
@@ -3118,6 +3031,7 @@ function setupAddItemButton() {
     addItemMenu.classList.add('hidden');
     if (domElements.addTransactionModal) {
       domElements.addTransactionModal.classList.remove('hidden');
+      console.log('addTransactionMenu: Transaction modal opened');
     } else {
       console.error('addTransactionMenu: Transaction modal not found');
       showError('new-transaction-category', 'Transaction modal not found');
@@ -3133,6 +3047,7 @@ function setupAddItemButton() {
     addItemMenu.classList.add('hidden');
     if (domElements.addBudgetModal) {
       domElements.addBudgetModal.classList.remove('hidden');
+      console.log('addBudgetMenu: Budget modal opened');
     } else {
       console.error('addBudgetMenu: Budget modal not found');
       showError('new-budget-name', 'Budget modal not found');
@@ -3144,6 +3059,7 @@ function setupAddItemButton() {
     addItemMenu.classList.add('hidden');
     if (domElements.addCategoryModal) {
       domElements.addCategoryModal.classList.remove('hidden');
+      console.log('addCategoryMenu: Category modal opened');
     } else {
       console.error('addCategoryMenu: Category modal not found');
       showError('new-category-name', 'Category modal not found');
@@ -3162,7 +3078,12 @@ function setupAddItemButton() {
 async function initApp() {
   console.log('initApp: Starting');
   try {
-    if (currentUser && currentAccountType === 'admin' && db && familyCode) {
+    if (!currentUser) {
+      console.log('initApp: No user logged in, skipping app initialization');
+      return;
+    }
+
+    if (currentAccountType === 'admin' && db && familyCode) {
       console.log('initApp: Checking budget reset for admin');
       await resetBudgetsForNewMonth(db, familyCode);
       console.log('initApp: Budget reset check complete');
