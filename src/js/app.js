@@ -1734,6 +1734,10 @@ async function loadTransactions() {
 
 async function setupTransactions() {
   console.log('setupTransactions: Starting');
+  if (!currentUser) {
+    console.warn('setupTransactions: No authenticated user, skipping');
+    return;
+  }
   try {
     const addTransaction = document.getElementById('add-transaction');
     const saveTransaction = document.getElementById('save-transaction');
@@ -1913,7 +1917,9 @@ async function setupTransactions() {
 
     cancelTransaction.addEventListener('click', () => {
       console.log('cancelTransaction: Clicked');
-      domElements.addTransactionModal.classList.add('hidden');
+      if (domElements.addTransactionModal) {
+        domElements.addTransactionModal.classList.add('hidden');
+      }
       document.getElementById('new-transaction-type').value = 'debit';
       document.getElementById('new-transaction-amount').value = '';
       document.getElementById('new-transaction-category').value = '';
@@ -1925,9 +1931,9 @@ async function setupTransactions() {
       if (e.target.classList.contains('edit-transaction')) {
         console.log('editTransaction: Clicked', { id: e.target.dataset.id });
         const id = e.target.dataset.id;
-        if (!db) {
-          console.error('editTransaction: Firestore not available');
-          showError('category', 'Database service not available');
+        if (!db || !currentUser) {
+          console.error('editTransaction: Firestore or user not available');
+          showError('category', 'User not authenticated or database unavailable');
           return;
         }
         try {
@@ -2057,9 +2063,9 @@ async function setupTransactions() {
       if (e.target.classList.contains('delete-transaction')) {
         console.log('deleteTransaction: Clicked', { id: e.target.dataset.id });
         const id = e.target.dataset.id;
-        if (!domElements.deleteConfirmModal || !db) {
-          console.error('deleteTransaction: Missing modal or Firestore');
-          showError('category', 'Cannot delete: Missing components');
+        if (!domElements.deleteConfirmModal || !db || !currentUser) {
+          console.error('deleteTransaction: Missing modal, Firestore, or user');
+          showError('category', 'Cannot delete: Missing components or user not authenticated');
           return;
         }
         domElements.deleteConfirmMessage.textContent = 'Are you sure you want to delete this transaction?';
@@ -2116,10 +2122,13 @@ async function setupTransactions() {
 
 async function loadChildAccounts() {
   console.log('loadChildAccounts: Starting', { familyCode, accountType: currentAccountType });
+  if (!currentUser) {
+    console.warn('loadChildAccounts: No authenticated user, skipping');
+    return;
+  }
   try {
-    if (!currentUser || !db || !familyCode) {
-      console.error('loadChildAccounts: Missing user, Firestore, or familyCode', {
-        currentUser: !!currentUser,
+    if (!db || !familyCode) {
+      console.error('loadChildAccounts: Firestore or familyCode not available', {
         db: !!db,
         familyCode
       });
@@ -2193,6 +2202,10 @@ async function loadChildAccounts() {
 
 async function loadChildTransactions() {
   console.log('loadChildTransactions: Starting for user:', currentChildUserId);
+  if (!currentUser) {
+    console.warn('loadChildTransactions: No authenticated user, skipping');
+    return;
+  }
   try {
     if (!db || !currentChildUserId) {
       console.error('loadChildTransactions: Firestore or user ID not available', {
@@ -2301,6 +2314,10 @@ async function loadChildTransactions() {
 
 async function loadChildTiles() {
   console.log('loadChildTiles: Starting');
+  if (!currentUser) {
+    console.warn('loadChildTiles: No authenticated user, skipping');
+    return;
+  }
   try {
     if (!db || !familyCode) {
       console.error('loadChildTiles: Firestore or familyCode not available', { db: !!db, familyCode });
@@ -2385,6 +2402,10 @@ async function loadChildTiles() {
 
 async function setupChildAccounts() {
   console.log('setupChildAccounts: Starting');
+  if (!currentUser) {
+    console.warn('setupChildAccounts: No authenticated user, skipping');
+    return;
+  }
   try {
     const addChildTransaction = document.getElementById('add-child-transaction');
     const childTransactionTable = document.getElementById('child-transaction-table');
@@ -2523,9 +2544,9 @@ async function setupChildAccounts() {
       if (e.target.classList.contains('edit-child-transaction')) {
         console.log('editChildTransaction: Clicked', { id: e.target.dataset.id });
         const id = e.target.dataset.id;
-        if (!db) {
-          console.error('editChildTransaction: Firestore not available');
-          showError('child-transaction-description', 'Database service not available');
+        if (!db || !currentUser) {
+          console.error('editChildTransaction: Firestore or user not available');
+          showError('child-transaction-description', 'User not authenticated or database unavailable');
           return;
         }
         try {
@@ -2598,9 +2619,9 @@ async function setupChildAccounts() {
       if (e.target.classList.contains('delete-child-transaction')) {
         console.log('deleteChildTransaction: Clicked', { id: e.target.dataset.id });
         const id = e.target.dataset.id;
-        if (!domElements.deleteConfirmModal || !db) {
-          console.error('deleteChildTransaction: Missing modal or Firestore');
-          showError('child-transaction-description', 'Cannot delete: Missing components');
+        if (!domElements.deleteConfirmModal || !db || !currentUser) {
+          console.error('deleteChildTransaction: Missing modal, Firestore, or user');
+          showError('child-transaction-description', 'Cannot delete: Missing components or user not authenticated');
           return;
         }
         domElements.deleteConfirmMessage.textContent = 'Are you sure you want to delete this child transaction?';
@@ -2659,6 +2680,10 @@ async function setupChildAccounts() {
 
 async function calculateChildBalance(userId) {
   console.log('calculateChildBalance: Starting for user:', userId);
+  if (!currentUser) {
+    console.warn('calculateChildBalance: No authenticated user, skipping');
+    return 0;
+  }
   try {
     if (!db || !userId) {
       console.error('calculateChildBalance: Firestore or user ID not available', { db: !!db, userId });
@@ -2700,15 +2725,14 @@ async function updateDashboard() {
     userId: currentUser?.uid,
     userEmail: currentUser?.email
   });
+  if (!currentUser) {
+    console.warn('updateDashboard: No authenticated user, skipping');
+    return;
+  }
   try {
     if (!db) {
       console.error('updateDashboard: Firestore not available');
       showError('balance', 'Database service not available');
-      return;
-    }
-    if (!currentUser || !currentUser.uid) {
-      console.error('updateDashboard: Current user not available', { currentUser });
-      showError('balance', 'User not authenticated');
       return;
     }
 
@@ -2950,13 +2974,16 @@ async function setupLogout() {
               currentChildUserId = null;
               currentAccountType = null;
 
-              const loginSection = document.getElementById('auth-section'); // Changed to auth-section to match index.html
+              const authSection = document.getElementById('auth-section');
               const appSection = document.getElementById('app-section');
               const pageTitle = document.getElementById('page-title');
 
-              if (loginSection) {
-                loginSection.classList.remove('hidden');
-                console.log('logoutButton: auth-section shown');
+              if (authSection) {
+                authSection.classList.remove('hidden');
+                document.getElementById('login-modal').classList.remove('hidden');
+                document.getElementById('signup-modal').classList.add('hidden');
+                document.getElementById('reset-modal').classList.add('hidden');
+                console.log('logoutButton: auth-section shown with login modal');
               } else {
                 console.warn('logoutButton: auth-section not found');
               }
@@ -3003,6 +3030,10 @@ async function setupLogout() {
 
 function setupAddItemButton() {
   console.log('setupAddItemButton: Starting');
+  if (!currentUser) {
+    console.warn('setupAddItemButton: No authenticated user, skipping');
+    return;
+  }
   const addItemButton = document.getElementById('add-item-button');
   const addItemMenu = document.getElementById('add-item-menu');
   const addTransactionMenu = document.getElementById('add-transaction-menu');
@@ -3077,15 +3108,26 @@ function setupAddItemButton() {
 
 async function initApp() {
   console.log('initApp: Starting');
-  try {
-    if (!currentUser) {
-      console.log('initApp: No user logged in, skipping app initialization');
-      return;
+  if (!currentUser) {
+    console.log('initApp: No user logged in, showing login screen');
+    const authSection = document.getElementById('auth-section');
+    const appSection = document.getElementById('app-section');
+    if (authSection) {
+      authSection.classList.remove('hidden');
+      document.getElementById('login-modal')?.classList.remove('hidden');
+      document.getElementById('signup-modal')?.classList.add('hidden');
+      document.getElementById('reset-modal')?.classList.add('hidden');
     }
+    if (appSection) {
+      appSection.classList.add('hidden');
+    }
+    return;
+  }
 
+  try {
     if (currentAccountType === 'admin' && db && familyCode) {
       console.log('initApp: Checking budget reset for admin');
-      await resetBudgetsForNewMonth(db, familyCode);
+      await retryFirestoreOperation(() => resetBudgetsForNewMonth(db, familyCode));
       console.log('initApp: Budget reset check complete');
     }
 
