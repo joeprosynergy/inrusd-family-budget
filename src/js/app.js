@@ -1764,10 +1764,6 @@ async function loadTransactions() {
   }
 }
 
-
-
-
-
 async function setupTransactions() {
   console.log('setupTransactions: Starting');
   try {
@@ -2169,7 +2165,6 @@ async function loadChildTransactions() {
       }
       const balance = document.getElementById('child-balance');
       if (balance) {
-        // Use synchronous fallback to avoid await in non-async context
         balance.textContent = '₹0';
       }
       return;
@@ -2256,7 +2251,7 @@ async function loadChildTransactions() {
       });
       showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
       childTransactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-      childBalance.textContent = '₹0'; // Synchronous fallback
+      childBalance.textContent = '₹0';
     }
   } catch (error) {
     console.error('loadChildTransactions error:', {
@@ -2271,7 +2266,7 @@ async function loadChildTransactions() {
     }
     const balance = document.getElementById('child-balance');
     if (balance) {
-      balance.textContent = '₹0'; // Synchronous fallback
+      balance.textContent = '₹0';
     }
   }
 }
