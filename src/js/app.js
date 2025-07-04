@@ -1684,12 +1684,16 @@ async function setupTransactions() {
   console.log('setupTransactions: Starting');
   try {
     const addTransaction = document.getElementById('add-transaction');
+    const saveTransaction = document.getElementById('save-transaction');
+    const cancelTransaction = document.getElementById('cancel-transaction');
     const transactionTable = document.getElementById('transaction-table');
     const transactionsFilter = document.getElementById('transactions-filter');
 
-    if (!addTransaction || !transactionTable || !transactionsFilter) {
+    if (!addTransaction || !saveTransaction || !cancelTransaction || !transactionTable || !transactionsFilter) {
       console.error('setupTransactions: Missing DOM elements', {
         addTransaction: !!addTransaction,
+        saveTransaction: !!saveTransaction,
+        cancelTransaction: !!cancelTransaction,
         transactionTable: !!transactionTable,
         transactionsFilter: !!transactionsFilter
       });
@@ -1774,6 +1778,90 @@ async function setupTransactions() {
         addTransaction.disabled = false;
         addTransaction.textContent = 'Add Transaction';
       }
+    });
+
+    saveTransaction.addEventListener('click', async () => {
+      if (isEditing.transaction) return;
+      clearErrors();
+      const typeInput = document.getElementById('new-transaction-type');
+      const amountInput = document.getElementById('new-transaction-amount');
+      const categoryInput = document.getElementById('new-transaction-category');
+      const descriptionInput = document.getElementById('new-transaction-description');
+      const dateInput = document.getElementById('new-transaction-date');
+      if (!typeInput || !amountInput || !categoryInput || !descriptionInput || !dateInput) {
+        showError('new-transaction-category', 'Form elements not found');
+        return;
+      }
+      const type = typeInput.value;
+      const amount = parseFloat(amountInput.value);
+      const categoryId = categoryInput.value;
+      const description = descriptionInput.value.trim();
+      const transactionDate = dateInput.value ? new Date(dateInput.value) : new Date();
+      if (!amount || amount <= 0) {
+        showError('new-transaction-amount', 'Valid amount is required');
+        return;
+      }
+      if (!categoryId) {
+        showError('new-transaction-category', 'Category is required');
+        return;
+      }
+      if (!dateInput.value || isNaN(transactionDate)) {
+        showError('new-transaction-date', 'Valid date is required');
+        return;
+      }
+      if (!currentUser || !db) {
+        showError('new-transaction-category', 'Database service not available');
+        return;
+      }
+      try {
+        saveTransaction.disabled = true;
+        saveTransaction.textContent = 'Saving...';
+        const docRef = await retryFirestoreOperation(() =>
+          addDoc(collection(db, 'transactions'), {
+            type,
+            amount,
+            categoryId,
+            description,
+            familyCode,
+            createdAt: transactionDate
+          })
+        );
+        if (type === 'debit') {
+          const categoryDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', categoryId)));
+          if (categoryDoc.exists() && categoryDoc.data().budgetId) {
+            await retryFirestoreOperation(() =>
+              updateDoc(doc(db, 'budgets', categoryDoc.data().budgetId), {
+                spent: increment(amount)
+              })
+            );
+            await loadBudgets();
+          }
+        }
+        clearTransactionCache();
+        typeInput.value = 'debit';
+        amountInput.value = '';
+        categoryInput.value = '';
+        descriptionInput.value = '';
+        dateInput.value = '';
+        domElements.addTransactionModal.classList.add('hidden');
+        await loadTransactions();
+        await updateDashboard();
+      } catch (error) {
+        showError('new-transaction-category', `Failed to add transaction: ${error.message}`);
+      } finally {
+        saveTransaction.disabled = false;
+        saveTransaction.textContent = 'Save';
+      }
+    });
+
+    cancelTransaction.addEventListener('click', () => {
+      console.log('cancelTransaction: Clicked');
+      domElements.addTransactionModal.classList.add('hidden');
+      document.getElementById('new-transaction-type').value = 'debit';
+      document.getElementById('new-transaction-amount').value = '';
+      document.getElementById('new-transaction-category').value = '';
+      document.getElementById('new-transaction-description').value = '';
+      document.getElementById('new-transaction-date').value = '';
     });
 
     transactionTable.addEventListener('click', async (e) => {
@@ -2081,7 +2169,6 @@ async function loadChildTransactions() {
       }
       const balance = document.getElementById('child-balance');
       if (balance) {
-        // Use synchronous fallback to avoid await in non-async context
         balance.textContent = '₹0';
       }
       return;
@@ -2168,7 +2255,7 @@ async function loadChildTransactions() {
       });
       showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
       childTransactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-      childBalance.textContent = '₹0'; // Synchronous fallback
+      childBalance.textContent = '₹0';
     }
   } catch (error) {
     console.error('loadChildTransactions error:', {
@@ -2183,7 +2270,7 @@ async function loadChildTransactions() {
     }
     const balance = document.getElementById('child-balance');
     if (balance) {
-      balance.textContent = '₹0'; // Synchronous fallback
+      balance.textContent = '₹0';
     }
   }
 }
@@ -2846,6 +2933,61 @@ async function updateDashboard() {
   }
 }
 
+function setupAddItemButton() {
+  console.log('setupAddItemButton: Starting');
+  const addItemButton = document.getElementById('add-item-button');
+  const addItemMenu = document.getElementById('add-item-menu');
+  const addTransactionMenu = document.getElementById('add-transaction-menu');
+  const addBudgetMenu = document.getElementById('add-budget-menu');
+  const addCategoryMenu = document.getElementById('add-category-menu');
+
+  if (!addItemButton || !addItemMenu || !addTransactionMenu || !addBudgetMenu || !addCategoryMenu) {
+    console.error('setupAddItemButton: Missing DOM elements', {
+      addItemButton: !!addItemButton,
+      addItemMenu: !!addItemMenu,
+      addTransactionMenu: !!addTransactionMenu,
+      addBudgetMenu: !!addBudgetMenu,
+      addCategoryMenu: !!addCategoryMenu
+    });
+    return;
+  }
+
+  addItemButton.addEventListener('click', () => {
+    console.log('addItemButton: Clicked');
+    const isHidden = addItemMenu.classList.contains('hidden');
+    addItemMenu.classList.toggle('hidden', !isHidden);
+  });
+
+  addTransactionMenu.addEventListener('click', () => {
+    console.log('addTransactionMenu: Clicked');
+    addItemMenu.classList.add('hidden');
+    domElements.addTransactionModal.classList.remove('hidden');
+  });
+
+  addBudgetMenu.addEventListener('click', () => {
+    console.log('addBudgetMenu: Clicked');
+    if (currentAccountType !== 'admin') {
+      showError('new-budget-name', 'Only admins can add budgets');
+      return;
+    }
+    addItemMenu.classList.add('hidden');
+    domElements.addBudgetModal.classList.remove('hidden');
+  });
+
+  addCategoryMenu.addEventListener('click', () => {
+    console.log('addCategoryMenu: Clicked');
+    addItemMenu.classList.add('hidden');
+    domElements.addCategoryModal.classList.remove('hidden');
+  });
+
+  // Close menu when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!addItemButton.contains(e.target) && !addItemMenu.contains(e.target)) {
+      addItemMenu.classList.add('hidden');
+    }
+  });
+}
+
 async function setupLogout() {
   console.log('setupLogout: Starting');
   const maxAttempts = 10;
@@ -2968,6 +3110,7 @@ async function initApp() {
     setupBudgets();
     setupTransactions();
     setupChildAccounts();
+    setupAddItemButton();
     setupLogout();
     console.log('initApp: Complete');
   } catch (error) {
