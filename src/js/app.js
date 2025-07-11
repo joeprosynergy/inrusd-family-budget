@@ -892,6 +892,8 @@ async function setupBudgets() {
     document.getElementById('edit-budget-id').value = '';
     saveBudget.textContent = 'Save';
     isEditing.budget = false;
+    const addItemMenu = document.getElementById('add-item-menu');
+    if (addItemMenu) addItemMenu.classList.add('hidden');
   });
 
   domElements.categoryBudgetSelect?.addEventListener('change', () => {
@@ -1241,6 +1243,8 @@ async function setupTransactions() {
       document.getElementById('edit-transaction-id').value = '';
       saveTransaction.textContent = 'Save';
       isEditing.transaction = false;
+      const addItemMenu = document.getElementById('add-item-menu');
+      if (addItemMenu) addItemMenu.classList.add('hidden');
     });
 
     saveTransaction.addEventListener('click', async () => {
@@ -1457,16 +1461,6 @@ async function setupTransactions() {
   }
 }
 
-
-
-
-
-
-
-
-
-
-
 async function loadChildAccounts() {
   console.log('loadChildAccounts: Starting', { familyCode, accountType: currentAccountType });
   try {
@@ -1568,7 +1562,6 @@ async function loadChildTransactions() {
       }
       const balance = document.getElementById('child-balance');
       if (balance) {
-        // Use synchronous fallback to avoid await in non-async context
         balance.textContent = '₹0';
       }
       return;
@@ -1610,7 +1603,6 @@ async function loadChildTransactions() {
           console.log('loadChildTransactions: No transactions found');
         } else {
           const transactions = [];
-          // Corrected: Sum totalBalance from all transactions (before filtering)
           snapshot.forEach(doc => {
             const transaction = doc.data();
             totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
@@ -1656,7 +1648,7 @@ async function loadChildTransactions() {
       });
       showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
       childTransactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-      childBalance.textContent = '₹0'; // Synchronous fallback
+      childBalance.textContent = '₹0';
     }
   } catch (error) {
     console.error('loadChildTransactions error:', {
@@ -1671,7 +1663,7 @@ async function loadChildTransactions() {
     }
     const balance = document.getElementById('child-balance');
     if (balance) {
-      balance.textContent = '₹0'; // Synchronous fallback
+      balance.textContent = '₹0';
     }
   }
 }
@@ -1724,7 +1716,7 @@ async function loadChildTiles() {
             childBalances.set(userId, { email, balance: 0 });
           }
         });
-        return Promise.all(promises);
+        await Promise.all(promises);
       });
     } catch (error) {
       console.error('loadChildTiles: Failed to fetch child users', {
@@ -2380,15 +2372,15 @@ async function setupLogout() {
               currentChildUserId = null;
               currentAccountType = null;
 
-              const loginSection = document.getElementById('login-section');
+              const loginSection = document.getElementById('auth-section');
               const appSection = document.getElementById('app-section');
               const pageTitle = document.getElementById('page-title');
 
               if (loginSection) {
                 loginSection.classList.remove('hidden');
-                console.log('logoutButton: login-section shown');
+                console.log('logoutButton: auth-section shown');
               } else {
-                console.warn('logoutButton: login-section not found');
+                console.warn('logoutButton: auth-section not found');
               }
               if (appSection) {
                 appSection.classList.add('hidden');
@@ -2462,7 +2454,7 @@ function setupFloatingButton() {
 async function initApp() {
   console.log('initApp: Starting');
   try {
-    if (currentUser && currentAccountType === 'admin' && db && familyCode) {
+    if (currentAccountType === 'admin' && db && familyCode) {
       console.log('initApp: Checking budget reset for admin');
       await resetBudgetsForNewMonth(db, familyCode);
       console.log('initApp: Budget reset check complete');
