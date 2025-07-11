@@ -487,7 +487,10 @@ async function loadCategories() {
   } catch (error) {
     console.error('loadCategories error:', error);
     showError('category-name', `Failed to load categories: ${error.message}`);
-    document.getElementById('category-table')?.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
+    const categoryTableError = document.getElementById('category-table');
+    if (categoryTableError) {
+      categoryTableError.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
+    }
   }
 }
 
