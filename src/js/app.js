@@ -1449,7 +1449,6 @@ async function setupTransactions() {
 
 
 
-
 async function loadChildAccounts() {
   console.log('loadChildAccounts: Starting', { familyCode, accountType: currentAccountType });
   try {
@@ -1535,24 +1534,6 @@ async function loadChildAccounts() {
     }
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 async function loadChildTransactions() {
   console.log('loadChildTransactions: Starting for user:', currentChildUserId);
@@ -2440,6 +2421,26 @@ async function setupLogout() {
   }, 500);
 }
 
+function setupFloatingButton() {
+  const addItemButton = document.getElementById('add-item-button');
+  const addItemMenu = document.getElementById('add-item-menu');
+  if (!addItemButton || !addItemMenu) {
+    console.error('setupFloatingButton: Missing DOM elements');
+    return;
+  }
+
+  addItemButton.addEventListener('click', () => {
+    addItemMenu.classList.toggle('hidden');
+  });
+
+  // Close menu when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!addItemButton.contains(e.target) && !addItemMenu.contains(e.target)) {
+      addItemMenu.classList.add('hidden');
+    }
+  });
+}
+
 async function initApp() {
   console.log('initApp: Starting');
   try {
@@ -2456,6 +2457,7 @@ async function initApp() {
     setupTransactions();
     setupChildAccounts();
     setupLogout();
+    setupFloatingButton();
     console.log('initApp: Complete');
   } catch (error) {
     console.error('initApp error:', {
