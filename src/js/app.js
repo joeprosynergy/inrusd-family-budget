@@ -113,7 +113,18 @@ function setupTabs() {
 
   function showDashboard() {
     console.log('Showing dashboard');
-    // Removed redundant class toggles (handled by switchTab)
+    domElements.dashboardTab?.classList.add('bg-blue-800');
+    domElements.dashboardTabMobile?.classList.add('bg-blue-800');
+    domElements.transactionsTab?.classList.remove('bg-blue-800');
+    domElements.transactionsTabMobile?.classList.remove('bg-blue-800');
+    domElements.budgetsTab?.classList.remove('bg-blue-800');
+    domElements.budgetsTabMobile?.classList.remove('bg-blue-800');
+    domElements.categoriesTab?.classList.remove('bg-blue-800');
+    domElements.categoriesTabMobile?.classList.remove('bg-blue-800');
+    domElements.childAccountsTab?.classList.remove('bg-blue-800');
+    domElements.childAccountsTabMobile?.classList.remove('bg-blue-800');
+    domElements.profileTab?.classList.remove('bg-blue-800');
+    domElements.profileTabMobile?.classList.remove('bg-blue-800');
     domElements.dashboardSection?.classList.remove('hidden');
     domElements.transactionsSection?.classList.add('hidden');
     domElements.budgetsSection?.classList.add('hidden');
@@ -126,7 +137,18 @@ function setupTabs() {
 
   async function showTransactions() {
     console.log('Showing transactions');
-    // Removed redundant class toggles (handled by switchTab)
+    domElements.transactionsTab?.classList.add('bg-blue-800');
+    domElements.transactionsTabMobile?.classList.add('bg-blue-800');
+    domElements.dashboardTab?.classList.remove('bg-blue-800');
+    domElements.dashboardTabMobile?.classList.remove('bg-blue-800');
+    domElements.budgetsTab?.classList.remove('bg-blue-800');
+    domElements.budgetsTabMobile?.classList.remove('bg-blue-800');
+    domElements.categoriesTab?.classList.remove('bg-blue-800');
+    domElements.categoriesTabMobile?.classList.remove('bg-blue-800');
+    domElements.childAccountsTab?.classList.remove('bg-blue-800');
+    domElements.childAccountsTabMobile?.classList.remove('bg-blue-800');
+    domElements.profileTab?.classList.remove('bg-blue-800');
+    domElements.profileTabMobile?.classList.remove('bg-blue-800');
     domElements.transactionsSection?.classList.remove('hidden');
     domElements.dashboardSection?.classList.add('hidden');
     domElements.budgetsSection?.classList.add('hidden');
@@ -142,7 +164,18 @@ function setupTabs() {
 
   async function showBudgets() {
     console.log('Showing budgets');
-    // Removed redundant class toggles (handled by switchTab)
+    domElements.budgetsTab?.classList.add('bg-blue-800');
+    domElements.budgetsTabMobile?.classList.add('bg-blue-800');
+    domElements.dashboardTab?.classList.remove('bg-blue-800');
+    domElements.dashboardTabMobile?.classList.remove('bg-blue-800');
+    domElements.transactionsTab?.classList.remove('bg-blue-800');
+    domElements.transactionsTabMobile?.classList.remove('bg-blue-800');
+    domElements.categoriesTab?.classList.remove('bg-blue-800');
+    domElements.categoriesTabMobile?.classList.remove('bg-blue-800');
+    domElements.childAccountsTab?.classList.remove('bg-blue-800');
+    domElements.childAccountsTabMobile?.classList.remove('bg-blue-800');
+    domElements.profileTab?.classList.remove('bg-blue-800');
+    domElements.profileTabMobile?.classList.remove('bg-blue-800');
     domElements.budgetsSection?.classList.remove('hidden');
     domElements.dashboardSection?.classList.add('hidden');
     domElements.transactionsSection?.classList.add('hidden');
@@ -158,7 +191,18 @@ function setupTabs() {
 
   async function showCategories() {
     console.log('Showing categories');
-    // Removed redundant class toggles (handled by switchTab)
+    domElements.categoriesTab?.classList.add('bg-blue-800');
+    domElements.categoriesTabMobile?.classList.add('bg-blue-800');
+    domElements.dashboardTab?.classList.remove('bg-blue-800');
+    domElements.dashboardTabMobile?.classList.remove('bg-blue-800');
+    domElements.transactionsTab?.classList.remove('bg-blue-800');
+    domElements.transactionsTabMobile?.classList.remove('bg-blue-800');
+    domElements.budgetsTab?.classList.remove('bg-blue-800');
+    domElements.budgetsTabMobile?.classList.remove('bg-blue-800');
+    domElements.childAccountsTab?.classList.remove('bg-blue-800');
+    domElements.childAccountsTabMobile?.classList.remove('bg-blue-800');
+    domElements.profileTab?.classList.remove('bg-blue-800');
+    domElements.profileTabMobile?.classList.remove('bg-blue-800');
     domElements.categoriesSection?.classList.remove('hidden');
     domElements.dashboardSection?.classList.add('hidden');
     domElements.transactionsSection?.classList.add('hidden');
@@ -170,7 +214,18 @@ function setupTabs() {
 
   async function showChildAccounts() {
     console.log('Showing child accounts');
-    // Removed redundant class toggles (handled by switchTab)
+    domElements.childAccountsTab?.classList.add('bg-blue-800');
+    domElements.childAccountsTabMobile?.classList.add('bg-blue-800');
+    domElements.dashboardTab?.classList.remove('bg-blue-800');
+    domElements.dashboardTabMobile?.classList.remove('bg-blue-800');
+    domElements.transactionsTab?.classList.remove('bg-blue-800');
+    domElements.transactionsTabMobile?.classList.remove('bg-blue-800');
+    domElements.budgetsTab?.classList.remove('bg-blue-800');
+    domElements.budgetsTabMobile?.classList.remove('bg-blue-800');
+    domElements.categoriesTab?.classList.remove('bg-blue-800');
+    domElements.categoriesTabMobile?.classList.remove('bg-blue-800');
+    domElements.profileTab?.classList.remove('bg-blue-800');
+    domElements.profileTabMobile?.classList.remove('bg-blue-800');
     domElements.childAccountsSection?.classList.remove('hidden');
     domElements.dashboardSection?.classList.add('hidden');
     domElements.transactionsSection?.classList.add('hidden');
@@ -186,7 +241,18 @@ function setupTabs() {
 
   function showProfile() {
     console.log('Showing profile');
-    // Removed redundant class toggles (handled by switchTab)
+    domElements.profileTab?.classList.add('bg-blue-800');
+    domElements.profileTabMobile?.classList.add('bg-blue-800');
+    domElements.dashboardTab?.classList.remove('bg-blue-800');
+    domElements.dashboardTabMobile?.classList.remove('bg-blue-800');
+    domElements.transactionsTab?.classList.remove('bg-blue-800');
+    domElements.transactionsTabMobile?.classList.remove('bg-blue-800');
+    domElements.budgetsTab?.classList.remove('bg-blue-800');
+    domElements.budgetsTabMobile?.classList.remove('bg-blue-800');
+    domElements.categoriesTab?.classList.remove('bg-blue-800');
+    domElements.categoriesTabMobile?.classList.remove('bg-blue-800');
+    domElements.childAccountsTab?.classList.remove('bg-blue-800');
+    domElements.childAccountsTabMobile?.classList.remove('bg-blue-800');
     domElements.profileSection?.classList.remove('hidden');
     domElements.dashboardSection?.classList.add('hidden');
     domElements.transactionsSection?.classList.add('hidden');
@@ -2000,24 +2066,6 @@ async function loadChildAccounts() {
   }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 async function loadChildTransactions() {
   console.log('loadChildTransactions: Starting for user:', currentChildUserId);
   try {
@@ -2075,11 +2123,9 @@ async function loadChildTransactions() {
           console.log('loadChildTransactions: No transactions found');
         } else {
           const transactions = [];
-          // Corrected: Sum totalBalance from all transactions (before filtering)
           snapshot.forEach(doc => {
             const transaction = doc.data();
-            totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
-            const createdAt = transaction.createdAt && transaction.createdAt.toDate ? transaction.createdAt.toDate() : new Date();
+            const createdAt = transaction.createdAt && transaction.createdAt.toDate ? new Date(transaction.createdAt.toDate()) : new Date();
             if (createdAt >= start && createdAt <= end) {
               transactions.push({ id: doc.id, ...transaction, createdAt });
             }
@@ -2094,6 +2140,7 @@ async function loadChildTransactions() {
             console.log('loadChildTransactions: Transactions sorted by createdAt', { count: transactions.length });
 
             for (const transaction of transactions) {
+              totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
               const tr = document.createElement('tr');
               tr.classList.add('table-row');
               const day = transaction.createdAt.toLocaleString('en-US', { day: 'numeric' });
@@ -2547,6 +2594,7 @@ async function calculateChildBalance(userId) {
       return 0;
     }
     let totalBalance = 0;
+    let transactionCount = 0;
     await retryFirestoreOperation(async () => {
       const transactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', userId));
       const snapshot = await getDocs(transactionsQuery);
@@ -2560,9 +2608,10 @@ async function calculateChildBalance(userId) {
           familyCode: transaction.familyCode
         });
         totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
+        transactionCount++;
       });
     });
-    console.log('calculateChildBalance: Balance calculated', { totalBalance });
+    console.log('calculateChildBalance: Balance calculated', { totalBalance, transactionCount });
     return totalBalance;
   } catch (error) {
     console.error('calculateChildBalance error:', {
