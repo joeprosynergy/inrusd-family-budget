@@ -1,6 +1,4 @@
 // auth.js
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { showError, clearErrors, setUserCurrency, setFamilyCode } from './core.js';
 import { generateFamilyCode, isValidFamilyCode, familyCodeExists, retryFirestoreOperation } from './utils.js';
 
@@ -34,13 +32,16 @@ function debounce(func, wait) {
  * Sets up authentication event listeners
  * @param {Function} loadAppDataCallback
  */
-export function setupAuth(loadAppDataCallback) {
+export async function setupAuth(loadAppDataCallback) {
   if (isSetup) {
     console.log('setupAuth: Already initialized, skipping');
     return;
   }
   isSetup = true;
   console.log('setupAuth: Starting');
+
+  const { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } = await import('firebase/auth');
+  const { getFirestore, doc, setDoc, serverTimestamp } = await import('firebase/firestore');
   const auth = getAuth();
   const db = getFirestore();
 
