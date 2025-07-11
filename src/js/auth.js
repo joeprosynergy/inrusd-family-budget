@@ -1,4 +1,6 @@
 // auth.js
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { showError, clearErrors, setUserCurrency, setFamilyCode } from './core.js';
 import { generateFamilyCode, isValidFamilyCode, familyCodeExists, retryFirestoreOperation } from './utils.js';
 
@@ -32,16 +34,13 @@ function debounce(func, wait) {
  * Sets up authentication event listeners
  * @param {Function} loadAppDataCallback
  */
-export async function setupAuth(loadAppDataCallback) {
+export function setupAuth(loadAppDataCallback) {
   if (isSetup) {
     console.log('setupAuth: Already initialized, skipping');
     return;
   }
   isSetup = true;
   console.log('setupAuth: Starting');
-
-  const { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } = await import('firebase/auth');
-  const { getFirestore, doc, setDoc, serverTimestamp } = await import('firebase/firestore');
   const auth = getAuth();
   const db = getFirestore();
 
@@ -70,12 +69,10 @@ export async function setupAuth(loadAppDataCallback) {
   });
 
   // Login handler
-  const loginForm = checkElement('login-form');
   const loginButton = checkElement('login-button');
   if (loginButton) {
-    const handleLogin = debounce(async (event) => {
-      event.preventDefault(); // Prevent default behavior (form submit or button click)
-      console.log(loginForm ? 'Login form submitted' : 'Login button clicked');
+    const handleLogin = debounce(async () => {
+      console.log('Login button clicked');
       clearErrors();
       const email = checkElement('login-email')?.value.trim();
       const password = checkElement('login-password')?.value;
@@ -106,14 +103,7 @@ export async function setupAuth(loadAppDataCallback) {
         loginButton.textContent = 'Login';
       }
     }, DEBOUNCE_MS);
-
-    if (loginForm) {
-      console.log('Attaching login handler to login-form submit');
-      loginForm.addEventListener('submit', handleLogin);
-    } else {
-      console.log('No login-form found, attaching login handler to login-button click');
-      loginButton.addEventListener('click', handleLogin);
-    }
+    loginButton.addEventListener('click', handleLogin);
   } else {
     console.error('Cannot setup login: login-button missing');
   }
