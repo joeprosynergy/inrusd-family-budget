@@ -21,11 +21,9 @@ let currentChildUserId = null;
 let currentAccountType = null;
 let loadedTabs = { budgets: false, transactions: false, childAccounts: false };
 
-// CHANGE: Added global caches for categories and budgets to reduce redundant queries
 let categoryCache = new Map();
 let budgetCache = new Map();
 
-// CHANGE: Added debounce utility function for add/edit operations
 function debounceFunction(func, delay = 300) {
   let timer;
   return (...args) => {
@@ -34,16 +32,13 @@ function debounceFunction(func, delay = 300) {
   };
 }
 
-// CHANGE: Added toggleClasses utility for simplifying class manipulations
 function toggleClasses(element, addClass, condition) {
   if (element) {
     element.classList.toggle(addClass, condition);
   }
 }
 
-// Load App Data
 async function loadAppData() {
-  // CHANGE: Reduced console logs
   if (!currentUser || !familyCode || !db) {
     console.error('Cannot load app data: missing user, familyCode, or Firestore');
     return;
@@ -65,21 +60,17 @@ async function loadAppData() {
       loadCategories(),
       updateDashboard()
     ]);
-    // CHANGE: Added cache clearing if needed after load
-    // No change needed here for now
   } catch (error) {
     console.error('loadAppData error:', error);
     showError('page-title', 'Failed to load app data.');
   }
 }
 
-// Wrapper for getDateRange to pass DOM inputs
 function getDateRangeWrapper(filter) {
   return getDateRange(filter, domElements.filterStartDate, domElements.filterEndDate);
 }
 
 function setupTabs() {
-  // CHANGE: Consolidated tab switching into a single handler; removed repetitive show functions
   const tabs = [
     { id: 'dashboard', name: 'Dashboard', section: domElements.dashboardSection, loadFunc: updateDashboard },
     { id: 'transactions', name: 'Transactions', section: domElements.transactionsSection, loadFunc: loadTransactions },
@@ -105,7 +96,6 @@ function setupTabs() {
     if (domElements.pageTitle) domElements.pageTitle.textContent = tab.name;
     currentTabIndex = tabs.findIndex(t => t.id === tabId);
 
-    // CHANGE: Lazy load only if not loaded, with error handling
     try {
       if (tab.loadFunc && !loadedTabs[tab.id.replace('-', '')]) {
         await tab.loadFunc();
@@ -141,7 +131,6 @@ function setupTabs() {
     });
   }
 
-  // CHANGE: Simplified swipe detection with better null checks
   const swipeContainer = document.getElementById('swipeable-tabs');
   if (swipeContainer && window.matchMedia('(max-width: 1023px)').matches) {
     let touchStartX = 0;
@@ -171,9 +160,7 @@ function setupTabs() {
   switchTab('dashboard');
 }
 
-// Profile Management
 async function setupProfile() {
-  // CHANGE: Added try-catch for entire setup; debounce on save
   try {
     domElements.editProfile?.addEventListener('click', () => {
       isEditing.profile = true;
@@ -189,7 +176,6 @@ async function setupProfile() {
       toggleClasses(domElements.saveProfile, 'hidden', false);
     });
 
-    // CHANGE: Debounced saveProfile click
     const debouncedSaveProfile = debounceFunction(async () => {
       clearErrors();
       const email = domElements.profileEmail?.value.trim();
@@ -304,7 +290,6 @@ async function loadProfileData() {
       domElements.profileFamilyCode.value = data.familyCode || '--';
       domElements.profileAccountType.value = data.accountType || '--';
       currentAccountType = data.accountType || '--';
-      // CHANGE: Set familyCode consistently from doc
       setFamilyCode(data.familyCode || familyCode);
     } else {
       showError('profile-email', 'Profile data not found.');
@@ -340,14 +325,13 @@ async function loadCategories() {
     }
     categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
 
-    // CHANGE: Use cached budgets if available, else fetch
     let budgetsSnapshot;
     if (budgetCache.size > 0) {
       budgetsSnapshot = { docs: Array.from(budgetCache.values()) };
     } else {
       const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
       budgetsSnapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
-      budgetsSnapshot.forEach(doc => budgetCache.set(doc.id, doc));
+      budgetsSnapshot.docs.forEach(doc => budgetCache.set(doc.id, doc));
     }
     const budgetMap = new Map();
     budgetsSnapshot.docs.forEach(doc => {
@@ -362,14 +346,13 @@ async function loadCategories() {
       }
     });
 
-    // CHANGE: Use cached categories if available, else fetch and cache
     let categoriesSnapshot;
     if (categoryCache.size > 0) {
       categoriesSnapshot = { docs: Array.from(categoryCache.values()) };
     } else {
       const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
       categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
-      categoriesSnapshot.forEach(doc => categoryCache.set(doc.id, doc));
+      categoriesSnapshot.docs.forEach(doc => categoryCache.set(doc.id, doc));
     }
 
     categoryTable.innerHTML = '';
@@ -405,7 +388,11 @@ async function loadCategories() {
   } catch (error) {
     console.error('loadCategories error:', error);
     showError('category-name', `Failed to load categories: ${error.message}`);
-    document.getElementById('category-table')?.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
+    // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
+    const categoryTableError = document.getElementById('category-table');
+    if (categoryTableError) {
+      categoryTableError.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
+    }
   }
 }
 
@@ -422,7 +409,6 @@ async function setupCategories() {
       return;
     }
 
-    // CHANGE: Debounced addCategory
     const debouncedAddCategory = debounceFunction(async () => {
       if (isEditing.category) return;
       clearErrors();
@@ -460,7 +446,6 @@ async function setupCategories() {
             createdAt: serverTimestamp()
           })
         );
-        // CHANGE: Update cache
         categoryCache.set(docRef.id, { id: docRef.id, data: () => ({ name, type, budgetId, familyCode }) });
         nameInput.value = '';
         typeSelect.value = 'income';
@@ -489,7 +474,6 @@ async function setupCategories() {
       }
     });
 
-    // CHANGE: Debounced saveCategory
     const debouncedSaveCategory = debounceFunction(async () => {
       clearErrors();
       const nameInput = document.getElementById('new-category-name');
@@ -526,7 +510,6 @@ async function setupCategories() {
             createdAt: serverTimestamp()
           })
         );
-        // CHANGE: Update cache
         categoryCache.set(docRef.id, { id: docRef.id, data: () => ({ name, type, budgetId, familyCode }) });
         domElements.addCategoryModal?.classList.add('hidden');
         nameInput.value = '';
@@ -586,7 +569,6 @@ async function setupCategories() {
                 await retryFirestoreOperation(() => 
                   updateDoc(doc(db, 'categories', id), { name, type, budgetId })
                 );
-                // CHANGE: Update cache
                 categoryCache.set(id, { id, data: () => ({ name, type, budgetId, familyCode }) });
                 nameInput.value = '';
                 typeSelect.value = 'income';
@@ -623,7 +605,6 @@ async function setupCategories() {
         const confirmHandler = async () => {
           try {
             await retryFirestoreOperation(() => deleteDoc(doc(db, 'categories', id)));
-            // CHANGE: Remove from cache
             categoryCache.delete(id);
             await loadCategories();
             domElements.deleteConfirmModal.classList.add('hidden');
@@ -676,7 +657,6 @@ async function loadBudgets() {
 
     const transactions = await fetchCachedTransactions(db, familyCode, start, end);
 
-    // CHANGE: Use cached categories
     let categoriesSnapshot;
     if (categoryCache.size > 0) {
       categoriesSnapshot = { docs: Array.from(categoryCache.values()) };
@@ -689,10 +669,7 @@ async function loadBudgets() {
     categoriesSnapshot.docs.forEach(doc => {
       const category = doc.data();
       if (category.budgetId) {
-        if (!budgetToCategories.has(category.budgetId)) {
-          budgetToCategories.set(category.budgetId, []);
-        }
-        budgetToCategories.get(category.budgetId).push(doc.id);
+        budgetToCategories.set(category.budgetId, [...(budgetToCategories.get(category.budgetId) || []), doc.id]);
       }
     });
 
@@ -708,7 +685,6 @@ async function loadBudgets() {
       return;
     }
 
-    // CHANGE: Update budget cache
     budgetCache.clear();
     const tableFragment = document.createDocumentFragment();
     const tilesFragment = document.createDocumentFragment();
@@ -769,8 +745,15 @@ async function loadBudgets() {
   } catch (error) {
     console.error('loadBudgets: Error loading budgets', error);
     showError('budget-name', `Failed to load budgets: ${error.message}`);
-    document.getElementById('budget-table')?.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading budgets</td></tr>';
-    document.getElementById('budget-tiles')?.innerHTML = '<div class="text-center py-4 text-red-600">Error loading budgets</div>';
+    // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
+    const budgetTableError = document.getElementById('budget-table');
+    if (budgetTableError) {
+      budgetTableError.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading budgets</td></tr>';
+    }
+    const budgetTilesError = document.getElementById('budget-tiles');
+    if (budgetTilesError) {
+      budgetTilesError.innerHTML = '<div class="text-center py-4 text-red-600">Error loading budgets</div>';
+    }
   }
 }
 
@@ -788,7 +771,6 @@ async function setupBudgets() {
     return;
   }
 
-  // CHANGE: Debounced addBudget
   const debouncedAddBudget = debounceFunction(async () => {
     if (isEditing.budget) return;
     clearErrors();
@@ -819,7 +801,6 @@ async function setupBudgets() {
       return;
     }
 
-    // CHANGE: Fetch fresh familyCode from user doc for consistency
     const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
     const verifiedFamilyCode = userDoc.data()?.familyCode;
     if (!verifiedFamilyCode) {
@@ -843,7 +824,6 @@ async function setupBudgets() {
       const docRef = await retryFirestoreOperation(() => 
         addDoc(collection(db, 'budgets'), budgetData)
       );
-      // CHANGE: Update cache
       budgetCache.set(docRef.id, { id: docRef.id, data: () => budgetData });
       clearTransactionCache();
       nameInput.value = '';
@@ -866,7 +846,6 @@ async function setupBudgets() {
     }
   });
 
-  // CHANGE: Debounced saveBudget
   const debouncedSaveBudget = debounceFunction(async () => {
     clearErrors();
     const nameInput = document.getElementById('new-budget-name');
@@ -976,7 +955,6 @@ async function setupBudgets() {
               await retryFirestoreOperation(() => 
                 updateDoc(doc(db, 'budgets', id), { name, amount })
               );
-              // CHANGE: Update cache
               const cached = budgetCache.get(id);
               if (cached) {
                 const data = cached.data();
@@ -1014,7 +992,6 @@ async function setupBudgets() {
         const confirmHandler = async () => {
           try {
             await retryFirestoreOperation(() => deleteDoc(doc(db, 'budgets', id)));
-            // CHANGE: Remove from cache
             budgetCache.delete(id);
             clearTransactionCache();
             await loadBudgets();
@@ -1060,7 +1037,6 @@ async function setupBudgets() {
     }
   });
 
-  // CHANGE: Debounced saveEditBudget
   const debouncedSaveEditBudget = debounceFunction(async () => {
     clearErrors();
     const nameInput = document.getElementById('edit-budget-name');
@@ -1093,7 +1069,6 @@ async function setupBudgets() {
       await retryFirestoreOperation(() => 
         updateDoc(doc(db, 'budgets', id), { name, amount })
       );
-      // CHANGE: Update cache
       const cached = budgetCache.get(id);
       if (cached) {
         const data = cached.data();
@@ -1137,7 +1112,11 @@ async function loadTransactions() {
 
     if (!db || !familyCode) {
       showError('transactions-filter', 'Database service not available');
-      transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Database unavailable</td></tr>';
+      // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
+      const transTableError = document.getElementById('transaction-table');
+      if (transTableError) {
+        transTableError.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Database unavailable</td></tr>';
+      }
       return;
     }
 
@@ -1165,7 +1144,6 @@ async function loadTransactions() {
     }
     dateHeader.textContent = headerText;
 
-    // CHANGE: Use cached categories for map
     let categoriesSnapshot;
     if (categoryCache.size > 0) {
       categoriesSnapshot = { docs: Array.from(categoryCache.values()) };
@@ -1212,7 +1190,11 @@ async function loadTransactions() {
   } catch (error) {
     console.error('loadTransactions error:', error);
     showError('transactions-filter', `Failed to load transactions: ${error.message}`);
-    document.getElementById('transaction-table')?.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+    // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
+    const transTableError = document.getElementById('transaction-table');
+    if (transTableError) {
+      transTableError.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+    }
   }
 }
 
@@ -1231,7 +1213,6 @@ async function setupTransactions() {
       loadTransactions();
     });
 
-    // CHANGE: Debounced addTransaction
     const debouncedAddTransaction = debounceFunction(async () => {
       if (isEditing.transaction) return;
       clearErrors();
@@ -1534,8 +1515,15 @@ async function loadChildTransactions() {
   try {
     if (!db || !currentChildUserId) {
       showError('child-transaction-description', 'No user selected');
-      document.getElementById('child-transaction-table')?.innerHTML = '<tr><td colspan="5" class="text-center py-4">No user selected</td></tr>';
-      document.getElementById('child-balance')?.textContent = '₹0';
+      // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
+      const childTableNoUser = document.getElementById('child-transaction-table');
+      if (childTableNoUser) {
+        childTableNoUser.innerHTML = '<tr><td colspan="5" class="text-center py-4">No user selected</td></tr>';
+      }
+      const childBalanceNoUser = document.getElementById('child-balance');
+      if (childBalanceNoUser) {
+        childBalanceNoUser.textContent = '₹0';
+      }
       return;
     }
 
@@ -1602,8 +1590,15 @@ async function loadChildTransactions() {
   } catch (error) {
     console.error('loadChildTransactions error:', error);
     showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
-    document.getElementById('child-transaction-table')?.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-    document.getElementById('child-balance')?.textContent = '₹0';
+    // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
+    const childTableError = document.getElementById('child-transaction-table');
+    if (childTableError) {
+      childTableError.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+    }
+    const childBalanceError = document.getElementById('child-balance');
+    if (childBalanceError) {
+      childBalanceError.textContent = '₹0';
+    }
   }
 }
 
@@ -1656,7 +1651,11 @@ async function loadChildTiles() {
     }
   } catch (error) {
     console.error('loadChildTiles error:', error);
-    document.getElementById('child-tiles')?.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
+    // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
+    const childTilesError = document.getElementById('child-tiles');
+    if (childTilesError) {
+      childTilesError.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
+    }
   }
 }
 
@@ -1670,7 +1669,6 @@ async function setupChildAccounts() {
       return;
     }
 
-    // CHANGE: Increased debounce to 5000ms as per original hint, but kept at 300 for general
     const debouncedAddChildTransaction = debounceFunction(async () => {
       if (isEditing.childTransaction) return;
       clearErrors();
@@ -1724,7 +1722,7 @@ async function setupChildAccounts() {
         addChildTransaction.disabled = false;
         addChildTransaction.textContent = 'Add Transaction';
       }
-    }, 300); // CHANGE: Debounce set to 300ms
+    }, 300);
     addChildTransaction.addEventListener('click', debouncedAddChildTransaction);
 
     childTransactionTable.addEventListener('click', async (e) => {
@@ -1822,8 +1820,15 @@ async function setupChildAccounts() {
       if (currentChildUserId) {
         loadChildTransactions();
       } else {
-        document.getElementById('child-transaction-table')?.innerHTML = '<tr><td colspan="5" class="text-center py-4">No child selected</td></tr>';
-        document.getElementById('child-balance')?.textContent = '₹0';
+        // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
+        const childTableNoSelect = document.getElementById('child-transaction-table');
+        if (childTableNoSelect) {
+          childTableNoSelect.innerHTML = '<tr><td colspan="5" class="text-center py-4">No child selected</td></tr>';
+        }
+        const childBalanceNoSelect = document.getElementById('child-balance');
+        if (childBalanceNoSelect) {
+          childBalanceNoSelect.textContent = '₹0';
+        }
       }
     });
   } catch (error) {
@@ -1904,7 +1909,6 @@ async function updateDashboard() {
         totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
       });
 
-      // CHANGE: Use cached categories and budgets
       let categoriesSnapshot = { docs: Array.from(categoryCache.values()) };
       if (categoryCache.size === 0) {
         const catQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
@@ -2032,7 +2036,6 @@ async function initApp() {
     setupTransactions();
     setupChildAccounts();
     setupLogout();
-    // CHANGE: Added call to setup FAB
     setupFloatingPlusButton();
   } catch (error) {
     console.error('initApp error:', error);
@@ -2040,16 +2043,13 @@ async function initApp() {
   }
 }
 
-// CHANGE: New function for floating plus button logic
 function setupFloatingPlusButton() {
-  // Create FAB element
   const fab = document.createElement('button');
   fab.id = 'fab-plus';
   fab.classList.add('fixed', 'bottom-4', 'right-4', 'bg-blue-600', 'text-white', 'rounded-full', 'w-12', 'h-12', 'flex', 'items-center', 'justify-center', 'shadow-lg', 'hover:bg-blue-700');
   fab.innerHTML = '+';
   document.body.appendChild(fab);
 
-  // Create menu modal
   const menuModal = document.createElement('div');
   menuModal.id = 'fab-menu-modal';
   menuModal.classList.add('hidden', 'fixed', 'inset-0', 'bg-black', 'bg-opacity-50', 'flex', 'items-center', 'justify-center');
@@ -2067,7 +2067,6 @@ function setupFloatingPlusButton() {
   menuModal.appendChild(menuContent);
   document.body.appendChild(menuModal);
 
-  // Create transaction modal (new, as not existing)
   const transactionModal = document.createElement('div');
   transactionModal.id = 'add-transaction-modal';
   transactionModal.classList.add('hidden', 'fixed', 'inset-0', 'bg-black', 'bg-opacity-50', 'flex', 'items-center', 'justify-center');
@@ -2077,7 +2076,7 @@ function setupFloatingPlusButton() {
     <h3 class="text-lg font-semibold mb-2">Add Transaction</h3>
     <select id="fab-trans-type" class="border p-1 mb-2"><option value="debit">Debit</option><option value="credit">Credit</option></select>
     <input id="fab-trans-amount" type="number" placeholder="Amount" class="border p-1 mb-2">
-    <select id="fab-trans-category" class="border p-1 mb-2"></select> <!-- Populate from categories -->
+    <select id="fab-trans-category" class="border p-1 mb-2"></select>
     <input id="fab-trans-description" type="text" placeholder="Description" class="border p-1 mb-2">
     <input id="fab-trans-date" type="date" class="border p-1 mb-2">
     <button id="save-fab-trans" class="bg-blue-600 text-white p-2">Save</button>
@@ -2086,7 +2085,6 @@ function setupFloatingPlusButton() {
   transactionModal.appendChild(transContent);
   document.body.appendChild(transactionModal);
 
-  // Populate category select in transaction modal from cache
   const fabCategorySelect = document.getElementById('fab-trans-category');
   if (fabCategorySelect) {
     fabCategorySelect.innerHTML = '<option value="">Select Category</option>';
@@ -2098,7 +2096,6 @@ function setupFloatingPlusButton() {
     });
   }
 
-  // Event listeners
   fab.addEventListener('click', () => {
     menuModal.classList.remove('hidden');
   });
@@ -2126,7 +2123,6 @@ function setupFloatingPlusButton() {
     transactionModal.classList.add('hidden');
   });
 
-  // Save transaction from FAB
   document.getElementById('save-fab-trans')?.addEventListener('click', async () => {
     const type = document.getElementById('fab-trans-type')?.value;
     const amount = parseFloat(document.getElementById('fab-trans-amount')?.value);
