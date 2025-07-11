@@ -20,10 +20,10 @@ let isEditing = { transaction: false, budget: false, category: false, profile: f
 let currentChildUserId = null;
 let currentAccountType = null;
 let loadedTabs = { budgets: false, transactions: false, childAccounts: false };
+let cachedCategories = null;
+let cachedBudgets = null;
 
-// CHANGE: Consolidated add logic into reusable functions for transactions, budgets, and categories to reuse in modals and sections
 async function addTransaction({ type, amount, categoryId, description, date }) {
-  // CHANGE: Extracted and simplified validation/add logic from setupTransactions
   if (!amount || amount <= 0) throw new Error('Valid positive amount is required');
   if (!categoryId) throw new Error('Category is required');
   if (!date || isNaN(new Date(date))) throw new Error('Valid date is required');
@@ -58,7 +58,6 @@ async function addTransaction({ type, amount, categoryId, description, date }) {
 }
 
 async function addBudget({ name, amount }) {
-  // CHANGE: Extracted and simplified validation/add logic from setupBudgets, added positive amount check
   if (!name) throw new Error('Budget name is required');
   if (!amount || amount <= 0) throw new Error('Valid positive amount is required');
   if (!currentUser || !db) throw new Error('Database service not available');
@@ -80,12 +79,12 @@ async function addBudget({ name, amount }) {
   };
   await retryFirestoreOperation(() => addDoc(collection(db, 'budgets'), budgetData));
   clearTransactionCache();
+  cachedBudgets = null; // Invalidate cache
   await loadBudgets();
   await loadCategories();
 }
 
 async function addCategory({ name, type, budgetId }) {
-  // CHANGE: Extracted and simplified validation/add logic from setupCategories
   if (!name) throw new Error('Name is required');
   if (!type) throw new Error('Type is required');
   if (!currentUser || !db) throw new Error('Database service not available');
@@ -100,12 +99,11 @@ async function addCategory({ name, type, budgetId }) {
       createdAt: serverTimestamp()
     })
   );
+  cachedCategories = null; // Invalidate cache
   await loadCategories();
 }
 
-// Load App Data
 async function loadAppData() {
-  // CHANGE: Reduced verbose logging
   if (!currentUser || !familyCode || !db) {
     console.error('Cannot load app data: missing user, familyCode, or Firestore');
     return;
@@ -137,13 +135,11 @@ async function loadAppData() {
   }
 }
 
-// Wrapper for getDateRange to pass DOM inputs
 function getDateRangeWrapper(filter) {
   return getDateRange(filter, domElements.filterStartDate, domElements.filterEndDate);
 }
 
 function setupTabs() {
-  // CHANGE: Consolidated repetitive tab logic into arrays and single switchTab function; reduced duplicate class toggles
   const tabs = [
     { id: 'dashboard', name: 'Dashboard', section: domElements.dashboardSection, show: showDashboard },
     { id: 'transactions', name: 'Transactions', section: domElements.transactionsSection, show: showTransactions },
@@ -237,7 +233,6 @@ function setupTabs() {
     });
   }
 
-  // CHANGE: Simplified swipe detection logging
   const swipeContainer = document.getElementById('swipeable-tabs');
   if (swipeContainer && window.matchMedia('(max-width: 1023px)').matches) {
     let touchStartX = 0;
@@ -272,9 +267,7 @@ function setupTabs() {
   switchTab('dashboard');
 }
 
-// Profile Management
 async function setupProfile() {
-  // CHANGE: Reduced logging, used destructuring
   domElements.editProfile?.addEventListener('click', () => {
     isEditing.profile = true;
     domElements.profileEmail?.removeAttribute('readonly');
@@ -384,7 +377,6 @@ async function setupProfile() {
 }
 
 async function loadProfileData() {
-  // CHANGE: Simplified logging, added optional chaining
   if (!currentUser || !db) {
     console.error('Cannot load profile data: missing user or Firestore');
     return;
@@ -411,7 +403,6 @@ async function loadProfileData() {
 }
 
 async function loadCategories() {
-  // CHANGE: Reduced logging, used template literals, added document fragment for options
   try {
     if (!db || !familyCode) {
       showError('category-name', 'Database service not available');
@@ -436,25 +427,28 @@ async function loadCategories() {
     }
     categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
 
-    const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
-    let budgetsSnapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
-    const budgetMap = new Map();
-    const budgetOptionFragment = document.createDocumentFragment();
-    const newBudgetOptionFragment = document.createDocumentFragment();
-    budgetsSnapshot.forEach(doc => {
-      budgetMap.set(doc.id, doc.data().name);
-      const option = document.createElement('option');
-      option.value = doc.id;
-      option.textContent = doc.data().name;
-      budgetOptionFragment.appendChild(option);
-      if (newCategoryBudgetSelect) newBudgetOptionFragment.appendChild(option.cloneNode(true));
-    });
-    categoryBudgetSelect.insertBefore(budgetOptionFragment, categoryBudgetSelect.querySelector('option[value="add-new"]'));
-    if (newCategoryBudgetSelect) newCategoryBudgetSelect.insertBefore(newBudgetOptionFragment, newCategoryBudgetSelect.querySelector('option[value="add-new"]'));
+    if (!cachedBudgets) {
+      const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
+      const budgetsSnapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
+      cachedBudgets = new Map();
+      const budgetOptionFragment = document.createDocumentFragment();
+      const newBudgetOptionFragment = document.createDocumentFragment();
+      budgetsSnapshot.forEach(doc => {
+        cachedBudgets.set(doc.id, doc.data().name);
+        const option = document.createElement('option');
+        option.value = doc.id;
+        option.textContent = doc.data().name;
+        budgetOptionFragment.appendChild(option);
+        if (newCategoryBudgetSelect) newBudgetOptionFragment.appendChild(option.cloneNode(true));
+      });
+      categoryBudgetSelect.insertBefore(budgetOptionFragment, categoryBudgetSelect.querySelector('option[value="add-new"]'));
+      if (newCategoryBudgetSelect) newCategoryBudgetSelect.insertBefore(newBudgetOptionFragment, newCategoryBudgetSelect.querySelector('option[value="add-new"]'));
+    }
 
     const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
     const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
 
+    cachedCategories = new Map();
     categoryTable.innerHTML = '';
     if (categoriesSnapshot.empty) {
       categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No categories found</td></tr>';
@@ -466,6 +460,7 @@ async function loadCategories() {
     const tableFragment = document.createDocumentFragment();
     categoriesSnapshot.forEach(doc => {
       const category = doc.data();
+      cachedCategories.set(doc.id, category);
       const option = document.createElement('option');
       option.value = doc.id;
       option.textContent = category.name;
@@ -474,7 +469,7 @@ async function loadCategories() {
 
       const tr = document.createElement('tr');
       tr.classList.add('table-row');
-      const budgetName = category.budgetId ? budgetMap.get(category.budgetId) ?? 'Unknown' : 'None';
+      const budgetName = category.budgetId ? cachedBudgets.get(category.budgetId) ?? 'Unknown' : 'None';
       tr.innerHTML = `
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${category.name ?? 'Unknown'}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${category.type ?? 'Unknown'}</td>
@@ -497,7 +492,6 @@ async function loadCategories() {
 }
 
 async function setupCategories() {
-  // CHANGE: Refactored to use addCategory function, reduced duplication in event listeners
   try {
     const addCategoryBtn = document.getElementById('add-category');
     const categorySelect = document.getElementById('category');
@@ -590,6 +584,7 @@ async function setupCategories() {
                 await retryFirestoreOperation(() => 
                   updateDoc(doc(db, 'categories', id), { name, type, budgetId })
                 );
+                cachedCategories = null;
                 document.getElementById('category-name').value = '';
                 document.getElementById('category-type').value = 'income';
                 document.getElementById('category-budget-select').value = 'none';
@@ -618,6 +613,7 @@ async function setupCategories() {
         const confirmHandler = async () => {
           try {
             await retryFirestoreOperation(() => deleteDoc(doc(db, 'categories', id)));
+            cachedCategories = null;
             await loadCategories();
             domElements.deleteConfirmModal.classList.add('hidden');
           } catch (error) {
@@ -640,7 +636,6 @@ async function setupCategories() {
 }
 
 async function loadBudgets() {
-  // CHANGE: Simplified logging, used async formatCurrency in template literals, added admin check earlier
   if (!db) {
     showError('budget-name', 'Database service not available');
     return;
@@ -666,12 +661,18 @@ async function loadBudgets() {
 
     const transactions = await fetchCachedTransactions(db, familyCode, start, end);
 
-    const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
-    const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
+    if (!cachedCategories) {
+      const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
+      const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
+      cachedCategories = new Map();
+      categoriesSnapshot.forEach(doc => cachedCategories.set(doc.id, doc.data()));
+    }
+
     const budgetToCategories = new Map();
-    categoriesSnapshot.forEach(doc => {
-      const category = doc.data();
-      if (category.budgetId) budgetToCategories.set(category.budgetId, [...(budgetToCategories.get(category.budgetId) ?? []), doc.id]);
+    cachedCategories.forEach((category, id) => {
+      if (category.budgetId) {
+        budgetToCategories.set(category.budgetId, [...(budgetToCategories.get(category.budgetId) ?? []), id]);
+      }
     });
 
     let totalBudgetAmount = 0;
@@ -747,7 +748,6 @@ async function loadBudgets() {
 }
 
 async function setupBudgets() {
-  // CHANGE: Refactored to use addBudget function, consolidated edit/update logic, reduced duplication
   const addBudgetBtn = document.getElementById('add-budget');
   const saveBudget = document.getElementById('save-budget');
   const cancelBudget = document.getElementById('cancel-budget');
@@ -832,6 +832,7 @@ async function setupBudgets() {
               updateDoc(doc(db, 'budgets', id), { name, amount })
             );
             clearTransactionCache();
+            cachedBudgets = null;
             document.getElementById('budget-name').value = '';
             document.getElementById('budget-amount').value = '';
             addBudgetBtn.textContent = 'Add Budget';
@@ -856,6 +857,7 @@ async function setupBudgets() {
         try {
           await retryFirestoreOperation(() => deleteDoc(doc(db, 'budgets', id)));
           clearTransactionCache();
+          cachedBudgets = null;
           await loadBudgets();
           await loadCategories();
           domElements.deleteConfirmModal.classList.add('hidden');
@@ -899,6 +901,7 @@ async function setupBudgets() {
         updateDoc(doc(db, 'budgets', id), { name, amount })
       );
       clearTransactionCache();
+      cachedBudgets = null;
       domElements.editBudgetModal.classList.add('hidden');
       document.getElementById('edit-budget-name').value = '';
       document.getElementById('edit-budget-amount').value = '';
@@ -922,7 +925,6 @@ async function setupBudgets() {
 }
 
 async function loadTransactions() {
-  // CHANGE: Added orderBy to query for efficient sorting, simplified header text logic with template literals
   try {
     const transactionTable = document.getElementById('transaction-table');
     const dateHeader = document.getElementById('transaction-date-header');
@@ -961,10 +963,9 @@ async function loadTransactions() {
     }
     dateHeader.textContent = headerText;
 
-    const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
-    const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
+    if (!cachedCategories) await loadCategories();
     const categoryMap = new Map();
-    categoriesSnapshot.forEach(doc => categoryMap.set(doc.id, doc.data().name));
+    cachedCategories.forEach((category, id) => categoryMap.set(id, category.name));
 
     const transactions = await fetchCachedTransactions(db, familyCode, adjustedStart, end);
 
@@ -1004,7 +1005,6 @@ async function loadTransactions() {
 }
 
 async function setupTransactions() {
-  // CHANGE: Refactored to use addTransaction function, consolidated edit logic
   try {
     const addTransactionBtn = document.getElementById('add-transaction');
     const transactionTable = document.getElementById('transaction-table');
@@ -1164,7 +1164,6 @@ async function setupTransactions() {
 }
 
 async function loadChildAccounts() {
-  // CHANGE: Simplified DOM checks, used ?? for defaults
   try {
     if (!currentUser || !db || !familyCode) {
       showError('child-user-id', 'Unable to load child accounts.');
@@ -1215,7 +1214,6 @@ async function loadChildAccounts() {
 }
 
 async function loadChildTransactions() {
-  // CHANGE: Used destructuring for date range, simplified balance calculation
   try {
     if (!db || !currentChildUserId) {
       showError('child-transaction-description', 'No user selected');
@@ -1292,7 +1290,6 @@ async function loadChildTransactions() {
 }
 
 async function loadChildTiles() {
-  // CHANGE: Simplified tile creation with template literals, used Map for balances
   try {
     if (!db || !familyCode) {
       showError('child-tiles', 'No family data');
@@ -1310,7 +1307,7 @@ async function loadChildTiles() {
       childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
       return;
     }
-    for (const doc of snapshot.docs) {
+    await Promise.all(snapshot.docs.map(async (doc) => {
       const userId = doc.id;
       const email = doc.data().email?.trim() ?? `Child Account ${userId.substring(0, 8)}`;
       const transQuery = query(collection(db, 'childTransactions'), where('userId', '==', userId));
@@ -1321,7 +1318,7 @@ async function loadChildTiles() {
         balance += trans.type === 'credit' ? trans.amount : -trans.amount;
       });
       childBalances.set(userId, { email, balance });
-    }
+    }));
 
     childTiles.innerHTML = '';
     if (childBalances.size === 0) {
@@ -1348,7 +1345,6 @@ async function loadChildTiles() {
 }
 
 async function setupChildAccounts() {
-  // CHANGE: Added debounce to add button, simplified event handlers
   try {
     const addChildTransactionBtn = document.getElementById('add-child-transaction');
     const childTransactionTable = document.getElementById('child-transaction-table');
@@ -1359,9 +1355,20 @@ async function setupChildAccounts() {
     }
 
     let isProcessing = false;
-    addChildTransactionBtn.addEventListener('click', async () => {
-      if (isEditing.childTransaction || isProcessing) return;
+    let lastAddClickTime = 0;
+    const DEBOUNCE_MS = 5000;
+
+    addChildTransactionBtn.addEventListener('click', async (event) => {
+      event.preventDefault();
+      const now = Date.now();
+      if (now - lastAddClickTime < DEBOUNCE_MS || isProcessing) return;
+      lastAddClickTime = now;
       isProcessing = true;
+
+      if (isEditing.childTransaction) {
+        isProcessing = false;
+        return;
+      }
       clearErrors();
       const type = document.getElementById('child-transaction-type').value;
       const amount = parseFloat(document.getElementById('child-transaction-amount').value);
@@ -1380,7 +1387,6 @@ async function setupChildAccounts() {
       try {
         addChildTransactionBtn.disabled = true;
         addChildTransactionBtn.textContent = 'Adding...';
-        const now = Date.now();
         const txId = `tx-${transactionUserId}-${type}-${amount}-${description}-${now}`.replace(/[^a-zA-Z0-9-]/g, '-');
         await retryFirestoreOperation(() => 
           setDoc(doc(db, 'childTransactions', txId), {
@@ -1491,7 +1497,6 @@ async function setupChildAccounts() {
 }
 
 async function calculateChildBalance(userId) {
-  // CHANGE: Simplified reduction for balance
   try {
     if (!db || !userId) return 0;
     let totalBalance = 0;
@@ -1509,7 +1514,6 @@ async function calculateChildBalance(userId) {
 }
 
 async function updateDashboard() {
-  // CHANGE: Optimized queries by chunking large 'in' arrays, reduced logging
   try {
     if (!db || !currentUser?.uid) {
       showError('balance', 'User not authenticated');
@@ -1558,13 +1562,11 @@ async function updateDashboard() {
         totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
       });
 
-      const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
-      const categoriesSnapshot = await getDocs(categoriesQuery);
+      if (!cachedCategories) await loadCategories();
       const budgetToCategories = new Map();
-      categoriesSnapshot.forEach(doc => {
-        const category = doc.data();
+      cachedCategories.forEach((category, id) => {
         if (category.budgetId) {
-          budgetToCategories.set(category.budgetId, [...(budgetToCategories.get(category.budgetId) ?? []), doc.id]);
+          budgetToCategories.set(category.budgetId, [...(budgetToCategories.get(category.budgetId) ?? []), id]);
         }
       });
 
@@ -1626,7 +1628,6 @@ async function updateDashboard() {
 }
 
 async function setupLogout() {
-  // CHANGE: Simplified polling with timeout, added retries to signOut
   const logoutButton = document.getElementById('logout-button');
   if (!logoutButton) return;
 
@@ -1651,7 +1652,6 @@ async function setupLogout() {
   });
 }
 
-// CHANGE: Added setup for floating button and modals in initApp, with click outside closing
 async function initApp() {
   if (currentAccountType === 'admin' && db && familyCode) {
     await resetBudgetsForNewMonth(db, familyCode);
@@ -1665,7 +1665,6 @@ async function initApp() {
   setupChildAccounts();
   setupLogout();
 
-  // CHANGE: New feature - Floating plus button and menu
   const addItemButton = document.getElementById('add-item-button');
   const addItemMenu = document.getElementById('add-item-menu');
   const addTransactionMenu = document.getElementById('add-transaction-menu');
@@ -1677,7 +1676,6 @@ async function initApp() {
       addItemMenu.classList.toggle('hidden');
     });
 
-    // Click outside to close menu
     document.addEventListener('click', (e) => {
       if (!addItemButton.contains(e.target) && !addItemMenu.contains(e.target)) {
         addItemMenu.classList.add('hidden');
@@ -1685,7 +1683,6 @@ async function initApp() {
     });
   }
 
-  // Menu items open modals and hide menu
   addTransactionMenu?.addEventListener('click', () => {
     document.getElementById('add-transaction-modal')?.classList.remove('hidden');
     addItemMenu.classList.add('hidden');
@@ -1699,7 +1696,6 @@ async function initApp() {
     addItemMenu.classList.add('hidden');
   });
 
-  // Setup modal saves using reusable add functions
   document.getElementById('save-transaction')?.addEventListener('click', async () => {
     const type = document.getElementById('new-transaction-type').value;
     const amount = parseFloat(document.getElementById('new-transaction-amount').value);
@@ -1709,7 +1705,6 @@ async function initApp() {
     try {
       await addTransaction({ type, amount, categoryId, description, date });
       document.getElementById('add-transaction-modal')?.classList.add('hidden');
-      // Clear modal form
       document.getElementById('new-transaction-type').value = 'debit';
       document.getElementById('new-transaction-amount').value = '';
       document.getElementById('new-transaction-category').value = '';
@@ -1722,7 +1717,6 @@ async function initApp() {
 
   document.getElementById('cancel-transaction')?.addEventListener('click', () => {
     document.getElementById('add-transaction-modal')?.classList.add('hidden');
-    // Clear form
     document.getElementById('new-transaction-type').value = 'debit';
     document.getElementById('new-transaction-amount').value = '';
     document.getElementById('new-transaction-category').value = '';
@@ -1730,9 +1724,6 @@ async function initApp() {
     document.getElementById('new-transaction-date').value = '';
   });
 
-  // Similar for budget and category modals, but already handled in setupBudgets and setupCategories for save-category and save-budget
-
-  // Click outside to close modals
   const modals = ['add-transaction-modal', 'add-budget-modal', 'add-category-modal', 'edit-budget-modal', 'delete-confirm-modal'];
   document.addEventListener('click', (e) => {
     modals.forEach(modalId => {
