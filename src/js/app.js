@@ -388,7 +388,6 @@ async function loadCategories() {
   } catch (error) {
     console.error('loadCategories error:', error);
     showError('category-name', `Failed to load categories: ${error.message}`);
-    // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
     const categoryTableError = document.getElementById('category-table');
     if (categoryTableError) {
       categoryTableError.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
@@ -462,14 +461,14 @@ async function setupCategories() {
 
     categorySelect.addEventListener('change', () => {
       if (categorySelect.value === 'add-new') {
-        domElements.addCategoryModal?.classList.remove('hidden');
+        if (domElements.addCategoryModal) domElements.addCategoryModal.classList.remove('hidden');
         categorySelect.value = '';
       }
     });
 
     newCategorySelect.addEventListener('change', () => {
       if (newCategorySelect.value === 'add-new') {
-        domElements.addCategoryModal?.classList.remove('hidden');
+        if (domElements.addCategoryModal) domElements.addCategoryModal.classList.remove('hidden');
         newCategorySelect.value = '';
       }
     });
@@ -511,7 +510,7 @@ async function setupCategories() {
           })
         );
         categoryCache.set(docRef.id, { id: docRef.id, data: () => ({ name, type, budgetId, familyCode }) });
-        domElements.addCategoryModal?.classList.add('hidden');
+        if (domElements.addCategoryModal) domElements.addCategoryModal.classList.add('hidden');
         nameInput.value = '';
         typeSelect.value = 'income';
         budgetSelect.value = 'none';
@@ -526,10 +525,14 @@ async function setupCategories() {
     saveCategory.addEventListener('click', debouncedSaveCategory);
 
     cancelCategory.addEventListener('click', () => {
-      domElements.addCategoryModal?.classList.add('hidden');
-      document.getElementById('new-category-name')?.value = '';
-      document.getElementById('new-category-type')?.value = 'income';
-      document.getElementById('new-category-budget')?.value = 'none';
+      if (domElements.addCategoryModal) domElements.addCategoryModal.classList.add('hidden');
+      // CHANGE: Fixed invalid optional chaining on LHS by using if checks
+      const newCatName = document.getElementById('new-category-name');
+      if (newCatName) newCatName.value = '';
+      const newCatType = document.getElementById('new-category-type');
+      if (newCatType) newCatType.value = 'income';
+      const newCatBudget = document.getElementById('new-category-budget');
+      if (newCatBudget) newCatBudget.value = 'none';
     });
 
     categoryTable.addEventListener('click', async (e) => {
@@ -745,7 +748,6 @@ async function loadBudgets() {
   } catch (error) {
     console.error('loadBudgets: Error loading budgets', error);
     showError('budget-name', `Failed to load budgets: ${error.message}`);
-    // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
     const budgetTableError = document.getElementById('budget-table');
     if (budgetTableError) {
       budgetTableError.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading budgets</td></tr>';
@@ -841,7 +843,7 @@ async function setupBudgets() {
 
   domElements.categoryBudgetSelect?.addEventListener('change', () => {
     if (domElements.categoryBudgetSelect.value === 'add-new') {
-      domElements.addBudgetModal?.classList.remove('hidden');
+      if (domElements.addBudgetModal) domElements.addBudgetModal.classList.remove('hidden');
       domElements.categoryBudgetSelect.value = 'none';
     }
   });
@@ -900,7 +902,7 @@ async function setupBudgets() {
       );
       budgetCache.set(docRef.id, { id: docRef.id, data: () => budgetData });
       clearTransactionCache();
-      domElements.addBudgetModal?.classList.add('hidden');
+      if (domElements.addBudgetModal) domElements.addBudgetModal.classList.add('hidden');
       nameInput.value = '';
       amountInput.value = '';
       await loadBudgets();
@@ -915,9 +917,12 @@ async function setupBudgets() {
   saveBudget.addEventListener('click', debouncedSaveBudget);
 
   cancelBudget.addEventListener('click', () => {
-    domElements.addBudgetModal?.classList.add('hidden');
-    document.getElementById('new-budget-name').value = '';
-    document.getElementById('new-budget-amount').value = '';
+    if (domElements.addBudgetModal) domElements.addBudgetModal.classList.add('hidden');
+    // CHANGE: Fixed invalid optional chaining on LHS by using if checks
+    const newBudgetName = document.getElementById('new-budget-name');
+    if (newBudgetName) newBudgetName.value = '';
+    const newBudgetAmount = document.getElementById('new-budget-amount');
+    if (newBudgetAmount) newBudgetAmount.value = '';
   });
 
   budgetTable.addEventListener('click', async (e) => {
@@ -927,8 +932,10 @@ async function setupBudgets() {
         const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'budgets', id)));
         if (docSnap.exists()) {
           const data = docSnap.data();
-          document.getElementById('budget-name').value = data.name;
-          document.getElementById('budget-amount').value = data.amount;
+          const nameInput = document.getElementById('budget-name');
+          const amountInput = document.getElementById('budget-amount');
+          if (nameInput) nameInput.value = data.name;
+          if (amountInput) amountInput.value = data.amount;
           addBudget.innerHTML = 'Update Budget';
           isEditing.budget = true;
           const updateHandler = async () => {
@@ -1093,9 +1100,13 @@ async function setupBudgets() {
 
   cancelEditBudget.addEventListener('click', () => {
     domElements.editBudgetModal.classList.add('hidden');
-    document.getElementById('edit-budget-name').value = '';
-    document.getElementById('edit-budget-amount').value = '';
-    document.getElementById('edit-budget-id').value = '';
+    // CHANGE: Fixed invalid optional chaining on LHS by using if checks
+    const editBudgetName = document.getElementById('edit-budget-name');
+    if (editBudgetName) editBudgetName.value = '';
+    const editBudgetAmount = document.getElementById('edit-budget-amount');
+    if (editBudgetAmount) editBudgetAmount.value = '';
+    const editBudgetId = document.getElementById('edit-budget-id');
+    if (editBudgetId) editBudgetId.value = '';
   });
 }
 
@@ -1112,7 +1123,6 @@ async function loadTransactions() {
 
     if (!db || !familyCode) {
       showError('transactions-filter', 'Database service not available');
-      // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
       const transTableError = document.getElementById('transaction-table');
       if (transTableError) {
         transTableError.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Database unavailable</td></tr>';
@@ -1190,7 +1200,6 @@ async function loadTransactions() {
   } catch (error) {
     console.error('loadTransactions error:', error);
     showError('transactions-filter', `Failed to load transactions: ${error.message}`);
-    // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
     const transTableError = document.getElementById('transaction-table');
     if (transTableError) {
       transTableError.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
@@ -1475,7 +1484,7 @@ async function loadChildAccounts() {
       return;
     }
 
-    domElements.childAccountsSection?.classList.remove('hidden');
+    if (domElements.childAccountsSection) domElements.childAccountsSection.classList.remove('hidden');
 
     if (currentAccountType === 'admin') {
       childSelector.classList.remove('hidden');
@@ -1515,7 +1524,6 @@ async function loadChildTransactions() {
   try {
     if (!db || !currentChildUserId) {
       showError('child-transaction-description', 'No user selected');
-      // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
       const childTableNoUser = document.getElementById('child-transaction-table');
       if (childTableNoUser) {
         childTableNoUser.innerHTML = '<tr><td colspan="5" class="text-center py-4">No user selected</td></tr>';
@@ -1590,7 +1598,6 @@ async function loadChildTransactions() {
   } catch (error) {
     console.error('loadChildTransactions error:', error);
     showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
-    // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
     const childTableError = document.getElementById('child-transaction-table');
     if (childTableError) {
       childTableError.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
@@ -1651,7 +1658,6 @@ async function loadChildTiles() {
     }
   } catch (error) {
     console.error('loadChildTiles error:', error);
-    // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
     const childTilesError = document.getElementById('child-tiles');
     if (childTilesError) {
       childTilesError.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
@@ -1820,7 +1826,6 @@ async function setupChildAccounts() {
       if (currentChildUserId) {
         loadChildTransactions();
       } else {
-        // CHANGE: Fixed invalid optional chaining on LHS of assignment by using if check
         const childTableNoSelect = document.getElementById('child-transaction-table');
         if (childTableNoSelect) {
           childTableNoSelect.innerHTML = '<tr><td colspan="5" class="text-center py-4">No child selected</td></tr>';
@@ -1889,11 +1894,11 @@ async function updateDashboard() {
       childTilesElement.appendChild(tile);
       childTilesElement.style.display = 'block';
 
-      balanceElement.parentElement?.classList.add('hidden');
+      if (balanceElement.parentElement) balanceElement.parentElement.classList.add('hidden');
       balanceElement.textContent = 'N/A';
-      afterBudgetElement.parentElement?.classList.add('hidden');
+      if (afterBudgetElement.parentElement) afterBudgetElement.parentElement.classList.add('hidden');
       afterBudgetElement.textContent = 'N/A';
-      totalBudgetElement.parentElement?.classList.add('hidden');
+      if (totalBudgetElement.parentElement) totalBudgetElement.parentElement.classList.add('hidden');
       totalBudgetElement.textContent = 'N/A';
       totalRemainingElement.textContent = 'N/A';
     } else {
@@ -1969,13 +1974,13 @@ async function updateDashboard() {
       }
 
       balanceElement.textContent = formatCurrency(totalBalance, 'INR');
-      balanceElement.parentElement?.classList.remove('hidden');
+      if (balanceElement.parentElement) balanceElement.parentElement.classList.remove('hidden');
       totalBudgetElement.textContent = formatCurrency(totalBudgetAmount, 'INR');
       totalRemainingElement.textContent = formatCurrency(totalBudgetAmount - totalSpent, 'INR');
-      totalBudgetElement.parentElement?.classList.remove('hidden');
+      if (totalBudgetElement.parentElement) totalBudgetElement.parentElement.classList.remove('hidden');
       const afterBudget = totalBalance - (totalBudgetAmount - totalSpent);
       afterBudgetElement.textContent = formatCurrency(afterBudget, 'INR');
-      afterBudgetElement.parentElement?.classList.remove('hidden');
+      if (afterBudgetElement.parentElement) afterBudgetElement.parentElement.classList.remove('hidden');
 
       await loadBudgets();
       childTilesElement.innerHTML = '';
@@ -2006,9 +2011,10 @@ async function setupLogout() {
           await signOut(auth);
           currentChildUserId = null;
           currentAccountType = null;
-          document.getElementById('login-section')?.classList.remove('hidden');
-          document.getElementById('app-section')?.classList.add('hidden');
-          document.getElementById('page-title')?.textContent = 'Login';
+          if (document.getElementById('login-section')) document.getElementById('login-section').classList.remove('hidden');
+          if (document.getElementById('app-section')) document.getElementById('app-section').classList.add('hidden');
+          const pageTitle = document.getElementById('page-title');
+          if (pageTitle) pageTitle.textContent = 'Login';
           logoutButton.classList.add('hidden');
         } catch (error) {
           showError('page-title', `Failed to log out: ${error.message}`);
@@ -2111,12 +2117,12 @@ function setupFloatingPlusButton() {
 
   document.getElementById('add-budget-option')?.addEventListener('click', () => {
     menuModal.classList.add('hidden');
-    domElements.addBudgetModal?.classList.remove('hidden');
+    if (domElements.addBudgetModal) domElements.addBudgetModal.classList.remove('hidden');
   });
 
   document.getElementById('add-category-option')?.addEventListener('click', () => {
     menuModal.classList.add('hidden');
-    domElements.addCategoryModal?.classList.remove('hidden');
+    if (domElements.addCategoryModal) domElements.addCategoryModal.classList.remove('hidden');
   });
 
   document.getElementById('close-trans')?.addEventListener('click', () => {
