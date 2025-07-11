@@ -24,8 +24,13 @@ let loadedTabs = { budgets: false, transactions: false, childAccounts: false };
 // Load App Data
 async function loadAppData() {
   console.log('loadAppData: Starting');
-  if (!currentUser || !familyCode || !db) {
-    console.error('Cannot load app data: missing user, familyCode, or Firestore');
+  if (!currentUser || !db) {
+    console.error('Cannot load app data: missing user or Firestore');
+    return;
+  }
+  await loadProfileData();
+  if (!familyCode) {
+    console.error('Cannot load app data: missing familyCode');
     return;
   }
   try {
@@ -43,7 +48,6 @@ async function loadAppData() {
       domElements.currencyToggle.value = userCurrency;
     }
     await Promise.all([
-      loadProfileData(),
       loadCategories(),
       updateDashboard()
     ]);
@@ -418,6 +422,8 @@ async function loadProfileData() {
         domElements.profileCurrency.value = data.currency || 'INR';
         domElements.profileFamilyCode.value = data.familyCode || '--';
         domElements.profileAccountType.value = data.accountType || '--';
+        setUserCurrency(data.currency || 'INR');
+        setFamilyCode(data.familyCode || '--');
         currentAccountType = data.accountType || '--';
         console.log('Profile data loaded:', { email: currentUser.email, currency: data.currency, familyCode: data.familyCode, accountType: data.accountType });
       } else {
@@ -582,6 +588,8 @@ async function setupCategories() {
       document.getElementById('edit-category-id').value = '';
       saveCategory.textContent = 'Save';
       isEditing.category = false;
+      const addItemMenu = document.getElementById('add-item-menu');
+      addItemMenu.classList.add('hidden');
     });
 
     categorySelect.addEventListener('change', () => {
@@ -845,6 +853,16 @@ async function loadBudgets() {
     }
   }
 }
+
+
+
+
+
+
+
+
+
+
 
 async function setupBudgets() {
   console.log('setupBudgets: Starting');
