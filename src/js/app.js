@@ -24,13 +24,8 @@ let loadedTabs = { budgets: false, transactions: false, childAccounts: false };
 // Load App Data
 async function loadAppData() {
   console.log('loadAppData: Starting');
-  if (!currentUser || !db) {
-    console.error('Cannot load app data: missing user or Firestore');
-    return;
-  }
-  await loadProfileData();
-  if (!familyCode) {
-    console.error('Cannot load app data: missing familyCode');
+  if (!currentUser || !familyCode || !db) {
+    console.error('Cannot load app data: missing user, familyCode, or Firestore');
     return;
   }
   try {
@@ -48,6 +43,7 @@ async function loadAppData() {
       domElements.currencyToggle.value = userCurrency;
     }
     await Promise.all([
+      loadProfileData(),
       loadCategories(),
       updateDashboard()
     ]);
@@ -422,8 +418,6 @@ async function loadProfileData() {
         domElements.profileCurrency.value = data.currency || 'INR';
         domElements.profileFamilyCode.value = data.familyCode || '--';
         domElements.profileAccountType.value = data.accountType || '--';
-        setUserCurrency(data.currency || 'INR');
-        setFamilyCode(data.familyCode || '--');
         currentAccountType = data.accountType || '--';
         console.log('Profile data loaded:', { email: currentUser.email, currency: data.currency, familyCode: data.familyCode, accountType: data.accountType });
       } else {
@@ -588,8 +582,6 @@ async function setupCategories() {
       document.getElementById('edit-category-id').value = '';
       saveCategory.textContent = 'Save';
       isEditing.category = false;
-      const addItemMenu = document.getElementById('add-item-menu');
-      addItemMenu.classList.add('hidden');
     });
 
     categorySelect.addEventListener('change', () => {
@@ -854,16 +846,6 @@ async function loadBudgets() {
   }
 }
 
-
-
-
-
-
-
-
-
-
-
 async function setupBudgets() {
   console.log('setupBudgets: Starting');
   const addBudgetMenu = document.getElementById('add-budget-menu');
@@ -892,8 +874,6 @@ async function setupBudgets() {
     document.getElementById('edit-budget-id').value = '';
     saveBudget.textContent = 'Save';
     isEditing.budget = false;
-    const addItemMenu = document.getElementById('add-item-menu');
-    if (addItemMenu) addItemMenu.classList.add('hidden');
   });
 
   domElements.categoryBudgetSelect?.addEventListener('change', () => {
@@ -1243,8 +1223,6 @@ async function setupTransactions() {
       document.getElementById('edit-transaction-id').value = '';
       saveTransaction.textContent = 'Save';
       isEditing.transaction = false;
-      const addItemMenu = document.getElementById('add-item-menu');
-      if (addItemMenu) addItemMenu.classList.add('hidden');
     });
 
     saveTransaction.addEventListener('click', async () => {
@@ -1461,6 +1439,17 @@ async function setupTransactions() {
   }
 }
 
+
+
+
+
+
+
+
+
+
+
+
 async function loadChildAccounts() {
   console.log('loadChildAccounts: Starting', { familyCode, accountType: currentAccountType });
   try {
@@ -1547,6 +1536,24 @@ async function loadChildAccounts() {
   }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 async function loadChildTransactions() {
   console.log('loadChildTransactions: Starting for user:', currentChildUserId);
   try {
@@ -1562,6 +1569,7 @@ async function loadChildTransactions() {
       }
       const balance = document.getElementById('child-balance');
       if (balance) {
+        // Use synchronous fallback to avoid await in non-async context
         balance.textContent = '₹0';
       }
       return;
@@ -1603,6 +1611,7 @@ async function loadChildTransactions() {
           console.log('loadChildTransactions: No transactions found');
         } else {
           const transactions = [];
+          // Corrected: Sum totalBalance from all transactions (before filtering)
           snapshot.forEach(doc => {
             const transaction = doc.data();
             totalBalance += transaction.type === 'credit' ? transaction.amount : -transaction.amount;
@@ -1648,7 +1657,7 @@ async function loadChildTransactions() {
       });
       showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
       childTransactionTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-      childBalance.textContent = '₹0';
+      childBalance.textContent = '₹0'; // Synchronous fallback
     }
   } catch (error) {
     console.error('loadChildTransactions error:', {
@@ -1663,7 +1672,7 @@ async function loadChildTransactions() {
     }
     const balance = document.getElementById('child-balance');
     if (balance) {
-      balance.textContent = '₹0';
+      balance.textContent = '₹0'; // Synchronous fallback
     }
   }
 }
@@ -1716,7 +1725,7 @@ async function loadChildTiles() {
             childBalances.set(userId, { email, balance: 0 });
           }
         });
-        await Promise.all(promises);
+        return Promise.all(promises);
       });
     } catch (error) {
       console.error('loadChildTiles: Failed to fetch child users', {
@@ -2372,15 +2381,15 @@ async function setupLogout() {
               currentChildUserId = null;
               currentAccountType = null;
 
-              const loginSection = document.getElementById('auth-section');
+              const loginSection = document.getElementById('login-section');
               const appSection = document.getElementById('app-section');
               const pageTitle = document.getElementById('page-title');
 
               if (loginSection) {
                 loginSection.classList.remove('hidden');
-                console.log('logoutButton: auth-section shown');
+                console.log('logoutButton: login-section shown');
               } else {
-                console.warn('logoutButton: auth-section not found');
+                console.warn('logoutButton: login-section not found');
               }
               if (appSection) {
                 appSection.classList.add('hidden');
@@ -2431,30 +2440,10 @@ async function setupLogout() {
   }, 500);
 }
 
-function setupFloatingButton() {
-  const addItemButton = document.getElementById('add-item-button');
-  const addItemMenu = document.getElementById('add-item-menu');
-  if (!addItemButton || !addItemMenu) {
-    console.error('setupFloatingButton: Missing DOM elements');
-    return;
-  }
-
-  addItemButton.addEventListener('click', () => {
-    addItemMenu.classList.toggle('hidden');
-  });
-
-  // Close menu when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!addItemButton.contains(e.target) && !addItemMenu.contains(e.target)) {
-      addItemMenu.classList.add('hidden');
-    }
-  });
-}
-
 async function initApp() {
   console.log('initApp: Starting');
   try {
-    if (currentAccountType === 'admin' && db && familyCode) {
+    if (currentUser && currentAccountType === 'admin' && db && familyCode) {
       console.log('initApp: Checking budget reset for admin');
       await resetBudgetsForNewMonth(db, familyCode);
       console.log('initApp: Budget reset check complete');
@@ -2467,7 +2456,6 @@ async function initApp() {
     setupTransactions();
     setupChildAccounts();
     setupLogout();
-    setupFloatingButton();
     console.log('initApp: Complete');
   } catch (error) {
     console.error('initApp error:', {
