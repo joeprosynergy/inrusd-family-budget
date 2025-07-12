@@ -120,17 +120,22 @@ function setupTabs() {
     }},
     { id: 'child-accounts', name: 'Child Accounts', section: domElements.childAccountsSection, show: async () => {
       console.log('setupTabs: Showing child-accounts');
-      if (!state.loadedTabs.childAccounts) {
-        try {
+      if (!domElements.childAccountsSection) {
+        console.error('setupTabs: Child accounts section not found');
+        showError('page-title', 'Child accounts section not available.');
+        return;
+      }
+      try {
+        if (!state.loadedTabs.childAccounts) {
           await loadChildAccounts();
           state.loadedTabs.childAccounts = true;
-        } catch (error) {
-          console.error('setupTabs: Failed to load child accounts', error);
-          showError('child-user-id', 'Failed to load child accounts tab.');
+        } else {
+          console.log('setupTabs: Child accounts already loaded, refreshing');
+          await loadChildAccounts();
         }
-      } else {
-        console.log('setupTabs: Child accounts already loaded, refreshing');
-        await loadChildAccounts();
+      } catch (error) {
+        console.error('setupTabs: Failed to load child accounts', error);
+        showError('child-user-id', 'Failed to load child accounts tab.');
       }
     }},
     { id: 'profile', name: 'User Profile', section: domElements.profileSection, show: () => {
@@ -146,6 +151,7 @@ function setupTabs() {
     const tab = tabs.find(t => t.id === tabId);
     if (!tab) {
       console.error(`switchTab: Tab not found: ${tabId}`);
+      showError('page-title', `Tab ${tabId} not found.`);
       return;
     }
 
@@ -187,7 +193,12 @@ function setupTabs() {
       }
     }
 
-    tab.show();
+    try {
+      tab.show();
+    } catch (error) {
+      console.error(`switchTab: Error showing tab ${tabId}`, error);
+      showError('page-title', `Failed to load ${tab.name} tab.`);
+    }
     currentTabIndex = tabs.findIndex(t => t.id === tabId);
   };
 
@@ -202,6 +213,9 @@ function setupTabs() {
       });
     } else {
       console.error(`setupTabs: Tab element not found for ${tab.id}`);
+      if (tab.id === 'child-accounts') {
+        showError('page-title', 'Child accounts tab not found in the DOM.');
+      }
     }
   });
 
