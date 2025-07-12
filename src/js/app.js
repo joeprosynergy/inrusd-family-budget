@@ -24,6 +24,9 @@ const state = {
   loadedTabs: { budgets: false, transactions: false, childAccounts: false }
 };
 
+// Supported currencies for dynamic rate fetching
+const supportedCurrencies = ['INR', 'USD', 'ZAR'];
+
 // Utility to get date range
 const getDateRangeWrapper = (filter) => getDateRange(filter, domElements.filterStartDate, domElements.filterEndDate);
 
@@ -37,27 +40,53 @@ async function loadAppData() {
   }
 
   try {
-    // Fetch exchange rates in parallel
-    const [inrUsdRate, inrZarRate, usdZarRate] = await Promise.all([
-      fetchExchangeRate('INR', 'USD', exchangeRateCache.get('INR_USD')),
-      fetchExchangeRate('INR', 'ZAR', exchangeRateCache.get('INR_ZAR')),
-      fetchExchangeRate('USD', 'ZAR', exchangeRateCache.get('USD_ZAR'))
-    ]);
+    // Generate currency pairs dynamically
+    const pairs = [];
+    for (let i = 0; i < supportedCurrencies.length; i++) {
+      for (let j = i + 1; j < supportedCurrencies.length; j++) {
+        pairs.push([supportedCurrencies[i], supportedCurrencies[j]]);
+        pairs.push([supportedCurrencies[j], supportedCurrencies[i]]);
+      }
+    }
 
-    // Update cache
-    exchangeRateCache.set('INR_USD', { rate: inrUsdRate, timestamp: Date.now() });
-    exchangeRateCache.set('INR_ZAR', { rate: inrZarRate, timestamp: Date.now() });
-    exchangeRateCache.set('USD_ZAR', { rate: usdZarRate, timestamp: Date.now() });
+    // Fetch exchange rates in parallel with individual handling
+    const ratePromises = pairs.map(async ([from, to]) => {
+      const key = `${from}_${to}`;
+      try {
+        const rate = await fetchExchangeRate(from, to, exchangeRateCache.get(key));
+        exchangeRateCache.set(key, { rate, timestamp: Date.now() });
+        return rate;
+      } catch (error) {
+        console.error(`Failed to fetch rate for ${key}:`, error);
+        // Use fallback or last known
+        return exchangeRateCache.get(key)?.rate || 1;
+      }
+    });
+    await Promise.all(ratePromises);
 
     if (domElements.currencyToggle) {
       domElements.currencyToggle.value = userCurrency;
     }
 
-    await Promise.all([
+    // Load other data in parallel with individual error handling
+    const [profileResult, categoriesResult, dashboardResult] = await Promise.allSettled([
       loadProfileData(),
       loadCategories(),
       updateDashboard()
     ]);
+
+    if (profileResult.status === 'rejected') {
+      console.error('Failed to load profile:', profileResult.reason);
+      showError('profile-email', 'Failed to load profile data.');
+    }
+    if (categoriesResult.status === 'rejected') {
+      console.error('Failed to load categories:', categoriesResult.reason);
+      showError('category-name', 'Failed to load categories.');
+    }
+    if (dashboardResult.status === 'rejected') {
+      console.error('Failed to update dashboard:', dashboardResult.reason);
+      showError('balance', 'Failed to update dashboard.');
+    }
   } catch (error) {
     console.error('loadAppData error:', error);
     showError('page-title', 'Failed to load app data.');
@@ -213,6 +242,17 @@ function setupTabs() {
         switchTab(tabs[currentTabIndex + 1].id);
       } else if (deltaX > 0 && currentTabIndex > 0) {
         switchTab(tabs[currentTabIndex - 1].id);
+      }
+    });
+
+    // Keyboard navigation for accessibility
+    swipeContainer.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' && currentTabIndex < tabs.length - 1) {
+        switchTab(tabs[currentTabIndex + 1].id);
+        tabs[currentTabIndex + 1].section.focus();
+      } else if (e.key === 'ArrowLeft' && currentTabIndex > 0) {
+        switchTab(tabs[currentTabIndex - 1].id);
+        tabs[currentTabIndex - 1].section.focus();
       }
     });
   } else {
@@ -1602,7 +1642,7 @@ async function updateDashboard() {
     } else {
       console.log('updateDashboard: Admin account mode');
       let totalBalance = 0, totalBudgetAmount = 0, totalSpent = 0;
-      const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
+      const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode), where('createdAt', '>=', start), where('createdAt', '<=', end));
       const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
       totalBalance = snapshot.docs.reduce((sum, doc) => {
         const tx = doc.data();
