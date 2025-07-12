@@ -16,7 +16,7 @@ export default defineConfig({
         assetFileNames: 'assets/[name].[ext]'
       }
     },
-    sourcemap: true,
+    sourcemap: process.env.NODE_ENV !== 'production',
     cssMinify: true
   },
   publicDir: false,
