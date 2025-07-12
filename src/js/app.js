@@ -16,6 +16,10 @@ import { signOut } from 'firebase/auth';
 import { retryFirestoreOperation, fetchExchangeRate, getDateRange, resetBudgetsForNewMonth, fetchCachedTransactions, clearTransactionCache } from './utils.js';
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, serverTimestamp, increment } from 'firebase/firestore';
 
+function toCamelCase(str) {
+  return str.split('-').map((word, index) => index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)).join('');
+}
+
 // State management
 const state = {
   isEditing: { transaction: false, budget: false, category: false, profile: false, childTransaction: false },
