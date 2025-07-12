@@ -245,22 +245,25 @@ function setupTabs() {
     console.warn('setupTabs: Mobile menu elements not found', { menuToggle, menuItems });
   }
 
-  // Swipe detection
+   // Swipe detection
   const swipeContainer = document.getElementById('swipeable-tabs');
   if (swipeContainer && window.matchMedia('(max-width: 768px)').matches) {
     let touchStartX = 0;
+    let touchStartY = 0;
     const minSwipeDistance = 50;
 
     swipeContainer.addEventListener('touchstart', (e) => {
       if (e.target.closest('.no-swipe')) return;
       touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
       console.log('setupTabs: Swipe started');
     });
 
     swipeContainer.addEventListener('touchend', (e) => {
       if (e.target.closest('.no-swipe')) return;
       const deltaX = e.changedTouches[0].clientX - touchStartX;
-      if (Math.abs(deltaX) < minSwipeDistance || Math.abs(e.changedTouches[0].clientY - e.touches[0].clientY) > 50) return;
+      const deltaY = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(deltaX) < minSwipeDistance || Math.abs(deltaY) > 50) return;
 
       console.log(`setupTabs: Swipe detected: deltaX=${deltaX}`);
       if (deltaX < 0 && currentTabIndex < tabs.length - 1) {
