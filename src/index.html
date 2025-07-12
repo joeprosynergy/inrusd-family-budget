@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://v6.exchangerate-api.com https://*.firebaseio.com https://*.googleapis.com; img-src 'self' data:;">
   <title>InRUSD: Family Budget</title>
   <link rel="preload" href="/assets/tailwind.css" as="style">
   <link href="/assets/tailwind.css" rel="stylesheet">
@@ -162,8 +163,14 @@
               <option value="custom">Custom Range</option>
             </select>
             <div id="custom-date-range" class="hidden flex flex-col sm:flex-row gap-4">
-              <input id="filter-start-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <input id="filter-end-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <div>
+                <label for="filter-start-date" class="block text-sm font-medium text-gray-700">Start Date</label>
+                <input id="filter-start-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              </div>
+              <div>
+                <label for="filter-end-date" class="block text-sm font-medium text-gray-700">End Date</label>
+                <input id="filter-end-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+              </div>
             </div>
           </div>
         </div>
@@ -199,7 +206,10 @@
               <option value="add-new">Add New</option>
             </select>
             <input id="description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <input id="transaction-date" type="date" placeholder="Transaction Date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600" required>
+            <div>
+              <label for="transaction-date" class="block text-sm font-medium text-gray-700">Transaction Date</label>
+              <input id="transaction-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600" required>
+            </div>
           </div>
           <button id="add-transaction" type="button" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Transaction</button>
         </div>
