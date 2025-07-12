@@ -1,25 +1,15 @@
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  root: 'src',
-  build: {
-    outDir: '../public',
-    assetsDir: 'assets',
-    rollupOptions: {
-      input: {
-        js: 'src/js/index.js',
-        tailwind: 'src/css/tailwind.css',
-        index: 'src/index.html'
-      },
-      output: {
-        entryFileNames: '[name].js',
-        assetFileNames: 'assets/[name].[ext]'
-      }
-    },
-    sourcemap: process.env.NODE_ENV !== 'production',
-    cssMinify: true
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    './src/**/*.{html,js}',
+    './index.html'
+  ],
+  theme: {
+    extend: {}
   },
-  publicDir: false,
-  envPrefix: 'VITE_',
-  base: '/'
-});
+  plugins: [],
+  purge: {
+    enabled: process.env.NODE_ENV === 'production',
+    content: ['./src/**/*.{html,js}', './index.html']
+  }
+};
