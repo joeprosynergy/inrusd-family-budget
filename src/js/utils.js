@@ -2,6 +2,7 @@
 import { showError } from './core.js';
 
 const transactionCache = new Map();
+const MAX_CACHE_SIZE = 20; // Limit cache size to prevent memory growth
 
 /**
  * Retries a Firestore operation
@@ -12,6 +13,7 @@ const transactionCache = new Map();
  * @returns {Promise<any>}
  */
 async function retryFirestoreOperation(operation, maxRetries = 3, baseDelay = 1000, operationData = null) {
+  const retryableCodes = ['unavailable', 'deadline-exceeded', 'resource-exhausted', 'internal'];
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Firestore operation attempt ${attempt}/${maxRetries}`);
@@ -23,7 +25,7 @@ async function retryFirestoreOperation(operation, maxRetries = 3, baseDelay = 10
         message: error.message,
         operationData: operationData ? JSON.stringify(operationData, null, 2) : 'No operation data'
       });
-      if (attempt === maxRetries || error.code === 'permission-denied') {
+      if (attempt === maxRetries || error.code === 'permission-denied' || !retryableCodes.includes(error.code)) {
         throw error;
       }
       const delay = baseDelay * Math.pow(2, attempt - 1);
@@ -66,11 +68,15 @@ async function fetchExchangeRate(fromCurrency, toCurrency, cache = { rate: null,
 
   let attempts = 0;
   const maxAttempts = 3;
+  const apiKey = import.meta.env.VITE_EXCHANGE_API_KEY;
+  if (!apiKey) {
+    throw new Error('Exchange rate API key is missing');
+  }
   while (attempts < maxAttempts) {
     attempts++;
     try {
       console.log(`Fetching exchange rate attempt ${attempts}/${maxAttempts} for ${fromCurrency} to ${toCurrency}`);
-      const response = await fetch(`https://v6.exchangerate-api.com/v6/18891e972833c8dd062c1283/latest/${fromCurrency}`);
+      const response = await fetch(`https://v6.exchangerate-api.com/v6/${apiKey}/latest/${fromCurrency}`);
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`);
       }
@@ -209,6 +215,11 @@ async function fetchCachedTransactions(db, familyCode, start, end) {
   );
   const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
   const transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt.toDate() }));
+  if (transactionCache.size >= MAX_CACHE_SIZE) {
+    // Remove oldest entry (FIFO)
+    const oldestKey = transactionCache.keys().next().value;
+    transactionCache.delete(oldestKey);
+  }
   transactionCache.set(cacheKey, transactions);
   console.log('fetchCachedTransactions: Cached transactions', { cacheKey, count: transactions.length });
   return transactions;
