@@ -120,9 +120,9 @@ function setupTabs() {
     }},
     { id: 'child-accounts', name: 'Child Accounts', section: domElements.childAccountsSection, show: async () => {
       console.log('setupTabs: Showing child-accounts');
-      if (!domElements.childAccountsSection) {
-        console.error('setupTabs: Child accounts section not found');
-        showError('page-title', 'Child accounts section not available.');
+      if (!domElements.childAccountsSection || !domElements.childAccountsTab) {
+        console.error('setupTabs: Child accounts section or tab not found');
+        showError('page-title', 'Child accounts feature is currently unavailable.');
         return;
       }
       try {
@@ -155,20 +155,24 @@ function setupTabs() {
       return;
     }
 
+    // Skip if tab or section is missing
+    const tabElement = domElements[`${tab.id.replace('-', '')}Tab`];
+    if (!tabElement || !tab.section) {
+      console.warn(`switchTab: Skipping tab ${tab.id} due to missing element or section`);
+      showError('page-title', `${tab.name} feature is currently unavailable.`);
+      return;
+    }
+
     // Update UI
     tabs.forEach(t => {
       const isActive = t.id === tabId;
-      const tabElement = domElements[`${t.id.replace('-', '')}Tab`];
-      if (tabElement) {
-        tabElement.classList.toggle('bg-blue-800', isActive);
-        tabElement.setAttribute('aria-selected', isActive);
-      } else {
-        console.warn(`switchTab: Tab element not found for ${t.id}`);
+      const tElement = domElements[`${t.id.replace('-', '')}Tab`];
+      if (tElement) {
+        tElement.classList.toggle('bg-blue-800', isActive);
+        tElement.setAttribute('aria-selected', isActive);
       }
       if (t.section) {
         t.section.classList.toggle('hidden', !isActive);
-      } else {
-        console.warn(`switchTab: Section not found for ${t.id}`);
       }
     });
 
@@ -212,7 +216,7 @@ function setupTabs() {
         switchTab(tab.id);
       });
     } else {
-      console.error(`setupTabs: Tab element not found for ${tab.id}`);
+      console.warn(`setupTabs: Tab element not found for ${tab.id}`);
       if (tab.id === 'child-accounts') {
         showError('page-title', 'Child accounts tab not found in the DOM.');
       }
