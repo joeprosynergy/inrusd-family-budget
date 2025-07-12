@@ -160,7 +160,8 @@ function setupTabs() {
     }
 
     // Skip if tab or section is missing
-    const tabElement = domElements[`${tab.id.replace('-', '')}Tab`];
+    const propName = toCamelCase(tab.id) + 'Tab';
+    const tabElement = domElements[propName];
     if (!tabElement || !tab.section) {
       console.warn(`switchTab: Skipping tab ${tab.id} due to missing element or section`);
       showError('page-title', `${tab.name} feature is currently unavailable.`);
@@ -170,7 +171,8 @@ function setupTabs() {
     // Update UI
     tabs.forEach(t => {
       const isActive = t.id === tabId;
-      const tElement = domElements[`${t.id.replace('-', '')}Tab`];
+      const tPropName = toCamelCase(t.id) + 'Tab';
+      const tElement = domElements[tPropName];
       if (tElement) {
         tElement.classList.toggle('bg-blue-800', isActive);
         tElement.setAttribute('aria-selected', isActive);
@@ -212,7 +214,8 @@ function setupTabs() {
 
   // Setup event listeners
   tabs.forEach(tab => {
-    const tabElement = domElements[`${tab.id.replace('-', '')}Tab`];
+    const propName = toCamelCase(tab.id) + 'Tab';
+    const tabElement = domElements[propName];
     if (tabElement) {
       console.log(`setupTabs: Attaching listener to ${tab.id}`);
       tabElement.addEventListener('click', () => {
