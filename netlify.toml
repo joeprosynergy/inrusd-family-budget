@@ -21,3 +21,9 @@
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
     Netlify-CDN-Cache-Control = "public, s-maxage=0, must-revalidate"
+
+# SPA redirects
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
