@@ -29,6 +29,28 @@ function debounce(func, wait) {
 }
 
 /**
+ * Traps focus within a modal
+ * @param {HTMLElement} modal
+ */
+function trapFocus(modal) {
+  const focusableElements = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  const firstFocusable = focusableElements[0];
+  const lastFocusable = focusableElements[focusableElements.length - 1];
+
+  modal.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      if (e.shiftKey && document.activeElement === firstFocusable) {
+        e.preventDefault();
+        lastFocusable.focus();
+      } else if (!e.shiftKey && document.activeElement === lastFocusable) {
+        e.preventDefault();
+        firstFocusable.focus();
+      }
+    }
+  });
+}
+
+/**
  * Sets up authentication event listeners
  * @param {Function} loadAppDataCallback
  */
@@ -41,7 +63,7 @@ export async function setupAuth(loadAppDataCallback) {
   console.log('setupAuth: Starting');
 
   const { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } = await import('firebase/auth');
-  const { getFirestore, doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+  const { getFirestore, doc, setDoc, serverTimestamp, writeBatch } = await import('firebase/firestore');
   const auth = getAuth();
   const db = getFirestore();
 
@@ -68,6 +90,25 @@ export async function setupAuth(loadAppDataCallback) {
       familyCodeInput.placeholder = '6-digit alphanumeric Family Code (optional)';
     }
   });
+
+  // Client-side validation on blur
+  const validateOnBlur = (input, validator, errorId, message) => {
+    input.addEventListener('blur', () => {
+      if (!validator(input.value)) {
+        showError(errorId, message);
+      }
+    });
+  };
+
+  // Login form
+  const loginForm = checkElement('login-modal')?.querySelector('form');
+  if (loginForm) {
+    loginForm.addEventListener('submit', (e) => e.preventDefault());
+  }
+  const loginEmail = checkElement('login-email');
+  if (loginEmail) {
+    validateOnBlur(loginEmail, isValidEmail, 'login-email', 'Invalid email format');
+  }
 
   // Login handler
   const loginButton = checkElement('login-button');
@@ -107,6 +148,24 @@ export async function setupAuth(loadAppDataCallback) {
     loginButton.addEventListener('click', handleLogin);
   } else {
     console.error('Cannot setup login: login-button missing');
+  }
+
+  // Signup form
+  const signupForm = checkElement('signup-modal')?.querySelector('form');
+  if (signupForm) {
+    signupForm.addEventListener('submit', (e) => e.preventDefault());
+  }
+  const signupEmail = checkElement('signup-email');
+  if (signupEmail) {
+    validateOnBlur(signupEmail, isValidEmail, 'signup-email', 'Invalid email format');
+  }
+  const signupPassword = checkElement('signup-password');
+  if (signupPassword) {
+    validateOnBlur(signupPassword, (val) => val.length >= 6, 'signup-password', 'Password must be at least 6 characters');
+  }
+  const signupConfirmPassword = checkElement('signup-confirm-password');
+  if (signupConfirmPassword) {
+    validateOnBlur(signupConfirmPassword, (val) => val === signupPassword?.value, 'signup-confirm-password', 'Passwords do not match');
   }
 
   // Signup handler
@@ -202,14 +261,17 @@ export async function setupAuth(loadAppDataCallback) {
           }
         }
 
-        // Create user document
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
+        // Create user document with batch for potential future expansions
+        const batch = writeBatch(db);
+        const userRef = doc(db, 'users', userCredential.user.uid);
+        batch.set(userRef, {
           email,
           familyCode: finalFamilyCode,
           currency,
           accountType,
           createdAt: serverTimestamp()
         });
+        await retryFirestoreOperation(() => batch.commit());
         console.log('User document created:', { uid: userCredential.user.uid, familyCode: finalFamilyCode });
 
         // Update app state
@@ -245,6 +307,16 @@ export async function setupAuth(loadAppDataCallback) {
     signupButton.addEventListener('click', handleSignup);
   } else {
     console.error('Cannot setup signup: signup-button missing');
+  }
+
+  // Reset form
+  const resetForm = checkElement('reset-modal')?.querySelector('form');
+  if (resetForm) {
+    resetForm.addEventListener('submit', (e) => e.preventDefault());
+  }
+  const resetEmail = checkElement('reset-email');
+  if (resetEmail) {
+    validateOnBlur(resetEmail, isValidEmail, 'reset-email', 'Invalid email format');
   }
 
   // Reset handler
@@ -285,6 +357,7 @@ export async function setupAuth(loadAppDataCallback) {
     checkElement('signup-modal').classList.remove('hidden');
     checkElement('login-modal').classList.add('hidden');
     checkElement('signup-email').focus(); // Accessibility
+    trapFocus(checkElement('signup-modal'));
   });
 
   const showResetBtn = checkElement('show-reset-btn');
@@ -292,6 +365,7 @@ export async function setupAuth(loadAppDataCallback) {
     checkElement('reset-modal').classList.remove('hidden');
     checkElement('login-modal').classList.add('hidden');
     checkElement('reset-email').focus(); // Accessibility
+    trapFocus(checkElement('reset-modal'));
   });
 
   const showLoginFromSignupBtn = checkElement('show-login-from-signup-btn');
@@ -299,6 +373,7 @@ export async function setupAuth(loadAppDataCallback) {
     checkElement('login-modal').classList.remove('hidden');
     checkElement('signup-modal').classList.add('hidden');
     checkElement('login-email').focus(); // Accessibility
+    trapFocus(checkElement('login-modal'));
   });
 
   const showLoginFromResetBtn = checkElement('show-login-from-reset-btn');
@@ -306,6 +381,7 @@ export async function setupAuth(loadAppDataCallback) {
     checkElement('login-modal').classList.remove('hidden');
     checkElement('reset-modal').classList.add('hidden');
     checkElement('login-email').focus(); // Accessibility
+    trapFocus(checkElement('login-modal'));
   });
 
   console.log('setupAuth: Complete');
