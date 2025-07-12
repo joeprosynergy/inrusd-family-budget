@@ -374,6 +374,17 @@ function setFamilyCode(code) {
   familyCode = code;
 }
 
+// Global error handler to ignore cross-origin "Script error." while handling real errors
+window.onerror = function(message, filename, lineno, colno, error) {
+  if (message === 'Script error.' && !filename) {
+    console.log('Ignored cross-origin script error');
+    return true;  // Prevents propagation and showing the error to the user
+  }
+  console.log('Global error:', { message, filename, lineno, colno, error });
+  showError('page-title', 'An unexpected error occurred. Please refresh the page.');
+  return false;
+};
+
 export {
   auth,
   db,
