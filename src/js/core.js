@@ -19,6 +19,23 @@ const exchangeRateCache = new Map([
   ['USD_ZAR', { rate: null, timestamp: null }]
 ]);
 const CACHE_TTL = 3600000; // 1 hour in milliseconds
+const CACHE_KEY = 'exchangeRateCache';
+
+// Load cache from localStorage on init
+try {
+  const storedCache = localStorage.getItem(CACHE_KEY);
+  if (storedCache) {
+    const parsed = JSON.parse(storedCache);
+    for (const [key, value] of Object.entries(parsed)) {
+      if (exchangeRateCache.has(key)) {
+        exchangeRateCache.set(key, value);
+      }
+    }
+    console.log('Loaded exchange rate cache from localStorage');
+  }
+} catch (error) {
+  console.warn('Failed to load exchange rate cache from localStorage:', error);
+}
 
 // DOM Elements
 /** @type {Record<string, HTMLElement | null>} */
@@ -98,8 +115,16 @@ async function initializeFirebase() {
     try {
       if (!navigator.onLine) throw new Error('No internet connection');
       const requiredFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+      let missingFields = [];
       for (const field of requiredFields) {
-        if (!firebaseConfig[field]) throw new Error(`Missing Firebase config: ${field}`);
+        if (!firebaseConfig[field]) {
+          missingFields.push(field);
+        }
+      }
+      if (missingFields.length > 0) {
+        console.error('Missing Firebase config fields:', missingFields);
+        alert('Application configuration error. Please contact support.');
+        throw new Error(`Missing Firebase config: ${missingFields.join(', ')}`);
       }
       const { initializeApp } = await import('firebase/app');
       const { getAuth } = await import('firebase/auth');
@@ -251,9 +276,17 @@ async function formatCurrency(amount, currency) {
           cacheEntry.rate = await fetchExchangeRate(from, to, cacheEntry);
         } catch {
           cacheEntry.rate = fallbackRates[key];
+          console.warn(`Using fallback rate for ${key} due to fetch failure`);
         }
         cacheEntry.timestamp = now;
         exchangeRateCache.set(key, cacheEntry);
+        // Save to localStorage
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify(Object.fromEntries(exchangeRateCache)));
+          console.log('Saved exchange rate cache to localStorage');
+        } catch (error) {
+          console.warn('Failed to save exchange rate cache to localStorage:', error);
+        }
       }
     }
 
