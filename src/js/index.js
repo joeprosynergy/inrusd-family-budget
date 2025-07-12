@@ -1,7 +1,7 @@
 // index.js
 console.log('index.js loaded');
 
-import { initializeFirebase, setupDOM, setupAuthStateListener } from './core.js';
+import { initializeFirebase, setupDOM, setupAuthStateListener, showError } from './core.js';
 import { setupAuth } from './auth.js';
 import { loadAppData, initApp } from './app.js';
 
@@ -45,11 +45,10 @@ async function init() {
         stack: error.stack
       });
       if (attempts === maxAttempts) {
-        const { showError } = await import('./core.js');
         showError('page-title', 'Failed to initialize the app. Please try refreshing the page.');
         break;
       }
-      const delay = baseDelay * Math.pow(2, attempts - 1);
+      const delay = baseDelay * Math.pow(2, attempts - 1) * (1 + Math.random() * 0.5); // Add jitter
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
@@ -63,9 +62,9 @@ window.addEventListener('error', (event) => {
     colno: event.colno,
     error: event.error?.stack
   });
+  showError('page-title', 'An unexpected error occurred. Please refresh the page.');
 });
 
-window.initApp = init;
 console.log('init: Calling init directly');
 init().catch(error => {
   console.error('init: Direct init failed:', {
@@ -73,4 +72,5 @@ init().catch(error => {
     message: error.message,
     stack: error.stack
   });
+  showError('page-title', 'Failed to initialize the app. Please try refreshing the page.');
 });
