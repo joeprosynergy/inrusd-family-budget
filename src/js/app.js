@@ -1667,7 +1667,7 @@ async function updateDashboard() {
     } else {
       console.log('updateDashboard: Admin account mode');
       let totalBalance = 0, totalBudgetAmount = 0, totalSpent = 0;
-      const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode), where('createdAt', '>=', start), where('createdAt', '<=', end));
+      const transactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
       const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
       totalBalance = snapshot.docs.reduce((sum, doc) => {
         const tx = doc.data();
