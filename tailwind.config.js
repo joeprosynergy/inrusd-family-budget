@@ -7,9 +7,6 @@ export default {
   theme: {
     extend: {}
   },
-  plugins: [],
-  purge: {
-    enabled: process.env.NODE_ENV === 'production',
-    content: ['./src/**/*.{html,js}', './index.html']
-  }
+  darkMode: 'class',
+  plugins: []
 };
