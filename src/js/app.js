@@ -705,6 +705,11 @@ async function setupCategories() {
 
 
 
+
+
+
+
+
 // Budgets
 async function loadBudgets() {
   if (!db) {
@@ -1629,8 +1634,7 @@ async function updateDashboard() {
         formatCurrency(totalBalance, 'INR'),
         formatCurrency(totalBudgetAmount, 'INR'),
         formatCurrency(totalBudgetAmount - totalSpent, 'INR'),
-        format THEY
-System: formatCurrency(totalBalance - (totalBudgetAmount - totalSpent), 'INR')
+        formatCurrency(totalBalance - (totalBudgetAmount - totalSpent), 'INR')
       ]);
       elements.balance.textContent = formattedTotalBalance;
       elements.balance.parentElement.classList.remove('hidden');
