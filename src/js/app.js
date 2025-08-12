@@ -711,6 +711,7 @@ async function setupCategories() {
 
 
 
+
 // Budgets
 async function loadBudgets() {
   if (!db) {
@@ -1319,22 +1320,18 @@ async function loadChildTransactions() {
           log('loadChildTransactions', 'Warning', `Invalid transaction date for ${doc.id}`);
           createdAt = new Date();
         }
-        if (!data.amount || typeof data.amount !== 'number' || !['credit', 'debit'].includes(data.type)) {
-          log('loadChildTransactions', 'Warning', `Invalid transaction data for ${doc.id}: amount=${data.amount}, type=${data.type}`);
-          return null;
-        }
         return { id: doc.id, ...data, createdAt };
       })
-      .filter(tx => tx && tx.createdAt >= start && tx.createdAt <= end)
+      .filter(tx => tx.createdAt >= start && tx.createdAt <= end)
       .sort((a, b) => b.createdAt - a.createdAt);
-    log('loadChildTransactions', 'Found', `${transactions.length} valid transactions`);
+    log('loadChildTransactions', 'Found', `${transactions.length} transactions`);
     if (transactions.length === 0) {
       elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
     } else {
       const fragment = document.createDocumentFragment();
       for (const tx of transactions) {
         totalBalance += tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount;
-        const formattedAmount = await formatCurrency(tx.amount, 'INR');
+        const formattedAmount = await formatCurrency(tx.amount || 0, 'INR');
         const tr = document.createElement('tr');
         tr.classList.add('table-row');
         tr.innerHTML = `
@@ -1351,11 +1348,9 @@ async function loadChildTransactions() {
       }
       elements.table.appendChild(fragment);
     }
-    const formattedBalance = await formatCurrency(totalBalance, 'INR');
-    elements.balance.textContent = formattedBalance;
-    log('loadChildTransactions', 'Balance', `Total: ${totalBalance} (${formattedBalance})`);
+    elements.balance.textContent = await formatCurrency(totalBalance, 'INR');
   } catch (error) {
-    log('loadChildTransactions', 'Error', `loading transactions: ${error.message}`);
+    log('loadChildTransactions', 'Error', 'loading transactions');
     showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
     elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
     elements.balance.textContent = await formatCurrency(0, 'INR');
@@ -1386,7 +1381,6 @@ async function loadChildTiles() {
     }
     log('loadChildTiles', 'Found', `${snapshot.docs.length} child accounts`);
     const childBalances = new Map();
-    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
     await Promise.all(snapshot.docs.map(async doc => {
       const userId = doc.id;
       const email = doc.data().email || `Child Account ${userId.substring(0, 8)}`;
@@ -1394,16 +1388,6 @@ async function loadChildTiles() {
       const transSnapshot = await retryFirestoreOperation(() => getDocs(transQuery));
       const balance = transSnapshot.docs.reduce((sum, txDoc) => {
         const tx = txDoc.data();
-        let createdAt = tx.createdAt?.toDate?.() || (typeof tx.createdAt === 'string' ? new Date(tx.createdAt) : new Date());
-        if (isNaN(createdAt.getTime())) {
-          log('loadChildTiles', 'Warning', `Invalid transaction date for ${txDoc.id}`);
-          createdAt = new Date();
-        }
-        if (!tx.amount || typeof tx.amount !== 'number' || !['credit', 'debit'].includes(tx.type)) {
-          log('loadChildTiles', 'Warning', `Invalid transaction data for ${txDoc.id}: amount=${tx.amount}, type=${tx.type}`);
-          return sum;
-        }
-        if (createdAt < start || createdAt > end) return sum;
         return sum + (tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount);
       }, 0);
       childBalances.set(userId, { email, balance });
@@ -1420,11 +1404,10 @@ async function loadChildTiles() {
         </p>
       `;
       fragment.appendChild(tile);
-      log('loadChildTiles', 'Balance', `Child ${email}: ${balance} (${formattedBalance})`);
     }
     childTiles.appendChild(fragment);
   } catch (error) {
-    log('loadChildTiles', 'Error', `loading child balances: ${error.message}`);
+    log('loadChildTiles', 'Error', 'loading child balances');
     showError('child-tiles', `Failed to load child balances: ${error.message}`);
     childTiles.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
   }
@@ -1568,29 +1551,14 @@ async function calculateChildBalance(userId) {
     return 0;
   }
   try {
-    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
     const transactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', userId));
     const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
-    const balance = snapshot.docs.reduce((sum, doc) => {
+    return snapshot.docs.reduce((sum, doc) => {
       const tx = doc.data();
-      let createdAt = tx.createdAt?.toDate?.() || (typeof tx.createdAt === 'string' ? new Date(tx.createdAt) : new Date());
-      if (isNaN(createdAt.getTime())) {
-        log('calculateChildBalance', 'Warning', `Invalid transaction date for ${doc.id}`);
-        return sum;
-      }
-      if (!tx.amount || typeof tx.amount !== 'number' || !['credit', 'debit'].includes(tx.type)) {
-        log('calculateChildBalance', 'Warning', `Invalid transaction data for ${doc.id}: amount=${tx.amount}, type=${tx.type}`);
-        return sum;
-      }
-      if (createdAt < start || createdAt > end) return sum;
-      const amount = tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount;
-      log('calculateChildBalance', 'Transaction', `ID: ${doc.id}, Amount: ${amount}, Type: ${tx.type}, Date: ${createdAt}`);
-      return sum + amount;
+      return sum + (tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount);
     }, 0);
-    log('calculateChildBalance', 'Result', `User ${userId}: Balance = ${balance}`);
-    return isNaN(balance) ? 0 : balance;
   } catch (error) {
-    log('calculateChildBalance', 'Error', `Calculating balance: ${error.message}`);
+    log('calculateChildBalance', 'Error', 'calculating balance');
     return 0;
   }
 }
@@ -1616,7 +1584,6 @@ async function updateDashboard() {
       log('updateDashboard', 'Child', 'account mode');
       const childBalance = await calculateChildBalance(currentUser.uid);
       const formattedChildBalance = await formatCurrency(childBalance, 'INR');
-      log('updateDashboard', 'Child Balance', `Balance: ${childBalance} (${formattedChildBalance})`);
       elements.childTiles.innerHTML = `
         <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
           <h3 class="text-base sm:text-lg font-semibold text-gray-700">Your Balance</h3>
@@ -1643,21 +1610,8 @@ async function updateDashboard() {
       const allTransactionsSnapshot = await retryFirestoreOperation(() => getDocs(allTransactionsQuery));
       totalBalance = allTransactionsSnapshot.docs.reduce((sum, doc) => {
         const tx = doc.data();
-        let createdAt = tx.createdAt?.toDate?.() || (typeof tx.createdAt === 'string' ? new Date(tx.createdAt) : new Date());
-        if (isNaN(createdAt.getTime())) {
-          log('updateDashboard', 'Warning', `Invalid transaction date for ${doc.id}`);
-          return sum;
-        }
-        if (!tx.amount || typeof tx.amount !== 'number' || !['credit', 'debit'].includes(tx.type)) {
-          log('updateDashboard', 'Warning', `Invalid transaction data for ${doc.id}: amount=${tx.amount}, type=${tx.type}`);
-          return sum;
-        }
-        if (createdAt < start || createdAt > end) return sum;
-        const amount = tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount;
-        log('updateDashboard', 'Transaction', `ID: ${doc.id}, Amount: ${amount}, Type: ${tx.type}, Date: ${createdAt}`);
-        return sum + amount;
+        return sum + (tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount);
       }, 0);
-      log('updateDashboard', 'Admin Balance', `Total Balance: ${totalBalance}`);
       const budgetToCategories = new Map();
       const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
       const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
@@ -1674,9 +1628,6 @@ async function updateDashboard() {
         const categoryIds = budgetToCategories.get(doc.id) || [];
         const spent = categoryIds.length > 0 ? allTransactionsSnapshot.docs.reduce((sum, txDoc) => {
           const tx = txDoc.data();
-          let createdAt = tx.createdAt?.toDate?.() || (typeof tx.createdAt === 'string' ? new Date(tx.createdAt) : new Date());
-          if (isNaN(createdAt.getTime()) || createdAt < start || createdAt > end) return sum;
-          if (!tx.amount || typeof tx.amount !== 'number' || !['credit', 'debit'].includes(tx.type)) return sum;
           return categoryIds.includes(tx.categoryId) ? sum + (tx.type === TransactionType.DEBIT ? tx.amount : -tx.amount) : sum;
         }, 0) : 0;
         totalSpent += spent;
@@ -1694,14 +1645,13 @@ async function updateDashboard() {
       elements.totalBudget.parentElement.classList.remove('hidden');
       elements.afterBudget.textContent = formattedAfterBudget;
       elements.afterBudget.parentElement.classList.remove('hidden');
-      log('updateDashboard', 'Admin Summary', `Balance: ${totalBalance} (${formattedTotalBalance}), Budget: ${totalBudgetAmount}, Spent: ${totalSpent}, Remaining: ${totalBudgetAmount - totalSpent}, After Budget: ${totalBalance - (totalBudgetAmount - totalSpent)}`);
       await loadBudgets();
       if (!elements.childTiles.innerHTML) {
         await loadChildTiles();
       }
     }
   } catch (error) {
-    log('updateDashboard', 'Error', `updating dashboard: ${error.message}`);
+    log('updateDashboard', 'Error', 'updating dashboard');
     showError('balance', `Failed to update dashboard: ${error.message}`);
   }
 }
@@ -1751,7 +1701,7 @@ async function setupLogout() {
             showError('page-title', 'Failed to log out: Connectivity issue');
           }
         } catch (error) {
-          log('setupLogout', 'Error', `during logout: ${error.message}`);
+          log('setupLogout', 'Error', 'during logout');
           showError('page-title', `Failed to log out: ${error.message}`);
         } finally {
           logoutButton.disabled = false;
@@ -1780,7 +1730,7 @@ async function initApp() {
     setupChildAccounts();
     setupLogout();
   } catch (error) {
-    log('initApp', 'Error', `Failed to initialize app: ${error.message}`);
+    log('initApp', 'Error', 'Failed to initialize app');
     showError('page-title', 'Failed to initialize app.');
   }
 }
