@@ -705,7 +705,6 @@ async function setupCategories() {
 
 
 
-
 // Budgets
 async function loadBudgets() {
   if (!db) {
@@ -751,20 +750,25 @@ async function loadBudgets() {
     }
     const tableFragment = document.createDocumentFragment();
     const tilesFragment = document.createDocumentFragment();
-    snapshot.docs.forEach(doc => {
+    for (const doc of snapshot.docs) {
       const budget = doc.data();
       const categoryIds = budgetToCategories.get(doc.id) || [];
       const spent = categoryIds.length > 0 ? transactions.reduce((sum, tx) =>
         categoryIds.includes(tx.categoryId) ? sum + (tx.type === TransactionType.DEBIT ? tx.amount : -tx.amount) : sum, 0) : 0;
       totalBudgetAmount += budget.amount;
       totalRemainingAmount += budget.amount - spent;
+      const [formattedBudgetAmount, formattedSpent, formattedRemaining] = await Promise.all([
+        formatCurrency(budget.amount, 'INR'),
+        formatCurrency(spent, 'INR'),
+        formatCurrency(budget.amount - spent, 'INR')
+      ]);
       const tr = document.createElement('tr');
       tr.classList.add('table-row');
       tr.innerHTML = `
         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount, 'INR')}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(spent, 'INR')}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatCurrency(budget.amount - spent, 'INR')}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formattedBudgetAmount}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formattedSpent}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formattedRemaining}</td>
         <td class="px-6 py-4 whitespace-nowrap text-sm">
           <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
           <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
@@ -776,10 +780,10 @@ async function loadBudgets() {
       const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
       tile.innerHTML = `
         <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
-        <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formatCurrency(budget.amount, 'INR')}</span></p>
-        <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formatCurrency(spent, 'INR')}</span></p>
+        <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formattedBudgetAmount}</span></p>
+        <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formattedSpent}</span></p>
         <p class="text-sm font-semibold text-gray-700 mt-2">
-          Remaining: <span id="${doc.id}-remaining">${formatCurrency(budget.amount - spent, 'INR')}</span>
+          Remaining: <span id="${doc.id}-remaining">${formattedRemaining}</span>
         </p>
         <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
           <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
@@ -789,16 +793,20 @@ async function loadBudgets() {
         showToast(`Warning: Budget ${budget.name} is at ${Math.round(percentage)}%`, 'warning');
       }
       tilesFragment.appendChild(tile);
-    });
+    }
     elements.budgetTable.appendChild(tableFragment);
     elements.budgetTiles.appendChild(tilesFragment);
+    const [formattedTotalBudget, formattedTotalRemaining] = await Promise.all([
+      formatCurrency(totalBudgetAmount, 'INR'),
+      formatCurrency(totalRemainingAmount, 'INR')
+    ]);
     const totalBudgetElement = document.getElementById('total-budget');
     const totalRemainingElement = document.getElementById('total-remaining');
     if (totalBudgetElement) {
-      totalBudgetElement.textContent = formatCurrency(totalBudgetAmount, 'INR');
+      totalBudgetElement.textContent = formattedTotalBudget;
     }
     if (totalRemainingElement) {
-      totalRemainingElement.textContent = formatCurrency(totalRemainingAmount, 'INR');
+      totalRemainingElement.textContent = formattedTotalRemaining;
     }
   } catch (error) {
     showError('budget-name', `Failed to load budgets: ${error.message}`);
@@ -1021,9 +1029,10 @@ async function loadTransactions() {
         log('loadTransactions', 'Warning', `Invalid transaction date for ${transaction.id}`);
         transactionDate = new Date();
       }
+      const formattedAmount = await formatCurrency(transaction.amount || 0, 'INR');
       tr.innerHTML = `
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
-        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formatCurrency(transaction.amount || 0, 'INR')}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formattedAmount}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.categoryId ? categoryMap.get(transaction.categoryId) || 'Unknown' : 'None'}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
         <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transactionDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
@@ -1174,7 +1183,8 @@ async function setupTransactions() {
       if (!domElements.deleteConfirmModal) return showError('category', 'Cannot delete: Missing components');
       const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'transactions', id)));
       const tx = docSnap.exists() ? docSnap.data() : { description: 'this transaction', amount: 0 };
-      domElements.deleteConfirmMessage.textContent = `Are you sure you want to delete the ${tx.description} transaction of ${formatCurrency(tx.amount, 'INR')}?`;
+      const formattedAmount = await formatCurrency(tx.amount, 'INR');
+      domElements.deleteConfirmMessage.textContent = `Are you sure you want to delete the ${tx.description} transaction of ${formattedAmount}?`;
       domElements.deleteConfirmModal.classList.remove('hidden');
       const confirmHandler = async () => {
         try {
@@ -1276,7 +1286,7 @@ async function loadChildTransactions() {
     }
     const balance = document.getElementById('child-balance');
     if (balance) {
-      balance.textContent = formatCurrency(0, 'INR');
+      balance.textContent = await formatCurrency(0, 'INR');
     }
     return;
   }
@@ -1314,11 +1324,12 @@ async function loadChildTransactions() {
       const fragment = document.createDocumentFragment();
       for (const tx of transactions) {
         totalBalance += tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount;
+        const formattedAmount = await formatCurrency(tx.amount || 0, 'INR');
         const tr = document.createElement('tr');
         tr.classList.add('table-row');
         tr.innerHTML = `
           <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.type || 'Unknown'}</td>
-          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formatCurrency(tx.amount || 0, 'INR')}</td>
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formattedAmount}</td>
           <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.description || ''}</td>
           <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.createdAt.toLocaleString('en-US', { day: 'numeric' })}</td>
           <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
@@ -1330,12 +1341,12 @@ async function loadChildTransactions() {
       }
       elements.table.appendChild(fragment);
     }
-    elements.balance.textContent = formatCurrency(totalBalance, 'INR');
+    elements.balance.textContent = await formatCurrency(totalBalance, 'INR');
   } catch (error) {
     log('loadChildTransactions', 'Error', 'loading transactions');
     showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
     elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-    elements.balance.textContent = formatCurrency(0, 'INR');
+    elements.balance.textContent = await formatCurrency(0, 'INR');
   }
 }
 
@@ -1376,12 +1387,13 @@ async function loadChildTiles() {
     }));
     const fragment = document.createDocumentFragment();
     for (const [userId, { email, balance }] of childBalances) {
+      const formattedBalance = await formatCurrency(balance, 'INR');
       const tile = document.createElement('div');
       tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'child-tile');
       tile.innerHTML = `
         <h3 class="text-lg font-semibold text-gray-700">${email}</h3>
         <p class="text-sm font-semibold text-gray-700 mt-2">
-          Balance: <span id="child-${userId}-balance">${formatCurrency(balance, 'INR')}</span>
+          Balance: <span id="child-${userId}-balance">${formattedBalance}</span>
         </p>
       `;
       fragment.appendChild(tile);
@@ -1491,7 +1503,8 @@ async function setupChildAccounts() {
       if (!domElements.deleteConfirmModal) return showError('child-transaction-description', 'Cannot delete: Missing components');
       const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'childTransactions', id)));
       const tx = docSnap.exists() ? docSnap.data() : { description: 'this transaction', amount: 0 };
-      domElements.deleteConfirmMessage.textContent = `Are you sure you want to delete the ${tx.description} child transaction of ${formatCurrency(tx.amount, 'INR')}?`;
+      const formattedAmount = await formatCurrency(tx.amount, 'INR');
+      domElements.deleteConfirmMessage.textContent = `Are you sure you want to delete the ${tx.description} child transaction of ${formattedAmount}?`;
       domElements.deleteConfirmModal.classList.remove('hidden');
       const confirmHandler = async () => {
         try {
@@ -1563,10 +1576,11 @@ async function updateDashboard() {
     if (state.currentAccountType === AccountType.CHILD) {
       log('updateDashboard', 'Child', 'account mode');
       const childBalance = await calculateChildBalance(currentUser.uid);
+      const formattedChildBalance = await formatCurrency(childBalance, 'INR');
       elements.childTiles.innerHTML = `
         <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
           <h3 class="text-base sm:text-lg font-semibold text-gray-700">Your Balance</h3>
-          <p class="text-lg sm:text-2xl font-bold text-gray-900">${formatCurrency(childBalance, 'INR')}</p>
+          <p class="text-lg sm:text-2xl font-bold text-gray-900">${formattedChildBalance}</p>
         </div>
       `;
       elements.childTiles.style.display = 'block';
@@ -1611,12 +1625,19 @@ async function updateDashboard() {
         }, 0) : 0;
         totalSpent += spent;
       });
-      elements.balance.textContent = formatCurrency(totalBalance, 'INR');
+      const [formattedTotalBalance, formattedTotalBudget, formattedTotalRemaining, formattedAfterBudget] = await Promise.all([
+        formatCurrency(totalBalance, 'INR'),
+        formatCurrency(totalBudgetAmount, 'INR'),
+        formatCurrency(totalBudgetAmount - totalSpent, 'INR'),
+        format THEY
+System: formatCurrency(totalBalance - (totalBudgetAmount - totalSpent), 'INR')
+      ]);
+      elements.balance.textContent = formattedTotalBalance;
       elements.balance.parentElement.classList.remove('hidden');
-      elements.totalBudget.textContent = formatCurrency(totalBudgetAmount, 'INR');
-      elements.totalRemaining.textContent = formatCurrency(totalBudgetAmount - totalSpent, 'INR');
+      elements.totalBudget.textContent = formattedTotalBudget;
+      elements.totalRemaining.textContent = formattedTotalRemaining;
       elements.totalBudget.parentElement.classList.remove('hidden');
-      elements.afterBudget.textContent = formatCurrency(totalBalance - (totalBudgetAmount - totalSpent), 'INR');
+      elements.afterBudget.textContent = formattedAfterBudget;
       elements.afterBudget.parentElement.classList.remove('hidden');
       await loadBudgets();
       if (!elements.childTiles.innerHTML) {
