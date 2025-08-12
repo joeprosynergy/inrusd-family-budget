@@ -712,6 +712,7 @@ async function setupCategories() {
 
 
 
+
 // Budgets
 async function loadBudgets() {
   if (!db) {
@@ -1512,25 +1513,6 @@ async function setupChildAccounts() {
           elements.addChildTransaction.removeEventListener('click', elements.addChildTransaction._updateHandler);
           elements.addChildTransaction._updateHandler = updateHandler;
           elements.addChildTransaction.addEventListener('click', updateHandler, { once: true });
-        } else {
-          showError('child-transaction-description', 'Transaction not found');
-        }
-      } catch (error) {
-        showError('child-transaction-description', `Failed to fetch transaction: ${error.message}`);
-      }
-    } else if (e.target.classList.contains('delete-child-transaction')) {
-      const id = e.target.dataset.id;
-      if (!domElements.deleteConfirmModal) return showError('child-transaction-description', 'Cannot delete: Missing components');
-      const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'childTransactions', id)));
-      const tx = docSnap.exists() ? docSnap.data() : { description: 'this transaction', amount: 0 };
-      const formattedAmount = await formatCurrency(tx.amount, 'INR');
-      domElements.deleteConfirmMessage.textContent = `Are you sure you want to delete the ${tx.description} child transaction of ${formattedAmount}?`;
-      domElements.deleteConfirmModal.classList.remove('hidden');
-      const confirmHandler = async () => {
-        try {
-          await retryFirestoreOperation(() => deleteDoc(doc(db, 'childTransactions', id)));
-          await Promise.all([loadChildTransactions(), loadChildTiles()]);
-          domElements.deleteConfirmModal.classList.add('hidden');
         } else {
           showError('child-transaction-description', 'Transaction not found');
         }
