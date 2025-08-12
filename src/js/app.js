@@ -702,6 +702,10 @@ async function setupCategories() {
     }
   });
 }
+
+
+
+
 // Budgets
 async function loadBudgets() {
   if (!db) {
