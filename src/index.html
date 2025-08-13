@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Strict-Transport-Security" content="max-age=31536000; includeSubDomains">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://v6.exchangerate-api.com https://securetoken.googleapis.com https://*.firebaseio.com; img-src 'self' data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://v6.exchangerate-api.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://*.firebaseio.com; img-src 'self' data:;">
   <title>InRUSD: Family Budget</title>
   <link rel="preload" href="/assets/tailwind.css" as="style">
   <link href="/assets/tailwind.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" onerror="document.createElement('script').src='/assets/chart.min.js'"></script>
   <script defer>
     console.log('index.html: Starting script load');
     window.addEventListener('error', (event) => {
