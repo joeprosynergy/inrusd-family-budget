@@ -4,10 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://v6.exchangerate-api.com https://*.firebaseio.com https://*.googleapis.com; img-src 'self' data:;">
+  <meta http-equiv="Strict-Transport-Security" content="max-age=31536000; includeSubDomains">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://v6.exchangerate-api.com https://securetoken.googleapis.com https://*.firebaseio.com; img-src 'self' data:;">
   <title>InRUSD: Family Budget</title>
   <link rel="preload" href="/assets/tailwind.css" as="style">
   <link href="/assets/tailwind.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script defer>
     console.log('index.html: Starting script load');
     window.addEventListener('error', (event) => {
@@ -31,97 +33,101 @@
   </script>
   <script type="module" src="/js" defer onload="console.log('js.js script tag loaded')" onerror="console.error('Failed to load js.js')"></script>
 </head>
-<body class="bg-gray-100 font-sans">
+<body class="bg-gray-100 font-sans dark:bg-gray-900 dark:text-gray-100">
+<!-- Toast Container -->
+<div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
+
 <!-- Auth Modals -->
-<div id="auth-section" class="min-h-screen flex items-center justify-center bg-gray-100">
-  <div id="login-modal" class="bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md" role="dialog" aria-modal="true" aria-label="Login Modal">
-    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Login</h2>
+<div id="auth-section" class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+  <div id="login-modal" class="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md" role="dialog" aria-modal="true" aria-label="Login Modal" tabindex="-1">
+    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800 dark:text-gray-200">Login</h2>
     <form class="space-y-4">
       <div>
-        <label for="login-email" class="block text-sm font-medium text-gray-700">Email</label>
-        <input id="login-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <label for="login-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+        <input id="login-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
       </div>
       <div>
-        <label for="login-password" class="block text-sm font-medium text-gray-700">Password</label>
-        <input id="login-password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <label for="login-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+        <input id="login-password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
       </div>
       <button id="login-button" type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Login</button>
       <div class="text-center space-x-4">
-        <button id="show-signup-btn" type="button" class="text-blue-600 hover:underline">Sign Up</button>
-        <button id="show-reset-btn" type="button" class="text-blue-600 hover:underline">Forgot Password?</button>
+        <button id="show-signup-btn" type="button" class="text-blue-600 hover:underline dark:text-blue-400">Sign Up</button>
+        <button id="show-reset-btn" type="button" class="text-blue-600 hover:underline dark:text-blue-400">Forgot Password?</button>
       </div>
     </form>
   </div>
-  <div id="signup-modal" class="hidden bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md" role="dialog" aria-modal="true" aria-label="Sign Up Modal">
-    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Sign Up</h2>
+  <div id="signup-modal" class="hidden bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md" role="dialog" aria-modal="true" aria-label="Sign Up Modal" tabindex="-1">
+    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800 dark:text-gray-200">Sign Up</h2>
     <form class="space-y-4">
       <div>
-        <label for="signup-email" class="block text-sm font-medium text-gray-700">Email</label>
-        <input id="signup-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <label for="signup-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+        <input id="signup-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
       </div>
       <div>
-        <label for="signup-password" class="block text-sm font-medium text-gray-700">Password</label>
-        <input id="signup-password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <label for="signup-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+        <input id="signup-password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
       </div>
       <div>
-        <label for="signup-confirm-password" class="block text-sm font-medium text-gray-700">Confirm Password</label>
-        <input id="signup-confirm-password" type="password" placeholder="Confirm Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <label for="signup-confirm-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Confirm Password</label>
+        <input id="signup-confirm-password" type="password" placeholder="Confirm Password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
       </div>
       <div id="admin-family-code-option" class="flex items-center space-x-2">
-        <input id="use-existing-family-code" type="checkbox" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-        <label for="use-existing-family-code" class="text-sm text-gray-700">Use existing family code</label>
+        <input id="use-existing-family-code" type="checkbox" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:border-gray-600">
+        <label for="use-existing-family-code" class="text-sm text-gray-700 dark:text-gray-300">Use existing family code</label>
       </div>
       <div>
-        <label for="signup-family-code" class="block text-sm font-medium text-gray-700">Family Code</label>
-        <input id="signup-family-code" type="text" placeholder="6-digit alphanumeric Family Code (required for child)" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <label for="signup-family-code" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Family Code</label>
+        <input id="signup-family-code" type="text" placeholder="6-digit alphanumeric Family Code (required for child)" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
       </div>
       <div>
-        <label for="signup-currency" class="block text-sm font-medium text-gray-700">Currency</label>
-        <select id="signup-currency" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <label for="signup-currency" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Currency</label>
+        <select id="signup-currency" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
           <option value="INR">INR</option>
           <option value="USD">USD</option>
           <option value="ZAR">ZAR</option>
         </select>
       </div>
       <div>
-        <label for="signup-account-type" class="block text-sm font-medium text-gray-700">Account Type</label>
-        <select id="signup-account-type" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <label for="signup-account-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Account Type</label>
+        <select id="signup-account-type" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
           <option value="admin">Admin</option>
           <option value="child">Child</option>
         </select>
       </div>
       <button id="signup-button" type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Sign Up</button>
       <div class="text-center">
-        <button id="show-login-from-signup-btn" type="button" class="text-blue-600 hover:underline">Login</button>
+        <button id="show-login-from-signup-btn" type="button" class="text-blue-600 hover:underline dark:text-blue-400">Login</button>
       </div>
     </form>
   </div>
-  <div id="reset-modal" class="hidden bg-white p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md" role="dialog" aria-modal="true" aria-label="Reset Password Modal">
-    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800">Reset Password</h2>
+  <div id="reset-modal" class="hidden bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md" role="dialog" aria-modal="true" aria-label="Reset Password Modal" tabindex="-1">
+    <h2 class="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-800 dark:text-gray-200">Reset Password</h2>
     <form class="space-y-4">
       <div>
-        <label for="reset-email" class="block text-sm font-medium text-gray-700">Email</label>
-        <input id="reset-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <label for="reset-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+        <input id="reset-email" type="email" placeholder="Email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
       </div>
       <button id="reset-button" type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Send Reset Link</button>
       <div class="text-center">
-        <button id="show-login-from-reset-btn" type="button" class="text-blue-600 hover:underline">Login</button>
+        <button id="show-login-from-reset-btn" type="button" class="text-blue-600 hover:underline dark:text-blue-400">Login</button>
       </div>
     </form>
   </div>
 </div>
 
 <!-- App Section -->
-<div id="app-section" class="hidden min-h-screen bg-gray-100">
+<div id="app-section" class="hidden min-h-screen bg-gray-100 dark:bg-gray-900">
   <!-- Header -->
   <header class="bg-blue-600 text-white p-3 sm:p-4 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-0">
     <h1 id="page-title" class="text-xl sm:text-2xl font-bold">Budget Dashboard</h1>
     <div class="flex items-center gap-2 sm:gap-4">
-      <select id="currency-toggle" class="p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-gray-700 text-sm">
+      <select id="currency-toggle" class="p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-gray-700 text-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600">
         <option value="INR">INR</option>
         <option value="USD">USD</option>
         <option value="ZAR">ZAR</option>
       </select>
+      <button id="dark-mode-toggle" type="button" class="bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 transition text-sm sm:text-base">Toggle Dark Mode</button>
       <button id="logout-button" type="button" class="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition text-sm sm:text-base">Logout</button>
     </div>
   </header>
@@ -146,14 +152,14 @@
   </nav>
   <main class="p-4 sm:p-6">
     <!-- Swipeable Tabs Container -->
-    <div id="swipeable-tabs" class="relative w-full overflow-x-hidden" aria-label="Swipe to change tabs">
+    <div id="swipeable-tabs" class="relative w-full overflow-x-hidden" aria-label="Swipe to change tabs" aria-live="polite">
       <!-- Dashboard Section -->
       <div id="dashboard-section" class="space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
         <!-- Filter Controls -->
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Filter Dashboard</h3>
+        <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Filter Dashboard</h3>
           <div class="flex flex-col sm:flex-row gap-4">
-            <select id="dashboard-filter" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 w-full sm:w-auto">
+            <select id="dashboard-filter" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 w-full sm:w-auto dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
               <option value="1week">Last 1 Week</option>
               <option value="1month">Last 1 Month</option>
               <option value="thisMonth" selected>This Month</option>
@@ -164,28 +170,33 @@
             </select>
             <div id="custom-date-range" class="hidden flex flex-col sm:flex-row gap-4">
               <div>
-                <label for="filter-start-date" class="block text-sm font-medium text-gray-700">Start Date</label>
-                <input id="filter-start-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+                <label for="filter-start-date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
+                <input id="filter-start-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600">
               </div>
               <div>
-                <label for="filter-end-date" class="block text-sm font-medium text-gray-700">End Date</label>
-                <input id="filter-end-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+                <label for="filter-end-date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date</label>
+                <input id="filter-end-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600">
               </div>
             </div>
           </div>
         </div>
         <!-- Summary Tiles -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-          <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-            <h3 class="text-base sm:text-lg font-semibold text-gray-700">Balance</h3>
-            <p id="balance" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
-            <p class="text-sm text-gray-500 mt-2">After Budget: <span id="after-budget">₹0</span></p>
+          <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300">Balance</h3>
+            <p id="balance" class="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-200">₹0</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">After Budget: <span id="after-budget">₹0</span></p>
           </div>
-          <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-            <h3 class="text-base sm:text-lg font-semibold text-gray-700">Total Budget</h3>
-            <p id="total-budget" class="text-lg sm:text-2xl font-bold text-gray-900">₹0</p>
-            <p class="text-sm text-gray-500 mt-2">Unspent Budget: <span id="total-remaining">₹0</span></p>
+          <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300">Total Budget</h3>
+            <p id="total-budget" class="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-200">₹0</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Unspent Budget: <span id="total-remaining">₹0</span></p>
           </div>
+        </div>
+        <!-- Spending Chart -->
+        <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300">Spending Breakdown</h3>
+          <canvas id="spending-chart" width="400" height="200"></canvas>
         </div>
         <!-- Budget and Child Tiles -->
         <div id="budget-tiles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"></div>
@@ -193,177 +204,244 @@
       </div>
       <!-- Transactions Section -->
       <div id="transactions-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Transaction</h3>
+        <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Add Transaction</h3>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <select id="type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="debit">Debit</option>
-              <option value="credit">Credit</option>
-            </select>
-            <input id="amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <select id="category" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="">Select Category</option>
-              <option value="add-new">Add New</option>
-            </select>
-            <input id="description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
             <div>
-              <label for="transaction-date" class="block text-sm font-medium text-gray-700">Transaction Date</label>
-              <input id="transaction-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600" required>
+              <label for="type" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Type</label>
+              <select id="type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                <option value="debit">Debit</option>
+                <option value="credit">Credit</option>
+              </select>
+            </div>
+            <div>
+              <label for="amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount</label>
+              <input id="amount" type="number" min="0" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+            </div>
+            <div>
+              <label for="category" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
+              <select id="category" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                <option value="">Select Category</option>
+                <option value="add-new">Add New</option>
+              </select>
+            </div>
+            <div>
+              <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+              <input id="description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+            </div>
+            <div>
+              <label for="transaction-date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Transaction Date</label>
+              <input id="transaction-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600" required>
+            </div>
+            <div>
+              <label for="recurring" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Recurring</label>
+              <select id="recurring" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                <option value="none">None</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
             </div>
           </div>
           <button id="add-transaction" type="button" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Transaction</button>
         </div>
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <div class="mb-4 flex items-center">
-            <label for="transactions-filter" class="mr-2 text-sm font-medium text-gray-700">Filter Transactions:</label>
-            <select id="transactions-filter" class="p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="thisMonth">This Month</option>
-              <option value="lastMonth">Last Month</option>
-              <option value="thisYear">This Year</option>
-              <option value="lastYear">Last Year</option>
-            </select>
+        <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+          <div class="mb-4 flex items-center justify-between">
+            <div class="flex items-center">
+              <label for="transactions-filter" class="mr-2 text-sm font-medium text-gray-700 dark:text-gray-300">Filter Transactions:</label>
+              <select id="transactions-filter" class="p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                <option value="thisMonth">This Month</option>
+                <option value="lastMonth">Last Month</option>
+                <option value="thisYear">This Year</option>
+                <option value="lastYear">Last Year</option>
+              </select>
+            </div>
+            <button id="export-transactions" type="button" class="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition text-sm">Export CSV</button>
           </div>
           <div class="overflow-x-auto no-swipe">
             <table class="w-full">
               <thead>
-                <tr class="bg-gray-200">
-                  <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Type</th>
-                  <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Amount</th>
-                  <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Category</th>
-                  <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Description</th>
-                  <th class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700" id="transaction-date-header">Date</th>
-                  <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
+                <tr class="bg-gray-200 dark:bg-gray-700">
+                  <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Type</th>
+                  <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Amount</th>
+                  <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Category</th>
+                  <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Description</th>
+                  <th scope="col" class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300" id="transaction-date-header">Date</th>
+                  <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Actions</th>
                 </tr>
               </thead>
-              <tbody id="transaction-table"></tbody>
+              <tbody id="transaction-table">
+                <!-- No Data Message -->
+                <tr id="no-transactions" class="hidden">
+                  <td colspan="6" class="text-center py-4 text-gray-500 dark:text-gray-400">No transactions found. Add your first one!</td>
+                </tr>
+              </tbody>
             </table>
           </div>
         </div>
       </div>
       <!-- Budgets Section -->
       <div id="budgets-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Budget</h3>
+        <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Add Budget</h3>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <input id="budget-name" type="text" placeholder="Budget Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <input id="budget-amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <div>
+              <label for="budget-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Budget Name</label>
+              <input id="budget-name" type="text" placeholder="Budget Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+            </div>
+            <div>
+              <label for="budget-amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount</label>
+              <input id="budget-amount" type="number" min="0" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+            </div>
           </div>
           <button id="add-budget" type="button" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Budget</button>
         </div>
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
+        <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
           <table class="w-full">
             <thead>
-              <tr class="bg-gray-200">
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Name</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Amount</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Spent</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Remaining</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
+              <tr class="bg-gray-200 dark:bg-gray-700">
+                <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Name</th>
+                <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Amount</th>
+                <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Spent</th>
+                <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Remaining</th>
+                <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Actions</th>
               </tr>
             </thead>
-            <tbody id="budget-table"></tbody>
+            <tbody id="budget-table">
+              <!-- No Data Message -->
+              <tr id="no-budgets" class="hidden">
+                <td colspan="5" class="text-center py-4 text-gray-500 dark:text-gray-400">No budgets found. Add your first budget to get started!</td>
+              </tr>
+            </tbody>
           </table>
         </div>
       </div>
       <!-- Categories Section -->
       <div id="categories-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Category</h3>
+        <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Add Category</h3>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <input id="category-name" type="text" placeholder="Category Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <select id="category-type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
-            </select>
-            <select id="category-budget-select" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="none">None</option>
-              <option value="add-new">Add New</option>
-            </select>
+            <div>
+              <label for="category-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Category Name</label>
+              <input id="category-name" type="text" placeholder="Category Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+            </div>
+            <div>
+              <label for="category-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Type</label>
+              <select id="category-type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </select>
+            </div>
+            <div>
+              <label for="category-budget-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Budget</label>
+              <select id="category-budget-select" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                <option value="none">None</option>
+                <option value="add-new">Add New</option>
+              </select>
+            </div>
           </div>
           <button id="add-category" type="button" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Category</button>
         </div>
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
+        <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
           <table class="w-full">
             <thead>
-              <tr class="bg-gray-200">
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Name</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Type</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Budget</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
+              <tr class="bg-gray-200 dark:bg-gray-700">
+                <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Name</th>
+                <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Type</th>
+                <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Budget</th>
+                <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Actions</th>
               </tr>
             </thead>
-            <tbody id="category-table"></tbody>
+            <tbody id="category-table">
+              <!-- No Data Message -->
+              <tr id="no-categories" class="hidden">
+                <td colspan="4" class="text-center py-4 text-gray-500 dark:text-gray-400">No categories found. Add your first one!</td>
+              </tr>
+            </tbody>
           </table>
         </div>
       </div>
       <!-- Child Accounts Section -->
       <div id="child-accounts-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Child Account Transactions</h3>
+        <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Child Account Transactions</h3>
           <!-- Admin: Child Selector -->
           <div id="child-selector" class="mb-4 hidden">
-            <label class="block text-sm font-medium text-gray-700">Select Child</label>
-            <select id="child-user-id" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <label for="child-user-id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Select Child</label>
+            <select id="child-user-id" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
               <option value="">Select a Child</option>
             </select>
           </div>
           <!-- Balance Display -->
           <div class="mb-4">
-            <h4 class="text-sm font-medium text-gray-700">Child Balance</h4>
-            <p id="child-balance" class="text-lg font-bold text-gray-900">₹0</p>
+            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Child Balance</h4>
+            <p id="child-balance" class="text-lg font-bold text-gray-900 dark:text-gray-200">₹0</p>
           </div>
           <!-- Add Transaction -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <select id="child-transaction-type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="debit">Debit</option>
-              <option value="credit">Credit</option>
-            </select>
-            <input id="child-transaction-amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <input id="child-transaction-description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <div>
+              <label for="child-transaction-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Type</label>
+              <select id="child-transaction-type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                <option value="debit">Debit</option>
+                <option value="credit">Credit</option>
+              </select>
+            </div>
+            <div>
+              <label for="child-transaction-amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount</label>
+              <input id="child-transaction-amount" type="number" min="0" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+            </div>
+            <div>
+              <label for="child-transaction-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+              <input id="child-transaction-description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+            </div>
           </div>
           <button id="add-child-transaction" type="button" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Transaction</button>
         </div>
         <!-- Transaction Table -->
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
+        <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
           <table class="w-full">
             <thead>
-              <tr class="bg-gray-200">
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Type</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Amount</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Description</th>
-                <th class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700" id="child-transaction-date-header">Date</th>
-                <th class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Actions</th>
+              <tr class="bg-gray-200 dark:bg-gray-700">
+                <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Type</th>
+                <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Amount</th>
+                <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Description</th>
+                <th scope="col" class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300" id="child-transaction-date-header">Date</th>
+                <th scope="col" class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Actions</th>
               </tr>
             </thead>
-            <tbody id="child-transaction-table"></tbody>
+            <tbody id="child-transaction-table">
+              <!-- No Data Message -->
+              <tr id="no-child-transactions" class="hidden">
+                <td colspan="5" class="text-center py-4 text-gray-500 dark:text-gray-400">No child transactions found.</td>
+              </tr>
+            </tbody>
           </table>
         </div>
         <div id="child-tiles" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6"></div>
       </div>
       <!-- Profile Section -->
       <div id="profile-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">User Profile</h3>
+        <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">User Profile</h3>
           <div class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700">Email</label>
-              <input id="profile-email" type="email" readonly class="w-full p-3 border rounded-lg bg-gray-100 focus:outline-none">
+              <label for="profile-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+              <input id="profile-email" type="email" readonly class="w-full p-3 border rounded-lg bg-gray-100 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700">Currency</label>
-              <select id="profile-currency" disabled class="w-full p-3 border rounded-lg bg-gray-100 focus:outline-none">
+              <label for="profile-currency" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Currency</label>
+              <select id="profile-currency" disabled class="w-full p-3 border rounded-lg bg-gray-100 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
                 <option value="INR">INR</option>
                 <option value="USD">USD</option>
                 <option value="ZAR">ZAR</option>
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700">Family Code</label>
-              <input id="profile-family-code" type="text" readonly class="w-full p-3 border rounded-lg bg-gray-100 focus:outline-none">
+              <label for="profile-family-code" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Family Code</label>
+              <input id="profile-family-code" type="text" readonly class="w-full p-3 border rounded-lg bg-gray-100 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700">Account Type</label>
-              <select id="profile-account-type" disabled class="w-full p-3 border rounded-lg bg-gray-100 focus:outline-none">
+              <label for="profile-account-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Account Type</label>
+              <select id="profile-account-type" disabled class="w-full p-3 border rounded-lg bg-gray-100 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
                 <option value="admin">Admin</option>
                 <option value="child">Child</option>
               </select>
@@ -378,48 +456,48 @@
 </div>
 
 <!-- Additional Modals -->
-<div id="add-category-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Add Category Modal">
-  <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
-    <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add New Category</h3>
+<div id="add-category-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Add Category Modal" tabindex="-1">
+  <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+    <h3 class="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Add New Category</h3>
     <div class="space-y-4">
-      <input id="new-category-name" type="text" placeholder="Category Name" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-      <select id="new-category-type" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+      <input id="new-category-name" type="text" placeholder="Category Name" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+      <select id="new-category-type" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
         <option value="income">Income</option>
         <option value="expense">Expense</option>
       </select>
-      <select id="new-category-budget" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+      <select id="new-category-budget" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
         <option value="none">None</option>
         <option value="add-new">Add New</option>
       </select>
       <div class="flex justify-end space-x-4">
         <button id="save-category" type="button" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Save</button>
-        <button id="cancel-category" type="button" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
+        <button id="cancel-category" type="button" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition dark:bg-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">Cancel</button>
       </div>
     </div>
   </div>
 </div>
 
-<div id="add-budget-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Add Budget Modal">
-  <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
-    <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add New Budget</h3>
+<div id="add-budget-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Add Budget Modal" tabindex="-1">
+  <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+    <h3 class="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Add New Budget</h3>
     <div class="space-y-4">
-      <input id="new-budget-name" type="text" placeholder="Budget Name" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-      <input id="new-budget-amount" type="number" placeholder="Amount" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+      <input id="new-budget-name" type="text" placeholder="Budget Name" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+      <input id="new-budget-amount" type="number" min="0" placeholder="Amount" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
       <div class="flex justify-end space-x-4">
         <button id="save-budget" type="button" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Save</button>
-        <button id="cancel-budget" type="button" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
+        <button id="cancel-budget" type="button" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition dark:bg-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">Cancel</button>
       </div>
     </div>
   </div>
 </div>
 
-<div id="delete-confirm-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Delete Confirmation Modal">
-  <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
-    <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Confirm Deletion</h3>
-    <p id="delete-confirm-message" class="text-sm text-gray-600 mb-4">Are you sure you want to delete this item?</p>
+<div id="delete-confirm-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Delete Confirmation Modal" tabindex="-1">
+  <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+    <h3 class="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Confirm Deletion</h3>
+    <p id="delete-confirm-message" class="text-sm text-gray-600 dark:text-gray-400 mb-4">Are you sure you want to delete this item?</p>
     <div class="flex justify-end space-x-4">
       <button id="confirm-delete" type="button" class="bg-red-600 text-white p-3 rounded-lg hover:bg-red-700 transition">Confirm</button>
-      <button id="cancel-delete" type="button" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
+      <button id="cancel-delete" type="button" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition dark:bg-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">Cancel</button>
     </div>
   </div>
 </div>
