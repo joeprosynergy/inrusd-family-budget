@@ -25,6 +25,7 @@ const AccountType = {
   ADMIN: 'admin',
   CHILD: 'child'
 };
+
 const TransactionType = {
   DEBIT: 'debit',
   CREDIT: 'credit'
@@ -52,15 +53,14 @@ function resetForm(inputs) {
 }
 
 function showToast(message, type = 'error') {
-  const container = document.getElementById('toast-container');
-  if (!container) {
-    console.log('[showToast] Error: Toast container not available');
+  if (!document.body) {
+    console.log('[showToast] Error: Document body not available');
     return;
   }
   const toast = document.createElement('div');
-  toast.className = `p-4 rounded-lg shadow-lg ${type === 'error' ? 'bg-red-500' : type === 'warning' ? 'bg-yellow-500' : 'bg-green-500'} text-white`;
+  toast.className = `fixed bottom-4 right-4 p-4 rounded-lg shadow-lg ${type === 'error' ? 'bg-red-500' : type === 'warning' ? 'bg-yellow-500' : 'bg-green-500'} text-white`;
   toast.textContent = message;
-  container.appendChild(toast);
+  document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
 }
 
@@ -70,26 +70,6 @@ function validateDomElements(elements, errorElementId, errorMessage) {
     return false;
   }
   return true;
-}
-
-function trapFocus(modal) {
-  const focusableElements = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-  const firstFocusable = focusableElements[0];
-  const lastFocusable = focusableElements[focusableElements.length - 1];
-  modal.addEventListener('keydown', (e) => {
-    if (e.key === 'Tab') {
-      if (e.shiftKey && document.activeElement === firstFocusable) {
-        e.preventDefault();
-        lastFocusable.focus();
-      } else if (!e.shiftKey && document.activeElement === lastFocusable) {
-        e.preventDefault();
-        firstFocusable.focus();
-      }
-    } else if (e.key === 'Escape') {
-      modal.classList.add('hidden');
-    }
-  });
-  firstFocusable.focus();
 }
 
 async function handleFormSubmission({ inputs, validate, dbOperation, successCallback, errorElement, button, isUpdate = false }) {
@@ -149,21 +129,6 @@ async function fetchRequiredExchangeRates(targetCurrency) {
     }
   });
   await Promise.all(ratePromises);
-}
-
-// Setup dark mode toggle
-function setupDarkMode() {
-  const toggle = document.getElementById('dark-mode-toggle');
-  if (toggle) {
-    toggle.addEventListener('click', () => {
-      document.documentElement.classList.toggle('dark');
-      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
-    });
-    // Initialize from localStorage
-    if (localStorage.getItem('theme') === 'dark') {
-      document.documentElement.classList.add('dark');
-    }
-  }
 }
 
 // Load app data
@@ -376,17 +341,6 @@ function setupTabs() {
   } else {
     log('setupTabs', 'Warning', 'Swipe container not found or not in mobile view');
   }
-  // Setup focus trapping for modals
-  ['addCategoryModal', 'addBudgetModal', 'deleteConfirmModal', 'loginModal', 'signupModal', 'resetModal'].forEach(modalId => {
-    const modal = domElements[modalId] || document.getElementById(modalId.replace(/([A-Z])/g, '-$1').toLowerCase());
-    if (modal) {
-      modal.addEventListener('transitionend', () => {
-        if (!modal.classList.contains('hidden')) {
-          trapFocus(modal);
-        }
-      });
-    }
-  });
   log('setupTabs', 'Initializing', 'default tab: dashboard');
   switchTab('dashboard');
 }
@@ -400,17 +354,17 @@ async function setupProfile() {
       if (el) {
         if (enable) {
           el.removeAttribute(id.includes('Email') ? 'readonly' : 'disabled');
-          el.classList.remove('bg-gray-100', 'dark:bg-gray-700');
+          el.classList.remove('bg-gray-100');
         } else {
           el.setAttribute(id.includes('Email') ? 'readonly' : 'disabled', 'true');
-          el.classList.add('bg-gray-100', 'dark:bg-gray-700');
+          el.classList.add('bg-gray-100');
         }
       }
     });
     const profileFamilyCode = domElements.profileFamilyCode;
     if (profileFamilyCode) {
       profileFamilyCode.setAttribute('readonly', 'true');
-      profileFamilyCode.classList.add('bg-gray-100', 'dark:bg-gray-700');
+      profileFamilyCode.classList.add('bg-gray-100');
     }
     if (domElements.editProfile) {
       domElements.editProfile.classList.toggle('hidden', enable);
@@ -535,22 +489,19 @@ async function loadCategories() {
     categorySelect: document.getElementById('category'),
     categoryBudgetSelect: document.getElementById('category-budget-select'),
     newCategoryBudgetSelect: document.getElementById('new-category-budget'),
-    categoryTable: document.getElementById('category-table'),
-    noCategories: document.getElementById('no-categories')
+    categoryTable: document.getElementById('category-table')
   };
   if (!validateDomElements(elements, 'category-name', 'Required components not available')) return;
   if (!db || !familyCode) {
     showError('category-name', 'Database service not available');
     elements.categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
-    if (elements.noCategories) elements.noCategories.classList.add('hidden');
     return;
   }
   try {
     elements.categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
     elements.categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
     elements.newCategoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
-    elements.categoryTable.innerHTML = '';
-    if (elements.noCategories) elements.noCategories.classList.add('hidden');
+    elements.categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
     const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
     const budgetsSnapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
     const budgetMap = new Map();
@@ -564,8 +515,9 @@ async function loadCategories() {
     });
     const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
     const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
+    elements.categoryTable.innerHTML = '';
     if (categoriesSnapshot.empty) {
-      if (elements.noCategories) elements.noCategories.classList.remove('hidden');
+      elements.categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No categories found</td></tr>';
       return;
     }
     categoriesSnapshot.forEach(doc => {
@@ -580,12 +532,12 @@ async function loadCategories() {
       const tr = document.createElement('tr');
       tr.classList.add('table-row');
       tr.innerHTML = `
-        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900 dark:text-gray-200">${category.name || 'Unknown'}</td>
-        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900 dark:text-gray-200">${category.type || 'Unknown'}</td>
-        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900 dark:text-gray-200">${category.budgetId ? budgetMap.get(category.budgetId) || 'Unknown' : 'None'}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${category.name || 'Unknown'}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${category.type || 'Unknown'}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${category.budgetId ? budgetMap.get(category.budgetId) || 'Unknown' : 'None'}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
-          <button class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 mr-2 edit-category" data-id="${doc.id}">Edit</button>
-          <button class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 delete-category" data-id="${doc.id}">Delete</button>
+          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-category" data-id="${doc.id}">Edit</button>
+          <button class="text-red-600 hover:text-red-800 delete-category" data-id="${doc.id}">Delete</button>
         </td>
       `;
       fragment.appendChild(tr);
@@ -594,7 +546,6 @@ async function loadCategories() {
   } catch (error) {
     showError('category-name', `Failed to load categories: ${error.message}`);
     elements.categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
-    if (elements.noCategories) elements.noCategories.classList.add('hidden');
   }
 }
 
@@ -752,6 +703,16 @@ async function setupCategories() {
   });
 }
 
+
+
+
+
+
+
+
+
+
+
 // Budgets
 async function loadBudgets() {
   if (!db) {
@@ -767,14 +728,12 @@ async function loadBudgets() {
   }
   const elements = {
     budgetTable: document.getElementById('budget-table'),
-    budgetTiles: document.getElementById('budget-tiles'),
-    noBudgets: document.getElementById('no-budgets')
+    budgetTiles: document.getElementById('budget-tiles')
   };
   if (!validateDomElements(elements, 'budget-name', 'Budget table or tiles not found')) return;
   try {
-    elements.budgetTable.innerHTML = '';
-    elements.budgetTiles.innerHTML = '';
-    if (elements.noBudgets) elements.noBudgets.classList.add('hidden');
+    elements.budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
+    elements.budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
     const filter = domElements.dashboardFilter?.value || 'thisMonth';
     let { start, end } = getDateRangeWrapper(filter);
     start = new Date(start.getTime() - 5.5 * 60 * 60 * 1000);
@@ -790,8 +749,11 @@ async function loadBudgets() {
     let totalBudgetAmount = 0, totalRemainingAmount = 0;
     const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
     const snapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
+    elements.budgetTable.innerHTML = '';
+    elements.budgetTiles.innerHTML = '';
     if (snapshot.empty) {
-      if (elements.noBudgets) elements.noBudgets.classList.remove('hidden');
+      elements.budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">No budgets found</td></tr>';
+      elements.budgetTiles.innerHTML = '<div class="text-center py-4">No budgets found</div>';
       return;
     }
     const tableFragment = document.createDocumentFragment();
@@ -811,27 +773,27 @@ async function loadBudgets() {
       const tr = document.createElement('tr');
       tr.classList.add('table-row');
       tr.innerHTML = `
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">${budget.name}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">${formattedBudgetAmount}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">${formattedSpent}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">${formattedRemaining}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${budget.name}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formattedBudgetAmount}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formattedSpent}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formattedRemaining}</td>
         <td class="px-6 py-4 whitespace-nowrap text-sm">
-          <button class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
-          <button class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 delete-budget" data-id="${doc.id}">Delete</button>
+          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
+          <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
         </td>
       `;
       tableFragment.appendChild(tr);
       const tile = document.createElement('div');
-      tile.classList.add('bg-white', 'dark:bg-gray-800', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
+      tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'budget-tile');
       const percentage = budget.amount ? (spent / budget.amount) * 100 : 0;
       tile.innerHTML = `
-        <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300">${budget.name}</h3>
-        <p class="text-sm text-gray-500 dark:text-gray-400">Budget: <span id="${doc.id}-budget">${formattedBudgetAmount}</span></p>
-        <p class="text-sm text-gray-500 dark:text-gray-400">Spent: <span id="${doc.id}-spent">${formattedSpent}</span></p>
-        <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-2">
+        <h3 class="text-lg font-semibold text-gray-700">${budget.name}</h3>
+        <p class="text-sm text-gray-500">Budget: <span id="${doc.id}-budget">${formattedBudgetAmount}</span></p>
+        <p class="text-sm text-gray-500">Spent: <span id="${doc.id}-spent">${formattedSpent}</span></p>
+        <p class="text-sm font-semibold text-gray-700 mt-2">
           Remaining: <span id="${doc.id}-remaining">${formattedRemaining}</span>
         </p>
-        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full mt-4 progress-bar">
+        <div class="w-full bg-gray-200 rounded-full mt-4 progress-bar">
           <div class="bg-green-600 progress-bar" style="width: ${percentage}%"></div>
         </div>
       `;
@@ -858,7 +820,6 @@ async function loadBudgets() {
     showError('budget-name', `Failed to load budgets: ${error.message}`);
     elements.budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading budgets</td></tr>';
     elements.budgetTiles.innerHTML = '<div class="text-center py-4 text-red-600">Error loading budgets</div>';
-    if (elements.noBudgets) elements.noBudgets.classList.add('hidden');
   }
 }
 
@@ -1029,29 +990,24 @@ async function setupBudgets() {
  * @property {string} description
  * @property {Date} createdAt
  * @property {string} familyCode
- * @property {string} recurring
  */
 async function loadTransactions() {
   const elements = {
     transactionTable: document.getElementById('transaction-table'),
     dateHeader: document.getElementById('transaction-date-header'),
-    transactionsFilter: document.getElementById('transactions-filter'),
-    noTransactions: document.getElementById('no-transactions')
+    transactionsFilter: document.getElementById('transactions-filter')
   };
   if (!validateDomElements(elements, 'transactions-filter', 'Required components not available')) {
     elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-    if (elements.noTransactions) elements.noTransactions.classList.add('hidden');
     return;
   }
   if (!db || !familyCode) {
     showError('transactions-filter', 'Database service not available');
     elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-    if (elements.noTransactions) elements.noTransactions.classList.add('hidden');
     return;
   }
   try {
-    elements.transactionTable.innerHTML = '';
-    if (elements.noTransactions) elements.noTransactions.classList.add('hidden');
+    elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">Loading...</td></tr>';
     elements.transactionsFilter.value = elements.transactionsFilter.value || 'thisMonth';
     const filter = elements.transactionsFilter.value;
     const { start, end } = getDateRangeWrapper(filter);
@@ -1067,8 +1023,9 @@ async function loadTransactions() {
     const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
     const categoryMap = new Map(categoriesSnapshot.docs.map(doc => [doc.id, doc.data().name]));
     const transactions = await fetchCachedTransactions(db, familyCode, adjustedStart, end);
+    elements.transactionTable.innerHTML = '';
     if (transactions.length === 0) {
-      if (elements.noTransactions) elements.noTransactions.classList.remove('hidden');
+      elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found for this period</td></tr>';
       return;
     }
     const fragment = document.createDocumentFragment();
@@ -1082,14 +1039,14 @@ async function loadTransactions() {
       }
       const formattedAmount = await formatCurrency(transaction.amount || 0, 'INR');
       tr.innerHTML = `
-        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900 dark:text-gray-200">${transaction.type || 'Unknown'}</td>
-        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900 dark:text-gray-200">${formattedAmount}</td>
-        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900 dark:text-gray-200">${transaction.categoryId ? categoryMap.get(transaction.categoryId) || 'Unknown' : 'None'}</td>
-        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900 dark:text-gray-200">${transaction.description || ''}</td>
-        <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900 dark:text-gray-200">${transactionDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formattedAmount}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.categoryId ? categoryMap.get(transaction.categoryId) || 'Unknown' : 'None'}</td>
+        <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
+        <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transactionDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
-          <button class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 mr-2 edit-transaction" data-id="${transaction.id}">Edit</button>
-          <button class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 delete-transaction" data-id="${transaction.id}">Delete</button>
+          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${transaction.id}">Edit</button>
+          <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${transaction.id}">Delete</button>
         </td>
       `;
       fragment.appendChild(tr);
@@ -1098,7 +1055,6 @@ async function loadTransactions() {
   } catch (error) {
     showError('transactions-filter', `Failed to load transactions: ${error.message}`);
     elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-    if (elements.noTransactions) elements.noTransactions.classList.add('hidden');
   }
 }
 
@@ -1106,39 +1062,12 @@ async function setupTransactions() {
   const elements = {
     addTransaction: document.getElementById('add-transaction'),
     transactionTable: document.getElementById('transaction-table'),
-    transactionsFilter: document.getElementById('transactions-filter'),
-    exportTransactions: document.getElementById('export-transactions')
+    transactionsFilter: document.getElementById('transactions-filter')
   };
   if (!validateDomElements(elements, 'category', 'Transaction components not found')) return;
   elements.transactionsFilter.addEventListener('change', debounce(loadTransactions, 300));
-  if (elements.exportTransactions) {
-    elements.exportTransactions.addEventListener('click', async () => {
-      const filter = elements.transactionsFilter.value;
-      const { start, end } = getDateRangeWrapper(filter);
-      const transactions = await fetchCachedTransactions(db, familyCode, start, end);
-      const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(query(collection(db, 'categories'), where('familyCode', '==', familyCode))));
-      const categoryMap = new Map(categoriesSnapshot.docs.map(doc => [doc.id, doc.data().name]));
-      const csv = [
-        'Type,Amount,Category,Description,Date',
-        ...transactions.map(tx => [
-          tx.type,
-          tx.amount,
-          categoryMap.get(tx.categoryId) || 'None',
-          `"${tx.description.replace(/"/g, '""')}"`,
-          tx.createdAt.toDate().toISOString().split('T')[0]
-        ].join(','))
-      ].join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `transactions_${filter}_${new Date().toISOString().split('T')[0]}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-  }
   const handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
-    const { type, amount, category, description, date, recurring } = inputs;
+    const { type, amount, category, description, date } = inputs;
     const amountVal = parseFloat(amount.value);
     const transactionDate = new Date(date.value);
     const validationErrors = [];
@@ -1146,7 +1075,6 @@ async function setupTransactions() {
     if (!category.value) validationErrors.push({ id: 'category', message: 'Category is required' });
     if (!date.value || isNaN(transactionDate.getTime())) validationErrors.push({ id: 'transaction-date', message: 'Valid date is required' });
     if (description.value.length > 200) validationErrors.push({ id: 'description', message: 'Description cannot exceed 200 characters' });
-    if (recurring.value !== 'none' && isUpdate) validationErrors.push({ id: 'recurring', message: 'Recurring not supported for updates' });
     await handleFormSubmission({
       inputs,
       validate: () => validationErrors,
@@ -1181,8 +1109,7 @@ async function setupTransactions() {
             amount: amountVal,
             categoryId: category.value,
             description: sanitizeInput(description.value.trim()),
-            createdAt: transactionDate,
-            recurring: recurring.value
+            createdAt: transactionDate
           });
         } else {
           const txRef = doc(collection(db, 'transactions'));
@@ -1192,28 +1119,13 @@ async function setupTransactions() {
             categoryId: category.value,
             description: sanitizeInput(description.value.trim()),
             familyCode,
-            createdAt: transactionDate,
-            recurring: recurring.value
+            createdAt: transactionDate
           });
           if (type.value === TransactionType.DEBIT) {
             const categoryDoc = await getDoc(doc(db, 'categories', category.value));
             if (categoryDoc.exists() && categoryDoc.data().budgetId) {
               batch.update(doc(db, 'budgets', categoryDoc.data().budgetId), { spent: increment(amountVal) });
             }
-          }
-          if (recurring.value !== 'none') {
-            const nextDate = new Date(transactionDate);
-            const interval = recurring.value === 'weekly' ? 7 : 30;
-            nextDate.setDate(nextDate.getDate() + interval);
-            batch.set(doc(collection(db, 'scheduledTransactions')), {
-              type: type.value,
-              amount: amountVal,
-              categoryId: category.value,
-              description: sanitizeInput(description.value.trim()),
-              familyCode,
-              nextRun: nextDate,
-              interval: recurring.value
-            });
           }
         }
         await batch.commit();
@@ -1237,8 +1149,7 @@ async function setupTransactions() {
       amount: document.getElementById('amount'),
       category: document.getElementById('category'),
       description: document.getElementById('description'),
-      date: document.getElementById('transaction-date'),
-      recurring: document.getElementById('recurring')
+      date: document.getElementById('transaction-date')
     };
     if (!validateDomElements(inputs, 'category', 'Form elements not found')) return;
     await handleTransactionAdd(inputs);
@@ -1255,8 +1166,7 @@ async function setupTransactions() {
             amount: document.getElementById('amount'),
             category: document.getElementById('category'),
             description: document.getElementById('description'),
-            date: document.getElementById('transaction-date'),
-            recurring: document.getElementById('recurring')
+            date: document.getElementById('transaction-date')
           };
           inputs.type.value = data.type;
           inputs.amount.value = data.amount;
@@ -1264,7 +1174,6 @@ async function setupTransactions() {
           inputs.description.value = data.description || '';
           const transactionDate = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
           inputs.date.value = transactionDate.toISOString().split('T')[0];
-          inputs.recurring.value = data.recurring || 'none';
           elements.addTransaction.innerHTML = 'Update Transaction';
           state.isEditing.transaction = true;
           const updateHandler = () => handleTransactionAdd(inputs, true, id);
@@ -1336,8 +1245,7 @@ async function loadChildAccounts() {
   }
   const elements = {
     childSelector: document.getElementById('child-selector'),
-    childUserIdSelect: document.getElementById('child-user-id'),
-    noChildTransactions: document.getElementById('no-child-transactions')
+    childUserIdSelect: document.getElementById('child-user-id')
   };
   if (!validateDomElements(elements, 'child-user-id', 'Child selector not found in the DOM.')) return;
   try {
@@ -1393,19 +1301,18 @@ async function loadChildTransactions() {
   const elements = {
     table: document.getElementById('child-transaction-table'),
     balance: document.getElementById('child-balance'),
-    dateHeader: document.getElementById('child-transaction-date-header'),
-    noChildTransactions: document.getElementById('no-child-transactions')
+    dateHeader: document.getElementById('child-transaction-date-header')
   };
   if (!validateDomElements(elements, 'child-transaction-description', 'Required components not found')) return;
   try {
-    elements.table.innerHTML = '';
-    if (elements.noChildTransactions) elements.noChildTransactions.classList.add('hidden');
+    elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
     elements.dateHeader.textContent = domElements.dashboardFilter?.value !== 'thisMonth' ? start.toLocaleString('en-US', { month: 'short' }) : new Date().toLocaleString('en-US', { month: 'short' });
     let totalBalance = 0;
     const transactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', state.currentChildUserId));
     log('loadChildTransactions', 'Fetching', `transactions for user ${state.currentChildUserId}`);
     const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
+    elements.table.innerHTML = '';
     const transactions = snapshot.docs
       .map(doc => {
         const data = doc.data();
@@ -1424,7 +1331,7 @@ async function loadChildTransactions() {
       .sort((a, b) => b.createdAt - a.createdAt);
     log('loadChildTransactions', 'Found', `${transactions.length} valid transactions`);
     if (transactions.length === 0) {
-      if (elements.noChildTransactions) elements.noChildTransactions.classList.remove('hidden');
+      elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
     } else {
       const fragment = document.createDocumentFragment();
       for (const tx of transactions) {
@@ -1433,13 +1340,13 @@ async function loadChildTransactions() {
         const tr = document.createElement('tr');
         tr.classList.add('table-row');
         tr.innerHTML = `
-          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900 dark:text-gray-200">${tx.type || 'Unknown'}</td>
-          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900 dark:text-gray-200">${formattedAmount}</td>
-          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900 dark:text-gray-200">${tx.description || ''}</td>
-          <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900 dark:text-gray-200">${tx.createdAt.toLocaleString('en-US', { day: 'numeric' })}</td>
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.type || 'Unknown'}</td>
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formattedAmount}</td>
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.description || ''}</td>
+          <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.createdAt.toLocaleString('en-US', { day: 'numeric' })}</td>
           <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
-            <button class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 mr-2 edit-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}">Edit</button>
-            <button class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 delete-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}">Delete</button>
+            <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}">Edit</button>
+            <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}">Delete</button>
           </td>
         `;
         fragment.appendChild(tr);
@@ -1454,18 +1361,8 @@ async function loadChildTransactions() {
     showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
     elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
     elements.balance.textContent = await formatCurrency(0, 'INR');
-    if (elements.noChildTransactions) elements.noChildTransactions.classList.add('hidden');
   }
 }
-
-
-
-
-
-
-
-
-
 
 async function loadChildTiles() {
   log('loadChildTiles', 'Starting', '');
@@ -1486,7 +1383,7 @@ async function loadChildTiles() {
     childTiles.innerHTML = '';
     if (snapshot.empty) {
       log('loadChildTiles', 'No', 'child accounts found');
-      childTiles.innerHTML = '<div class="text-center py-4 text-gray-500 dark:text-gray-400">No child accounts found</div>';
+      childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
       return;
     }
     log('loadChildTiles', 'Found', `${snapshot.docs.length} child accounts`);
@@ -1513,10 +1410,10 @@ async function loadChildTiles() {
     for (const [userId, { email, balance }] of childBalances) {
       const formattedBalance = await formatCurrency(balance, 'INR');
       const tile = document.createElement('div');
-      tile.classList.add('bg-white', 'dark:bg-gray-800', 'rounded-lg', 'shadow-md', 'p-6', 'child-tile');
+      tile.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6', 'child-tile');
       tile.innerHTML = `
-        <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300">${email}</h3>
-        <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-2">
+        <h3 class="text-lg font-semibold text-gray-700">${email}</h3>
+        <p class="text-sm font-semibold text-gray-700 mt-2">
           Balance: <span id="child-${userId}-balance">${formattedBalance}</span>
         </p>
       `;
@@ -1655,11 +1552,9 @@ async function setupChildAccounts() {
       loadChildTransactions();
     } else {
       const table = document.getElementById('child-transaction-table');
-      if (table) table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-gray-500 dark:text-gray-400">No child selected</td></tr>';
+      if (table) table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No child selected</td></tr>';
       const balance = document.getElementById('child-balance');
       if (balance) balance.textContent = '₹0';
-      const noChildTransactions = document.getElementById('no-child-transactions');
-      if (noChildTransactions) noChildTransactions.classList.add('hidden');
     }
   });
 }
@@ -1702,8 +1597,7 @@ async function updateDashboard() {
     afterBudget: document.getElementById('after-budget'),
     totalBudget: document.getElementById('total-budget'),
     totalRemaining: document.getElementById('total-remaining'),
-    childTiles: document.getElementById('child-tiles'),
-    spendingChart: document.getElementById('spending-chart')
+    childTiles: document.getElementById('child-tiles')
   };
   if (!validateDomElements(elements, 'balance', 'Dashboard elements not found')) return;
   try {
@@ -1714,9 +1608,9 @@ async function updateDashboard() {
       const formattedChildBalance = await formatCurrency(childBalance, 'INR');
       log('updateDashboard', 'Child Balance', `Balance: ${childBalance} (${formattedChildBalance})`);
       elements.childTiles.innerHTML = `
-        <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300">Your Balance</h3>
-          <p class="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-200">${formattedChildBalance}</p>
+        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-700">Your Balance</h3>
+          <p class="text-lg sm:text-2xl font-bold text-gray-900">${formattedChildBalance}</p>
         </div>
       `;
       elements.childTiles.style.display = 'block';
@@ -1727,9 +1621,6 @@ async function updateDashboard() {
         }
       });
       elements.totalRemaining.textContent = 'N/A';
-      if (elements.spendingChart) {
-        elements.spendingChart.parentElement.classList.add('hidden');
-      }
     } else {
       log('updateDashboard', 'Admin', 'account mode');
       let totalBalance = 0, totalBudgetAmount = 0, totalSpent = 0;
@@ -1793,32 +1684,6 @@ async function updateDashboard() {
       elements.afterBudget.textContent = formattedAfterBudget;
       elements.afterBudget.parentElement.classList.remove('hidden');
       log('updateDashboard', 'Admin Summary', `Balance: ${totalBalance} (${formattedTotalBalance}), Budget: ${totalBudgetAmount}, Spent: ${totalSpent}, Remaining: ${totalBudgetAmount - totalSpent}, After Budget: ${totalBalance - (totalBudgetAmount - totalSpent)}`);
-      // Initialize spending chart for admin
-      if (elements.spendingChart) {
-        const spendingByCategory = {};
-        const categoryMap = new Map(categoriesSnapshot.docs.map(doc => [doc.id, doc.data().name]));
-        filteredTransactionsSnapshot.docs.forEach(txDoc => {
-          const tx = txDoc.data();
-          if (tx.categoryId && tx.type === TransactionType.DEBIT) {
-            spendingByCategory[tx.categoryId] = (spendingByCategory[tx.categoryId] || 0) + tx.amount;
-          }
-        });
-        new Chart(elements.spendingChart, {
-          type: 'pie',
-          data: {
-            labels: Object.keys(spendingByCategory).map(id => categoryMap.get(id) || 'Unknown'),
-            datasets: [{
-              data: Object.values(spendingByCategory),
-              backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
-            }]
-          },
-          options: {
-            responsive: true,
-            plugins: { legend: { position: 'top' } }
-          }
-        });
-        elements.spendingChart.parentElement.classList.remove('hidden');
-      }
       await loadBudgets();
       if (!elements.childTiles.innerHTML) {
         await loadChildTiles();
@@ -1827,9 +1692,6 @@ async function updateDashboard() {
   } catch (error) {
     log('updateDashboard', 'Error', `updating dashboard: ${error.message}`);
     showError('balance', `Failed to update dashboard: ${error.message}`);
-    if (elements.spendingChart) {
-      elements.spendingChart.parentElement.classList.add('hidden');
-    }
   }
 }
 
@@ -1866,7 +1728,7 @@ async function setupLogout() {
           if (signOutSuccess) {
             state.currentChildUserId = null;
             state.currentAccountType = null;
-            const loginSection = document.getElementById('auth-section'); // Updated to match index.html
+            const loginSection = document.getElementById('login-section');
             const appSection = document.getElementById('app-section');
             const pageTitle = document.getElementById('page-title');
             if (loginSection) loginSection.classList.remove('hidden');
@@ -1899,7 +1761,6 @@ async function initApp() {
       log('initApp', 'Resetting', 'budgets for admin');
       await resetBudgetsForNewMonth(db, familyCode);
     }
-    setupDarkMode();
     setupTabs();
     setupProfile();
     setupCategories();
