@@ -111,59 +111,44 @@ export async function setupAuth(loadAppDataCallback) {
   }
 
   // Login handler
-  // In auth.js, replace the loginButton event listener in setupAuth
-const loginButton = checkElement('login-button');
-if (loginButton) {
-  const handleLogin = debounce(async () => {
-    console.log('Login button clicked');
-    clearErrors();
-    const email = checkElement('login-email')?.value.trim();
-    const password = checkElement('login-password')?.value;
-    if (!email || !password) {
-      showError('login-email', 'Please enter email and password');
-      return;
-    }
-    if (!isValidEmail(email)) {
-      showError('login-email', 'Invalid email format');
-      return;
-    }
-    try {
-      loginButton.disabled = true;
-      loginButton.textContent = 'Logging in...';
-      // Retry logic for network issues
-      let maxAttempts = 3;
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-          await signInWithEmailAndPassword(auth, email, password);
-          console.log('Login successful');
-          return;
-        } catch (error) {
-          if (attempt === maxAttempts || error.code !== 'auth/network-request-failed') {
-            throw error;
-          }
-          console.warn(`Login attempt ${attempt} failed: ${error.message}`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+  const loginButton = checkElement('login-button');
+  if (loginButton) {
+    const handleLogin = debounce(async () => {
+      console.log('Login button clicked');
+      clearErrors();
+      const email = checkElement('login-email')?.value.trim();
+      const password = checkElement('login-password')?.value;
+      if (!email || !password) {
+        showError('login-email', 'Please enter email and password');
+        return;
       }
-    } catch (error) {
-      console.error('Login failed:', { code: error.code, message: error.message });
-      const errorMessages = {
-        'auth/user-not-found': 'No user found with this email',
-        'auth/wrong-password': 'Incorrect password',
-        'auth/invalid-email': 'Invalid email format',
-        'auth/too-many-requests': 'Too many attempts, try again later',
-        'auth/network-request-failed': 'Network error. Please check your connection and try again.'
-      };
-      showError('login-email', errorMessages[error.code] || error.message);
-    } finally {
-      loginButton.disabled = false;
-      loginButton.textContent = 'Login';
-    }
-  }, DEBOUNCE_MS);
-  loginButton.addEventListener('click', handleLogin);
-} else {
-  console.error('Cannot setup login: login-button missing');
-}
+      if (!isValidEmail(email)) {
+        showError('login-email', 'Invalid email format');
+        return;
+      }
+      try {
+        loginButton.disabled = true;
+        loginButton.textContent = 'Logging in...';
+        await signInWithEmailAndPassword(auth, email, password);
+        console.log('Login successful');
+      } catch (error) {
+        console.error('Login failed:', { code: error.code, message: error.message });
+        const errorMessages = {
+          'auth/user-not-found': 'No user found with this email',
+          'auth/wrong-password': 'Incorrect password',
+          'auth/invalid-email': 'Invalid email format',
+          'auth/too-many-requests': 'Too many attempts, try again later'
+        };
+        showError('login-email', errorMessages[error.code] || error.message);
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = 'Login';
+      }
+    }, DEBOUNCE_MS);
+    loginButton.addEventListener('click', handleLogin);
+  } else {
+    console.error('Cannot setup login: login-button missing');
+  }
 
   // Signup form
   const signupForm = checkElement('signup-modal')?.querySelector('form');
