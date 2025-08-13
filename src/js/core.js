@@ -1,5 +1,3 @@
-// core.js
-// Core module: Firebase initialization, DOM setup, auth state, and utilities
 import { fetchExchangeRate } from './utils.js';
 
 /** @type {import('firebase/auth').Auth | null} */
@@ -104,11 +102,9 @@ async function initializeFirebase() {
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
     appId: import.meta.env.VITE_FIREBASE_APP_ID
   };
-
   let attempts = 0;
   const maxAttempts = 3;
   const baseDelay = 2000;
-
   while (attempts < maxAttempts) {
     attempts++;
     console.log(`Firebase initialization attempt ${attempts}/${maxAttempts}`);
@@ -159,11 +155,9 @@ function setupDOM() {
       console.log(`DOM element ${key}: ${domElements[key] ? 'found' : 'not found'}`);
       if (!domElements[key]) console.warn(`DOM element not found: ${id}`);
     }
-
     // Hide sections initially
     domElements.authSection?.classList.add('hidden');
     domElements.appSection?.classList.add('hidden');
-
     // Create loading spinner with ARIA
     const loadingDiv = document.createElement('div');
     loadingDiv.id = 'loading-spinner';
@@ -191,7 +185,6 @@ async function setupAuthStateListener(loadAppDataCallback) {
     document.getElementById('loading-spinner')?.remove();
     return;
   }
-
   console.log('setupAuthStateListener: Setting up onAuthStateChanged');
   const { onAuthStateChanged } = await import('firebase/auth');
   const { doc, getDoc } = await import('firebase/firestore');
@@ -251,6 +244,64 @@ async function setupAuthStateListener(loadAppDataCallback) {
 }
 
 /**
+ * Sets up login handler with retry logic
+ */
+async function setupLogin() {
+  const loginButton = document.getElementById('login-button');
+  if (!loginButton) {
+    console.error('Login button not found');
+    return;
+  }
+  const { signInWithEmailAndPassword } = await import('firebase/auth');
+  async function signInWithRetry(email, password, maxAttempts = 3) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        return;
+      } catch (error) {
+        console.error(`Login attempt ${attempt} failed:`, error);
+        if (attempt === maxAttempts || error.code !== 'auth/network-request-failed') {
+          throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+  }
+  loginButton.addEventListener('click', async (e) => {
+    e.preventDefault();
+    console.log('Login button clicked');
+    clearErrors();
+    const email = document.getElementById('login-email')?.value.trim();
+    const password = document.getElementById('login-password')?.value;
+    console.log('Checking element login-email:', !!email);
+    console.log('Checking element login-password:', !!password);
+    if (!email || !password) {
+      showError('login-email', 'Email and password are required');
+      return;
+    }
+    try {
+      loginButton.disabled = true;
+      loginButton.textContent = 'Logging in...';
+      await signInWithRetry(email, password);
+      console.log('Login successful');
+    } catch (error) {
+      console.error('Login failed:', error);
+      const errorMessages = {
+        'auth/user-not-found': 'No account found with this email.',
+        'auth/wrong-password': 'Incorrect password.',
+        'auth/invalid-email': 'Invalid email format.',
+        'auth/network-request-failed': 'Network error. Please check your connection and try again.',
+        'auth/too-many-requests': 'Too many attempts. Please try again later.'
+      };
+      showError('login-email', errorMessages[error.code] || `Firebase: Error (${error.code})`);
+    } finally {
+      loginButton.disabled = false;
+      loginButton.textContent = 'Login';
+    }
+  });
+}
+
+/**
  * Formats currency amount
  * @param {number} amount
  * @param {string} currency
@@ -266,7 +317,6 @@ async function formatCurrency(amount, currency) {
       INR_ZAR: 0.22,
       USD_ZAR: 18.0
     };
-
     // Update exchange rates if stale
     for (const key of rateKeys) {
       const [from, to] = key.split('_');
@@ -289,7 +339,6 @@ async function formatCurrency(amount, currency) {
         }
       }
     }
-
     // Convert amount
     const conversions = {
       INR_USD: amount * exchangeRateCache.get('INR_USD').rate,
@@ -300,7 +349,6 @@ async function formatCurrency(amount, currency) {
       ZAR_USD: amount / exchangeRateCache.get('USD_ZAR').rate
     };
     displayAmount = conversions[`${currency}_${userCurrency}`] || amount;
-
     // Format based on user currency
     const formatters = {
       USD: value => `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
@@ -378,12 +426,15 @@ function setFamilyCode(code) {
 window.onerror = function(message, filename, lineno, colno, error) {
   if (message === 'Script error.' && !filename) {
     console.log('Ignored cross-origin script error');
-    return true;  // Prevents propagation and showing the error to the user
+    return true; // Prevents propagation and showing the error to the user
   }
   console.log('Global error:', { message, filename, lineno, colno, error });
   showError('page-title', 'An unexpected error occurred. Please refresh the page.');
   return false;
 };
+
+// Initialize login handler
+setupLogin();
 
 export {
   auth,
