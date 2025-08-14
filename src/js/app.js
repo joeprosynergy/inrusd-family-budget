@@ -841,6 +841,7 @@ async function loadBudgets() {
       totalRemainingElement.textContent = formattedTotalRemaining;
     }
   } catch (error) {
+    log('loadBudgets', 'Error', `Failed to load budgets: ${error.message}`);
     showError('modal-budget-name', `Failed to load budgets: ${error.message}`);
     elements.budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading budgets</td></tr>';
     elements.budgetTiles.innerHTML = '<div class="text-center py-4 text-red-600">Error loading budgets</div>';
@@ -975,6 +976,7 @@ async function setupBudgets() {
           showError('modal-budget-name', 'Budget not found');
         }
       } catch (error) {
+        log('setupBudgets', 'Error', `Failed to fetch budget: ${error.message}`);
         showError('modal-budget-name', `Failed to fetch budget: ${error.message}`);
       }
     } else if (e.target.classList.contains('delete-budget')) {
@@ -991,6 +993,7 @@ async function setupBudgets() {
           await Promise.all([loadBudgets(), loadCategories()]);
           domElements.deleteConfirmModal.classList.add('hidden');
         } catch (error) {
+          log('setupBudgets', 'Error', `Failed to delete budget: ${error.message}`);
           showError('modal-budget-name', `Failed to delete budget: ${error.message}`);
         }
         domElements.confirmDelete.removeEventListener('click', confirmHandler);
@@ -1074,6 +1077,7 @@ async function loadTransactions() {
     }
     elements.transactionTable.appendChild(fragment);
   } catch (error) {
+    log('loadTransactions', 'Error', `Failed to load transactions: ${error.message}`);
     showError('modal-transaction-category', `Failed to load transactions: ${error.message}`);
     elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
   }
@@ -1101,7 +1105,6 @@ async function setupTransactions() {
     if (!category.value) validationErrors.push({ id: 'modal-transaction-category', message: 'Category is required' });
     if (!date.value || isNaN(transactionDate.getTime())) validationErrors.push({ id: 'modal-transaction-date', message: 'Valid date is required' });
     if (description.value.length > 200) validationErrors.push({ id: 'modal-transaction-description', message: 'Description cannot exceed 200 characters' });
-    // Validate category exists
     if (category.value && category.value !== 'add-new') {
       const categoryDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', category.value)));
       if (!categoryDoc.exists()) {
@@ -1228,6 +1231,7 @@ async function setupTransactions() {
           showError('modal-transaction-category', 'Transaction not found');
         }
       } catch (error) {
+        log('setupTransactions', 'Error', `Failed to fetch transaction: ${error.message}`);
         showError('modal-transaction-category', `Failed to fetch transaction: ${error.message}`);
       }
     } else if (e.target.classList.contains('delete-transaction')) {
@@ -1254,6 +1258,7 @@ async function setupTransactions() {
           await Promise.all([loadBudgets(), loadTransactions(), updateDashboard()]);
           domElements.deleteConfirmModal.classList.add('hidden');
         } catch (error) {
+          log('setupTransactions', 'Error', `Failed to delete transaction: ${error.message}`);
           showError('modal-transaction-category', `Failed to delete transaction: ${error.message}`);
         }
         domElements.confirmDelete.removeEventListener('click', confirmHandler);
@@ -1284,7 +1289,8 @@ async function loadChildAccounts() {
     domElements.childAccountsSection.classList.remove('hidden');
   }
   if (!currentUser || !db || !familyCode) {
-    log('loadChildAccounts', 'Error', 'Missing dependencies');
+    log('loadChildAccounts', 'Error', 'Missing dependencies: ' + 
+        `currentUser=${!!currentUser}, db=${!!db}, familyCode=${familyCode}`);
     showError('child-user-id', 'Unable to load child accounts. Missing user or database configuration.');
     return;
   }
@@ -1299,7 +1305,11 @@ async function loadChildAccounts() {
       log('loadChildAccounts', 'Admin', 'mode, loading child accounts');
       elements.childSelector.classList.remove('hidden');
       elements.childUserIdSelect.innerHTML = '<option value="">Select a Child</option>';
-      const usersQuery = query(collection(db, 'users'), where('familyCode', '==', familyCode), where('accountType', '==', AccountType.CHILD));
+      const usersQuery = query(collection(db, 'users'), 
+        where('familyCode', '==', familyCode), 
+        where('accountType', '==', AccountType.CHILD)
+      );
+      log('loadChildAccounts', 'Query', `Fetching users with familyCode=${familyCode}`);
       const snapshot = await retryFirestoreOperation(() => getDocs(usersQuery));
       if (snapshot.empty) {
         log('loadChildAccounts', 'No', 'child accounts found');
@@ -1484,6 +1494,7 @@ async function setupChildAccounts() {
           showError('child-transaction-description', 'Transaction not found');
         }
       } catch (error) {
+        log('setupChildAccounts', 'Error', `Failed to fetch transaction: ${error.message}`);
         showError('child-transaction-description', `Failed to fetch transaction: ${error.message}`);
       }
     } else if (e.target.classList.contains('delete-child-transaction')) {
@@ -1500,6 +1511,7 @@ async function setupChildAccounts() {
           await Promise.all([loadChildTransactions(), loadChildTiles()]);
           domElements.deleteConfirmModal.classList.add('hidden');
         } catch (error) {
+          log('setupChildAccounts', 'Error', `Failed to delete transaction: ${error.message}`);
           showError('child-transaction-description', `Failed to delete transaction: ${error.message}`);
         }
         domElements.confirmDelete.removeEventListener('click', confirmHandler);
@@ -1513,7 +1525,7 @@ async function setupChildAccounts() {
     }
   });
   elements.childUserId.addEventListener('change', () => {
-    log('childUserId', 'Change', 'event triggered');
+    log('childUserId', 'Change', `Selected user: ${elements.childUserId.value}`);
     state.currentChildUserId = elements.childUserId.value || null;
     if (state.currentChildUserId) {
       loadChildTransactions();
@@ -1655,7 +1667,7 @@ async function updateDashboard() {
       }
     }
   } catch (error) {
-    log('updateDashboard', 'Error', `updating dashboard: ${error.message}`);
+    log('updateDashboard', 'Error', `Updating dashboard: ${error.message}`);
     showError('balance', `Failed to update dashboard: ${error.message}`);
   }
 }
@@ -1672,9 +1684,12 @@ async function setupAddItemModal() {
     cancelItem: document.getElementById('cancel-item'),
     modalTransactionCategory: document.getElementById('modal-transaction-category')
   };
-  if (!validateDomElements(elements, 'add-item-type', 'Add item modal components not found')) return;
-  elements.addItemButton.addEventListener('click', () => {
-    elements.addItemModal.classList.remove('hidden');
+  if (!validateDomElements(elements, 'add-item-type', 'Add item modal components not found')) {
+    log('setupAddItemModal', 'Error', 'Missing modal components');
+    return;
+  }
+  const resetModalState = () => {
+    elements.addItemModal.classList.add('hidden');
     elements.addItemType.value = '';
     elements.addTransactionForm.classList.add('hidden');
     elements.addBudgetForm.classList.add('hidden');
@@ -1697,67 +1712,36 @@ async function setupAddItemModal() {
       categoryType: document.getElementById('modal-category-type'),
       categoryBudget: document.getElementById('modal-category-budget')
     });
+    elements.saveItem.removeEventListener('click', elements.saveItem._transactionUpdateHandler);
+    elements.saveItem.removeEventListener('click', elements.saveItem._budgetUpdateHandler);
+    elements.saveItem.removeEventListener('click', elements.saveItem._categoryUpdateHandler);
+  };
+  elements.addItemButton.addEventListener('click', () => {
+    log('setupAddItemModal', 'Action', 'Opening add item modal');
+    resetModalState();
+    elements.addItemModal.classList.remove('hidden');
     loadCategories();
   });
   elements.addItemType.addEventListener('change', () => {
     const value = elements.addItemType.value;
+    log('setupAddItemModal', 'Action', `Item type changed to ${value}`);
     elements.addTransactionForm.classList.toggle('hidden', value !== 'transaction');
     elements.addBudgetForm.classList.toggle('hidden', value !== 'budget');
     elements.addCategoryForm.classList.toggle('hidden', value !== 'category');
-    state.isEditing.transaction = false;
-    state.isEditing.budget = false;
-    state.isEditing.category = false;
-    state.editingTransactionId = null;
-    state.editingBudgetId = null;
-    state.editingCategoryId = null;
-    resetForm({
-      transactionType: document.getElementById('modal-transaction-type'),
-      transactionAmount: document.getElementById('modal-transaction-amount'),
-      transactionCategory: document.getElementById('modal-transaction-category'),
-      transactionDescription: document.getElementById('modal-transaction-description'),
-      transactionDate: document.getElementById('modal-transaction-date'),
-      budgetName: document.getElementById('modal-budget-name'),
-      budgetAmount: document.getElementById('modal-budget-amount'),
-      categoryName: document.getElementById('modal-category-name'),
-      categoryType: document.getElementById('modal-category-type'),
-      categoryBudget: document.getElementById('modal-category-budget')
-    });
-    elements.saveItem.removeEventListener('click', elements.saveItem._transactionUpdateHandler);
-    elements.saveItem.removeEventListener('click', elements.saveItem._budgetUpdateHandler);
-    elements.saveItem.removeEventListener('click', elements.saveItem._categoryUpdateHandler);
+    resetModalState();
+    elements.addItemType.value = value;
+    elements.addTransactionForm.classList.toggle('hidden', value !== 'transaction');
+    elements.addBudgetForm.classList.toggle('hidden', value !== 'budget');
+    elements.addCategoryForm.classList.toggle('hidden', value !== 'category');
   });
   elements.cancelItem.addEventListener('click', () => {
-    elements.addItemModal.classList.add('hidden');
-    elements.addItemType.value = '';
-    resetForm({
-      transactionType: document.getElementById('modal-transaction-type'),
-      transactionAmount: document.getElementById('modal-transaction-amount'),
-      transactionCategory: document.getElementById('modal-transaction-category'),
-      transactionDescription: document.getElementById('modal-transaction-description'),
-      transactionDate: document.getElementById('modal-transaction-date'),
-      budgetName: document.getElementById('modal-budget-name'),
-      budgetAmount: document.getElementById('modal-budget-amount'),
-      categoryName: document.getElementById('modal-category-name'),
-      categoryType: document.getElementById('modal-category-type'),
-      categoryBudget: document.getElementById('modal-category-budget')
-    });
-    elements.addTransactionForm.classList.add('hidden');
-    elements.addBudgetForm.classList.add('hidden');
-    elements.addCategoryForm.classList.add('hidden');
-    state.isEditing.transaction = false;
-    state.isEditing.budget = false;
-    state.isEditing.category = false;
-    state.editingTransactionId = null;
-    state.editingBudgetId = null;
-    state.editingCategoryId = null;
-    elements.saveItem.removeEventListener('click', elements.saveItem._transactionUpdateHandler);
-    elements.saveItem.removeEventListener('click', elements.saveItem._budgetUpdateHandler);
-    elements.saveItem.removeEventListener('click', elements.saveItem._categoryUpdateHandler);
+    log('setupAddItemModal', 'Action', 'Cancel button clicked');
+    resetModalState();
   });
   if (elements.modalTransactionCategory) {
     elements.modalTransactionCategory.addEventListener('change', () => {
       if (elements.modalTransactionCategory.value === 'add-new') {
-        elements.addItemModal.classList.add('hidden');
+        log('setupAddItemModal', 'Action', 'Opening category form from transaction modal');
         elements.addItemType.value = 'category';
         elements.addCategoryForm.classList.remove('hidden');
         elements.addTransactionForm.classList.add('hidden');
@@ -1766,8 +1750,10 @@ async function setupAddItemModal() {
       }
     });
   }
-  elements.saveItem.addEventListener('click', async () => {
+  elements.saveItem.removeEventListener('click', elements.saveItem._saveHandler);
+  const saveHandler = async () => {
     const itemType = elements.addItemType.value;
+    log('setupAddItemModal', 'Action', `Saving item of type ${itemType}`);
     if (itemType === 'transaction') {
       const inputs = {
         type: document.getElementById('modal-transaction-type'),
@@ -1776,14 +1762,20 @@ async function setupAddItemModal() {
         description: document.getElementById('modal-transaction-description'),
         date: document.getElementById('modal-transaction-date')
       };
-      if (!validateDomElements(inputs, 'modal-transaction-category', 'Transaction form elements not found')) return;
+      if (!validateDomElements(inputs, 'modal-transaction-category', 'Transaction form elements not found')) {
+        log('setupAddItemModal', 'Error', 'Transaction form elements missing');
+        return;
+      }
       await setupTransactions.handleTransactionAdd(inputs, state.isEditing.transaction, state.editingTransactionId);
     } else if (itemType === 'budget') {
       const inputs = {
         name: document.getElementById('modal-budget-name'),
         amount: document.getElementById('modal-budget-amount')
       };
-      if (!validateDomElements(inputs, 'modal-budget-name', 'Budget form elements not found')) return;
+      if (!validateDomElements(inputs, 'modal-budget-name', 'Budget form elements not found')) {
+        log('setupAddItemModal', 'Error', 'Budget form elements missing');
+        return;
+      }
       await setupBudgets.handleBudgetAdd(inputs.name, inputs.amount, false, state.isEditing.budget, state.editingBudgetId);
     } else if (itemType === 'category') {
       const inputs = {
@@ -1791,12 +1783,18 @@ async function setupAddItemModal() {
         type: document.getElementById('modal-category-type'),
         budget: document.getElementById('modal-category-budget')
       };
-      if (!validateDomElements(inputs, 'modal-category-name', 'Category form elements not found')) return;
+      if (!validateDomElements(inputs, 'modal-category-name', 'Category form elements not found')) {
+        log('setupAddItemModal', 'Error', 'Category form elements missing');
+        return;
+      }
       await setupCategories.handleCategoryAdd(inputs.name, inputs.type, inputs.budget, false, state.isEditing.category, state.editingCategoryId);
     } else {
       showError('add-item-type', 'Please select an item type');
+      log('setupAddItemModal', 'Error', 'No item type selected');
     }
-  });
+  };
+  elements.saveItem._saveHandler = saveHandler;
+  elements.saveItem.addEventListener('click', saveHandler);
   setupTransactions.handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
     await handleTransactionAdd(inputs, isUpdate, id);
   };
