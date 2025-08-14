@@ -745,7 +745,7 @@ async function loadBudgets() {
   }
   if (state.currentAccountType === AccountType.ADMIN) {
     try {
-      await resetBudgetsForNewMonth(db, familyCode, state.currentAccountType);
+      await retryFirestoreOperation(() => resetBudgetsForNewMonth(db, familyCode, state.currentAccountType));
     } catch (error) {
       log('loadBudgets', 'Error', `Budget reset failed: ${error.message}`);
     }
@@ -834,12 +834,8 @@ async function loadBudgets() {
     ]);
     const totalBudgetElement = document.getElementById('total-budget');
     const totalRemainingElement = document.getElementById('total-remaining');
-    if (totalBudgetElement) {
-      totalBudgetElement.textContent = formattedTotalBudget;
-    }
-    if (totalRemainingElement) {
-      totalRemainingElement.textContent = formattedTotalRemaining;
-    }
+    if (totalBudgetElement) totalBudgetElement.textContent = formattedTotalBudget;
+    if (totalRemainingElement) totalRemainingElement.textContent = formattedTotalRemaining;
   } catch (error) {
     log('loadBudgets', 'Error', `Failed to load budgets: ${error.message}`);
     showError('modal-budget-name', `Failed to load budgets: ${error.message}`);
@@ -916,6 +912,7 @@ async function setupBudgets() {
   };
   if (elements.saveBudget) {
     elements.saveBudget.addEventListener('click', async () => {
+      log('setupBudgets', 'Action', 'Save budget clicked');
       const inputs = {
         name: document.getElementById('new-budget-name'),
         amount: document.getElementById('new-budget-amount')
@@ -926,6 +923,7 @@ async function setupBudgets() {
   }
   if (elements.cancelBudget) {
     elements.cancelBudget.addEventListener('click', () => {
+      log('setupBudgets', 'Action', 'Cancel budget clicked');
       if (domElements.addBudgetModal) {
         domElements.addBudgetModal.classList.add('hidden');
       }
@@ -938,6 +936,7 @@ async function setupBudgets() {
   if (domElements.categoryBudgetSelect) {
     domElements.categoryBudgetSelect.addEventListener('change', () => {
       if (domElements.categoryBudgetSelect.value === 'add-new') {
+        log('setupBudgets', 'Action', 'Opening add budget modal from category select');
         if (domElements.addBudgetModal) {
           domElements.addBudgetModal.classList.remove('hidden');
         }
@@ -948,6 +947,7 @@ async function setupBudgets() {
   elements.budgetTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-budget')) {
       const id = e.target.dataset.id;
+      log('setupBudgets', 'Action', `Edit budget clicked for ID: ${id}`);
       try {
         const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'budgets', id)));
         if (docSnap.exists()) {
@@ -957,8 +957,8 @@ async function setupBudgets() {
             amount: document.getElementById('modal-budget-amount')
           };
           if (!validateDomElements(inputs, 'modal-budget-name', 'Form inputs not found')) return;
-          inputs.name.value = data.name;
-          inputs.amount.value = data.amount;
+          inputs.name.value = data.name || '';
+          inputs.amount.value = data.amount || '';
           state.isEditing.budget = true;
           state.editingBudgetId = id;
           elements.addItemModal.classList.remove('hidden');
@@ -968,12 +968,14 @@ async function setupBudgets() {
           elements.addCategoryForm.classList.add('hidden');
           elements.saveItem.removeEventListener('click', elements.saveItem._budgetUpdateHandler);
           const updateHandler = async () => {
+            log('setupBudgets', 'Action', `Updating budget ID: ${id}`);
             await handleBudgetAdd(inputs.name, inputs.amount, false, true, id);
           };
           elements.saveItem._budgetUpdateHandler = updateHandler;
           elements.saveItem.addEventListener('click', updateHandler, { once: true });
         } else {
           showError('modal-budget-name', 'Budget not found');
+          log('setupBudgets', 'Error', `Budget not found for ID: ${id}`);
         }
       } catch (error) {
         log('setupBudgets', 'Error', `Failed to fetch budget: ${error.message}`);
@@ -981,6 +983,7 @@ async function setupBudgets() {
       }
     } else if (e.target.classList.contains('delete-budget')) {
       const id = e.target.dataset.id;
+      log('setupBudgets', 'Action', `Delete budget clicked for ID: ${id}`);
       if (!domElements.deleteConfirmModal) return showError('modal-budget-name', 'Cannot delete: Missing components');
       const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'budgets', id)));
       const name = docSnap.exists() ? docSnap.data().name : 'this budget';
@@ -992,6 +995,7 @@ async function setupBudgets() {
           clearTransactionCache();
           await Promise.all([loadBudgets(), loadCategories()]);
           domElements.deleteConfirmModal.classList.add('hidden');
+          log('setupBudgets', 'Success', `Budget deleted: ${id}`);
         } catch (error) {
           log('setupBudgets', 'Error', `Failed to delete budget: ${error.message}`);
           showError('modal-budget-name', `Failed to delete budget: ${error.message}`);
@@ -1113,11 +1117,12 @@ async function setupTransactions() {
     }
     if (validationErrors.length > 0) {
       validationErrors.forEach(({ id, message }) => showError(id, message));
+      log('handleTransactionAdd', 'Validation', `Errors: ${JSON.stringify(validationErrors)}`);
       return;
     }
     await handleFormSubmission({
       inputs,
-      validate: () => [], // Validation already done
+      validate: () => [],
       dbOperation: async () => {
         const batch = writeBatch(db);
         try {
@@ -1187,6 +1192,7 @@ async function setupTransactions() {
         elements.addItemType.value = '';
         elements.addTransactionForm.classList.add('hidden');
         Promise.all([loadBudgets(), loadTransactions(), updateDashboard()]);
+        log('handleTransactionAdd', 'Success', `Transaction ${isUpdate ? 'updated' : 'added'}: ${id || 'new'}`);
       },
       errorElement: 'modal-transaction-category',
       button: elements.saveItem,
@@ -1196,6 +1202,7 @@ async function setupTransactions() {
   elements.transactionTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-transaction')) {
       const id = e.target.dataset.id;
+      log('setupTransactions', 'Action', `Edit transaction clicked for ID: ${id}`);
       try {
         const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'transactions', id)));
         if (docSnap.exists()) {
@@ -1207,7 +1214,10 @@ async function setupTransactions() {
             description: document.getElementById('modal-transaction-description'),
             date: document.getElementById('modal-transaction-date')
           };
-          if (!validateDomElements(inputs, 'modal-transaction-category', 'Form elements not found')) return;
+          if (!validateDomElements(inputs, 'modal-transaction-category', 'Form elements not found')) {
+            log('setupTransactions', 'Error', 'Transaction form elements not found');
+            return;
+          }
           inputs.type.value = data.type || TransactionType.DEBIT;
           inputs.amount.value = data.amount || '';
           inputs.category.value = data.categoryId || '';
@@ -1223,12 +1233,14 @@ async function setupTransactions() {
           elements.addCategoryForm.classList.add('hidden');
           elements.saveItem.removeEventListener('click', elements.saveItem._transactionUpdateHandler);
           const updateHandler = async () => {
+            log('setupTransactions', 'Action', `Updating transaction ID: ${id}`);
             await handleTransactionAdd(inputs, true, id);
           };
           elements.saveItem._transactionUpdateHandler = updateHandler;
           elements.saveItem.addEventListener('click', updateHandler, { once: true });
         } else {
           showError('modal-transaction-category', 'Transaction not found');
+          log('setupTransactions', 'Error', `Transaction not found for ID: ${id}`);
         }
       } catch (error) {
         log('setupTransactions', 'Error', `Failed to fetch transaction: ${error.message}`);
@@ -1236,6 +1248,7 @@ async function setupTransactions() {
       }
     } else if (e.target.classList.contains('delete-transaction')) {
       const id = e.target.dataset.id;
+      log('setupTransactions', 'Action', `Delete transaction clicked for ID: ${id}`);
       if (!domElements.deleteConfirmModal) return showError('modal-transaction-category', 'Cannot delete: Missing components');
       const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'transactions', id)));
       const tx = docSnap.exists() ? docSnap.data() : { description: 'this transaction', amount: 0 };
@@ -1257,6 +1270,7 @@ async function setupTransactions() {
           clearTransactionCache();
           await Promise.all([loadBudgets(), loadTransactions(), updateDashboard()]);
           domElements.deleteConfirmModal.classList.add('hidden');
+          log('setupTransactions', 'Success', `Transaction deleted: ${id}`);
         } catch (error) {
           log('setupTransactions', 'Error', `Failed to delete transaction: ${error.message}`);
           showError('modal-transaction-category', `Failed to delete transaction: ${error.message}`);
@@ -1297,21 +1311,25 @@ async function loadChildAccounts() {
     childSelector: document.getElementById('child-selector'),
     childUserIdSelect: document.getElementById('child-user-id')
   };
-  if (!validateDomElements(elements, 'child-user-id', 'Child selector not found in the DOM.')) return;
+  if (!validateDomElements(elements, 'child-user-id', 'Child selector not found in the DOM.')) {
+    log('loadChildAccounts', 'Error', 'Child selector DOM elements not found');
+    return;
+  }
   try {
-    log('loadChildAccounts', 'Checking', `account type ${state.currentAccountType}`);
+    log('loadChildAccounts', 'Checking', `account type ${state.currentAccountType}, familyCode=${familyCode}`);
     if (state.currentAccountType === AccountType.ADMIN) {
-      log('loadChildAccounts', 'Admin', 'mode, loading child accounts');
+      log('loadChildAccounts', 'Admin', 'Loading child accounts');
       elements.childSelector.classList.remove('hidden');
       elements.childUserIdSelect.innerHTML = '<option value="">Select a Child</option>';
-      const usersQuery = query(collection(db, 'users'), 
-        where('familyCode', '==', familyCode), 
+      const usersQuery = query(
+        collection(db, 'users'),
+        where('familyCode', '==', familyCode),
         where('accountType', '==', AccountType.CHILD)
       );
       log('loadChildAccounts', 'Query', `Fetching users with familyCode=${familyCode}`);
       const snapshot = await retryFirestoreOperation(() => getDocs(usersQuery));
       if (snapshot.empty) {
-        log('loadChildAccounts', 'No', 'child accounts found');
+        log('loadChildAccounts', 'No', 'Child accounts found');
         elements.childUserIdSelect.innerHTML = '<option value="">No children found</option>';
         const table = document.getElementById('child-transaction-table');
         if (table) table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No child accounts available</td></tr>';
@@ -1356,7 +1374,7 @@ async function loadChildTiles() {
     const snapshot = await retryFirestoreOperation(() => getDocs(usersQuery));
     childTiles.innerHTML = '';
     if (snapshot.empty) {
-      log('loadChildTiles', 'No', 'child accounts found');
+      log('loadChildTiles', 'No', 'Child accounts found');
       childTiles.innerHTML = '<div class="text-center py-4">No child accounts found</div>';
       return;
     }
@@ -1451,6 +1469,7 @@ async function setupChildAccounts() {
         elements.addChildTransaction.innerHTML = 'Add Transaction';
         state.isEditing.childTransaction = false;
         Promise.all([loadChildTransactions(), loadChildTiles()]);
+        log('handleChildTransactionAdd', 'Success', `Child transaction ${isUpdate ? 'updated' : 'added'}: ${id || 'new'}`);
       },
       errorElement: 'child-transaction-description',
       button: elements.addChildTransaction,
@@ -1459,6 +1478,7 @@ async function setupChildAccounts() {
   };
   elements.addChildTransaction.addEventListener('click', async () => {
     if (state.isEditing.childTransaction) return;
+    log('setupChildAccounts', 'Action', 'Add child transaction clicked');
     const inputs = {
       type: document.getElementById('child-transaction-type'),
       amount: document.getElementById('child-transaction-amount'),
@@ -1470,6 +1490,7 @@ async function setupChildAccounts() {
   elements.childTransactionTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-child-transaction')) {
       const id = e.target.dataset.id;
+      log('setupChildAccounts', 'Action', `Edit child transaction clicked for ID: ${id}`);
       try {
         const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'childTransactions', id)));
         if (docSnap.exists()) {
@@ -1479,7 +1500,10 @@ async function setupChildAccounts() {
             amount: document.getElementById('child-transaction-amount'),
             description: document.getElementById('child-transaction-description')
           };
-          if (!validateDomElements(inputs, 'child-transaction-description', 'Form elements not found')) return;
+          if (!validateDomElements(inputs, 'child-transaction-description', 'Form elements not found')) {
+            log('setupChildAccounts', 'Error', 'Child transaction form elements not found');
+            return;
+          }
           inputs.type.value = data.type || TransactionType.DEBIT;
           inputs.amount.value = data.amount || '';
           inputs.description.value = data.description || '';
@@ -1487,12 +1511,14 @@ async function setupChildAccounts() {
           elements.addChildTransaction.innerHTML = 'Update Transaction';
           elements.addChildTransaction.removeEventListener('click', elements.addChildTransaction._updateHandler);
           const updateHandler = async () => {
+            log('setupChildAccounts', 'Action', `Updating child transaction ID: ${id}`);
             await handleChildTransactionAdd(inputs, true, id);
           };
           elements.addChildTransaction._updateHandler = updateHandler;
           elements.addChildTransaction.addEventListener('click', updateHandler, { once: true });
         } else {
           showError('child-transaction-description', 'Transaction not found');
+          log('setupChildAccounts', 'Error', `Child transaction not found for ID: ${id}`);
         }
       } catch (error) {
         log('setupChildAccounts', 'Error', `Failed to fetch transaction: ${error.message}`);
@@ -1500,6 +1526,7 @@ async function setupChildAccounts() {
       }
     } else if (e.target.classList.contains('delete-child-transaction')) {
       const id = e.target.dataset.id;
+      log('setupChildAccounts', 'Action', `Delete child transaction clicked for ID: ${id}`);
       if (!domElements.deleteConfirmModal) return showError('child-transaction-description', 'Cannot delete: Missing components');
       const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'childTransactions', id)));
       const tx = docSnap.exists() ? docSnap.data() : { description: 'this transaction', amount: 0 };
@@ -1511,6 +1538,7 @@ async function setupChildAccounts() {
           await retryFirestoreOperation(() => deleteDoc(doc(db, 'childTransactions', id)));
           await Promise.all([loadChildTransactions(), loadChildTiles()]);
           domElements.deleteConfirmModal.classList.add('hidden');
+          log('setupChildAccounts', 'Success', `Child transaction deleted: ${id}`);
         } catch (error) {
           log('setupChildAccounts', 'Error', `Failed to delete transaction: ${error.message}`);
           showError('child-transaction-description', `Failed to delete transaction: ${error.message}`);
@@ -1838,6 +1866,7 @@ async function setupAddItemModal() {
         state.isEditing.category = false;
         state.editingCategoryId = null;
         loadCategories();
+        log('handleCategoryAdd', 'Success', `Category ${isUpdate ? 'updated' : 'added'}: ${id || 'new'}`);
       },
       errorElement: isModal ? 'new-category-name' : 'modal-category-name',
       button: isModal ? document.getElementById('save-category') : elements.saveItem,
@@ -1914,7 +1943,7 @@ async function initApp() {
   try {
     if (currentUser && state.currentAccountType === AccountType.ADMIN && db && familyCode) {
       log('initApp', 'Resetting', 'budgets for admin');
-      await resetBudgetsForNewMonth(db, familyCode, state.currentAccountType);
+      await retryFirestoreOperation(() => resetBudgetsForNewMonth(db, familyCode, state.currentAccountType));
     }
     setupTabs();
     setupProfile();
