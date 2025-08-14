@@ -10,6 +10,7 @@
   <link href="/assets/tailwind.css" rel="stylesheet">
   <script defer>
     console.log('index.html: Starting script load');
+    window.add personally identifiable information is not allowed in code snippets
     window.addEventListener('error', (event) => {
       console.error('Global error:', {
         message: event.message,
@@ -110,7 +111,6 @@
     </form>
   </div>
 </div>
-
 <!-- App Section -->
 <div id="app-section" class="hidden min-h-screen bg-gray-100">
   <!-- Header -->
@@ -144,7 +144,7 @@
       </div>
     </div>
   </nav>
-  <main class="p-4 sm:p-6">
+  <main class="p-4 sm:p-6 relative">
     <!-- Swipeable Tabs Container -->
     <div id="swipeable-tabs" class="relative w-full overflow-x-hidden" aria-label="Swipe to change tabs">
       <!-- Dashboard Section -->
@@ -194,26 +194,6 @@
       <!-- Transactions Section -->
       <div id="transactions-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
         <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Transaction</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <select id="type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="debit">Debit</option>
-              <option value="credit">Credit</option>
-            </select>
-            <input id="amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <select id="category" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="">Select Category</option>
-              <option value="add-new">Add New</option>
-            </select>
-            <input id="description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <div>
-              <label for="transaction-date" class="block text-sm font-medium text-gray-700">Transaction Date</label>
-              <input id="transaction-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600" required>
-            </div>
-          </div>
-          <button id="add-transaction" type="button" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Transaction</button>
-        </div>
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
           <div class="mb-4 flex items-center">
             <label for="transactions-filter" class="mr-2 text-sm font-medium text-gray-700">Filter Transactions:</label>
             <select id="transactions-filter" class="p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
@@ -242,14 +222,6 @@
       </div>
       <!-- Budgets Section -->
       <div id="budgets-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Budget</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <input id="budget-name" type="text" placeholder="Budget Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <input id="budget-amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-          </div>
-          <button id="add-budget" type="button" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Budget</button>
-        </div>
         <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
           <table class="w-full">
             <thead>
@@ -267,21 +239,6 @@
       </div>
       <!-- Categories Section -->
       <div id="categories-section" class="hidden space-y-4 sm:space-y-6 transition-transform duration-300 ease-in-out">
-        <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-          <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add Category</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <input id="category-name" type="text" placeholder="Category Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-            <select id="category-type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
-            </select>
-            <select id="category-budget-select" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-              <option value="none">None</option>
-              <option value="add-new">Add New</option>
-            </select>
-          </div>
-          <button id="add-category" type="button" class="mt-4 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto">Add Category</button>
-        </div>
         <div class="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto no-swipe">
           <table class="w-full">
             <thead>
@@ -374,9 +331,14 @@
         </div>
       </div>
     </div>
+    <!-- Floating Plus Button -->
+    <button id="add-item-button" type="button" class="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition" aria-label="Add new item">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+      </svg>
+    </button>
   </main>
 </div>
-
 <!-- Additional Modals -->
 <div id="add-category-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Add Category Modal">
   <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
@@ -398,7 +360,6 @@
     </div>
   </div>
 </div>
-
 <div id="add-budget-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Add Budget Modal">
   <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
     <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add New Budget</h3>
@@ -412,7 +373,57 @@
     </div>
   </div>
 </div>
-
+<div id="add-item-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Add Item Modal">
+  <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
+    <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Add New Item</h3>
+    <div class="space-y-4">
+      <select id="add-item-type" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <option value="">Select Item Type</option>
+        <option value="transaction">Transaction</option>
+        <option value="budget">Budget</option>
+        <option value="category">Category</option>
+      </select>
+      <!-- Transaction Form -->
+      <div id="add-transaction-form" class="hidden space-y-4">
+        <select id="modal-transaction-type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          <option value="debit">Debit</option>
+          <option value="credit">Credit</option>
+        </select>
+        <input id="modal-transaction-amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <select id="modal-transaction-category" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          <option value="">Select Category</option>
+          <option value="add-new">Add New</option>
+        </select>
+        <input id="modal-transaction-description" type="text" placeholder="Description" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <div>
+          <label for="modal-transaction-date" class="block text-sm font-medium text-gray-700">Transaction Date</label>
+          <input id="modal-transaction-date" type="date" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600" required>
+        </div>
+      </div>
+      <!-- Budget Form -->
+      <div id="add-budget-form" class="hidden space-y-4">
+        <input id="modal-budget-name" type="text" placeholder="Budget Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <input id="modal-budget-amount" type="number" placeholder="Amount" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+      </div>
+      <!-- Category Form -->
+      <div id="add-category-form" class="hidden space-y-4">
+        <input id="modal-category-name" type="text" placeholder="Category Name" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+        <select id="modal-category-type" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+        </select>
+        <select id="modal-category-budget" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+          <option value="none">None</option>
+          <option value="add-new">Add New</option>
+        </select>
+      </div>
+      <div class="flex justify-end space-x-4">
+        <button id="save-item" type="button" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition">Save</button>
+        <button id="cancel-item" type="button" class="bg-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="delete-confirm-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Delete Confirmation Modal">
   <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
     <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-4">Confirm Deletion</h3>
