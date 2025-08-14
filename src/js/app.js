@@ -100,6 +100,7 @@ function log(module, action, details) {
 // State management
 const state = {
   isEditing: { transaction: false, budget: false, category: false, profile: false, childTransaction: false },
+  editingId: { transaction: null, budget: null, category: null },
   currentChildUserId: null,
   currentAccountType: null,
   loadedTabs: { budgets: false, transactions: false, childAccounts: false }
@@ -576,7 +577,7 @@ async function setupCategories() {
     addBudgetForm: document.getElementById('add-budget-form')
   };
   if (!validateDomElements({ categoryTable: elements.categoryTable }, 'category-table', 'Category table not found')) return;
-  const handleCategoryAdd = async (nameInput, typeSelect, budgetSelect, isModal = false) => {
+  const handleCategory = async (nameInput, typeSelect, budgetSelect, isUpdate = false, id = null, isModal = false) => {
     const name = nameInput.value.trim();
     const type = typeSelect.value;
     const budgetId = budgetSelect.value === 'none' ? null : budgetSelect.value;
@@ -587,13 +588,23 @@ async function setupCategories() {
     await handleFormSubmission({
       inputs: { nameInput, typeSelect, budgetSelect },
       validate: () => validationErrors,
-      dbOperation: () => addDoc(collection(db, 'categories'), {
-        name: sanitizeInput(name),
-        type,
-        budgetId,
-        familyCode,
-        createdAt: serverTimestamp()
-      }),
+      dbOperation: () => {
+        if (isUpdate) {
+          return updateDoc(doc(db, 'categories', id), {
+            name: sanitizeInput(name),
+            type,
+            budgetId
+          });
+        } else {
+          return addDoc(collection(db, 'categories'), {
+            name: sanitizeInput(name),
+            type,
+            budgetId,
+            familyCode,
+            createdAt: serverTimestamp()
+          });
+        }
+      },
       successCallback: () => {
         nameInput.value = '';
         typeSelect.value = 'income';
@@ -606,10 +617,13 @@ async function setupCategories() {
           elements.addItemType.value = '';
           elements.modalCategory.classList.add('hidden');
         }
+        state.isEditing.category = false;
+        state.editingId.category = null;
         loadCategories();
       },
       errorElement: isModal ? 'new-category-name' : 'modal-category-name',
-      button: isModal ? elements.saveCategory : elements.saveItem
+      button: isModal ? elements.saveCategory : elements.saveItem,
+      isUpdate
     });
   };
   if (elements.saveCategory) {
@@ -620,7 +634,7 @@ async function setupCategories() {
         budget: document.getElementById('new-category-budget')
       };
       if (!validateDomElements(inputs, 'new-category-name', 'Modal form elements not found')) return;
-      await handleCategoryAdd(inputs.name, inputs.type, inputs.budget, true);
+      await handleCategory(inputs.name, inputs.type, inputs.budget, false, null, true);
     });
   }
   if (elements.cancelCategory) {
@@ -662,34 +676,7 @@ async function setupCategories() {
           inputs.type.value = data.type || 'income';
           inputs.budget.value = data.budgetId || 'none';
           state.isEditing.category = true;
-          const updateHandler = async () => {
-            const name = inputs.name.value.trim();
-            const type = inputs.type.value;
-            const budgetId = inputs.budget.value === 'none' ? null : inputs.budget.value;
-            const validationErrors = [];
-            if (!name) validationErrors.push({ id: 'modal-category-name', message: 'Name is required' });
-            if (name.length > 100) validationErrors.push({ id: 'modal-category-name', message: 'Name cannot exceed 100 characters' });
-            if (!type) validationErrors.push({ id: 'modal-category-type', message: 'Type is required' });
-            await handleFormSubmission({
-              inputs,
-              validate: () => validationErrors,
-              dbOperation: () => updateDoc(doc(db, 'categories', id), { name: sanitizeInput(name), type, budgetId }),
-              successCallback: () => {
-                resetForm(inputs);
-                state.isEditing.category = false;
-                domElements.addItemModal.classList.add('hidden');
-                domElements.addItemType.value = '';
-                elements.modalCategory.classList.add('hidden');
-                loadCategories();
-              },
-              errorElement: 'modal-category-name',
-              button: elements.saveItem,
-              isUpdate: true
-            });
-          };
-          elements.saveItem.removeEventListener('click', elements.saveItem._categoryUpdateHandler);
-          elements.saveItem._categoryUpdateHandler = updateHandler;
-          elements.saveItem.addEventListener('click', updateHandler, { once: true });
+          state.editingId.category = id;
           domElements.addItemModal.classList.remove('hidden');
           domElements.addItemType.value = 'category';
           elements.modalCategory.classList.remove('hidden');
@@ -727,16 +714,6 @@ async function setupCategories() {
     }
   });
 }
-
-
-
-
-
-
-
-
-
-
 
 async function loadBudgets() {
   if (!db) {
@@ -860,42 +837,42 @@ async function setupBudgets() {
     addCategoryForm: document.getElementById('add-category-form')
   };
   if (!validateDomElements({ budgetTable: elements.budgetTable }, 'modal-budget-name', 'Budget table not found')) return;
-  const handleBudgetAdd = async (nameInput, amountInput, isModal = false, isUpdate = false, id = null) => {
+  const handleBudget = async (nameInput, amountInput, isUpdate = false, id = null, isModal = false) => {
     const name = nameInput.value.trim();
     const amount = parseFloat(amountInput.value);
     const validationErrors = [];
     if (!name) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Budget name is required' });
     if (name.length > 100) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Name cannot exceed 100 characters' });
     if (isNaN(amount) || amount <= 0) validationErrors.push({ id: isModal ? 'new-budget-amount' : 'modal-budget-amount', message: 'Valid positive amount is required' });
-    if (state.currentAccountType !== AccountType.ADMIN) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Only admins can add or edit budgets' });
+    if (state.currentAccountType !== AccountType.ADMIN) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Only admins can add budgets' });
     await handleFormSubmission({
       inputs: { nameInput, amountInput },
       validate: () => validationErrors,
       dbOperation: async () => {
-        if (isUpdate && id) {
-          await retryFirestoreOperation(() => updateDoc(doc(db, 'budgets', id), {
-            name: sanitizeInput(name),
-            amount
-          }));
+        if (isUpdate) {
+          await updateDoc(doc(db, 'budgets', id), { name: sanitizeInput(name), amount });
+          clearTransactionCache();
         } else {
           const userDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'users', currentUser.uid)));
           if (!userDoc.exists() || !userDoc.data().familyCode) {
             throw new Error('Invalid user configuration');
           }
           const now = new Date();
-          await retryFirestoreOperation(() => addDoc(collection(db, 'budgets'), {
+          const budgetData = {
             name: sanitizeInput(name),
             amount,
             spent: 0,
             familyCode: userDoc.data().familyCode,
             createdAt: serverTimestamp(),
             lastResetMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-          }));
+          };
+          await addDoc(collection(db, 'budgets'), budgetData);
+          clearTransactionCache();
         }
-        clearTransactionCache();
       },
       successCallback: () => {
-        resetForm({ nameInput, amountInput });
+        nameInput.value = '';
+        amountInput.value = '';
         if (isModal && domElements.addBudgetModal) {
           domElements.addBudgetModal.classList.add('hidden');
         }
@@ -905,15 +882,24 @@ async function setupBudgets() {
           elements.addBudgetForm.classList.add('hidden');
         }
         state.isEditing.budget = false;
-        state.editingBudgetId = null;
+        state.editingId.budget = null;
         Promise.all([loadBudgets(), loadCategories()]);
-        log('handleBudgetAdd', 'Success', `Budget ${isUpdate ? 'updated' : 'added'}: ${id || 'new'}`);
       },
       errorElement: isModal ? 'new-budget-name' : 'modal-budget-name',
       button: isModal ? elements.saveBudget : elements.saveItem,
       isUpdate
     });
   };
+  if (domElements.categoryBudgetSelect) {
+    domElements.categoryBudgetSelect.addEventListener('change', () => {
+      if (domElements.categoryBudgetSelect.value === 'add-new') {
+        if (domElements.addBudgetModal) {
+          domElements.addBudgetModal.classList.remove('hidden');
+        }
+        domElements.categoryBudgetSelect.value = 'none';
+      }
+    });
+  }
   if (elements.saveBudget) {
     elements.saveBudget.addEventListener('click', async () => {
       const inputs = {
@@ -921,7 +907,7 @@ async function setupBudgets() {
         amount: document.getElementById('new-budget-amount')
       };
       if (!validateDomElements(inputs, 'new-budget-name', 'Modal form inputs not found')) return;
-      await handleBudgetAdd(inputs.name, inputs.amount, true);
+      await handleBudget(inputs.name, inputs.amount, false, null, true);
     });
   }
   if (elements.cancelBudget) {
@@ -933,16 +919,6 @@ async function setupBudgets() {
         name: document.getElementById('new-budget-name'),
         amount: document.getElementById('new-budget-amount')
       });
-    });
-  }
-  if (domElements.categoryBudgetSelect) {
-    domElements.categoryBudgetSelect.addEventListener('change', () => {
-      if (domElements.categoryBudgetSelect.value === 'add-new') {
-        if (domElements.addBudgetModal) {
-          domElements.addBudgetModal.classList.remove('hidden');
-        }
-        domElements.categoryBudgetSelect.value = 'none';
-      }
     });
   }
   elements.budgetTable.addEventListener('click', async (e) => {
@@ -960,23 +936,14 @@ async function setupBudgets() {
           inputs.name.value = data.name;
           inputs.amount.value = data.amount;
           state.isEditing.budget = true;
-          state.editingBudgetId = id;
+          state.editingId.budget = id;
           elements.addItemModal.classList.remove('hidden');
           elements.addItemType.value = 'budget';
           elements.addBudgetForm.classList.remove('hidden');
           elements.addTransactionForm.classList.add('hidden');
           elements.addCategoryForm.classList.add('hidden');
-          elements.saveItem.removeEventListener('click', elements.saveItem._budgetUpdateHandler);
-          const updateHandler = async () => {
-            await handleBudgetAdd(inputs.name, inputs.amount, false, true, id);
-          };
-          elements.saveItem._budgetUpdateHandler = updateHandler;
-          elements.saveItem.addEventListener('click', updateHandler, { once: true });
-        } else {
-          showError('modal-budget-name', 'Budget not found');
         }
       } catch (error) {
-        log('setupBudgets', 'Error', `Failed to fetch budget: ${error.message}`);
         showError('modal-budget-name', `Failed to fetch budget: ${error.message}`);
       }
     } else if (e.target.classList.contains('delete-budget')) {
@@ -993,7 +960,6 @@ async function setupBudgets() {
           await Promise.all([loadBudgets(), loadCategories()]);
           domElements.deleteConfirmModal.classList.add('hidden');
         } catch (error) {
-          log('setupBudgets', 'Error', `Failed to delete budget: ${error.message}`);
           showError('modal-budget-name', `Failed to delete budget: ${error.message}`);
         }
         domElements.confirmDelete.removeEventListener('click', confirmHandler);
@@ -1008,13 +974,27 @@ async function setupBudgets() {
   });
 }
 
+// Transactions
+/**
+ * @typedef {Object} Transaction
+ * @property {string} id
+ * @property {'debit' | 'credit'} type
+ * @property {number} amount
+ * @property {string} categoryId
+ * @property {string} description
+ * @property {Date} createdAt
+ * @property {string} familyCode
+ */
 async function loadTransactions() {
   const elements = {
     transactionTable: document.getElementById('transaction-table'),
     dateHeader: document.getElementById('transaction-date-header'),
     transactionsFilter: document.getElementById('transactions-filter')
   };
-  if (!validateDomElements(elements, 'modal-transaction-category', 'Transaction components not found')) return;
+  if (!validateDomElements(elements, 'modal-transaction-category', 'Required components not available')) {
+    elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+    return;
+  }
   if (!db || !familyCode) {
     showError('modal-transaction-category', 'Database service not available');
     elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
@@ -1044,20 +1024,10 @@ async function loadTransactions() {
     }
     const fragment = document.createDocumentFragment();
     for (const transaction of transactions.sort((a, b) => b.createdAt - a.createdAt)) {
-      let transactionDate;
-      if (transaction.createdAt.toDate) {
-        transactionDate = transaction.createdAt.toDate();
-      } else if (typeof transaction.createdAt === 'string') {
-        transactionDate = new Date(transaction.createdAt);
-      } else if (transaction.createdAt.seconds) {
-        transactionDate = new Date(transaction.createdAt.seconds * 1000);
-      } else {
-        transactionDate = new Date();
-        log('loadTransactions', 'Warning', `Invalid transaction date for ${transaction.id}`);
-      }
+      let transactionDate = transaction.createdAt.toDate ? transaction.createdAt.toDate() : new Date(transaction.createdAt);
       if (isNaN(transactionDate.getTime())) {
+        log('loadTransactions', 'Warning', `Invalid transaction date for ${transaction.id}, using current date`);
         transactionDate = new Date();
-        log('loadTransactions', 'Warning', `Invalid transaction date after parsing for ${transaction.id}`);
       }
       const formattedAmount = await formatCurrency(transaction.amount || 0, 'INR');
       const tr = document.createElement('tr');
@@ -1095,7 +1065,7 @@ async function setupTransactions() {
   };
   if (!validateDomElements({ transactionTable: elements.transactionTable, transactionsFilter: elements.transactionsFilter }, 'modal-transaction-category', 'Transaction components not found')) return;
   elements.transactionsFilter.addEventListener('change', debounce(loadTransactions, 300));
-  const handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
+  const handleTransaction = async (inputs, isUpdate = false, id = null) => {
     const { type, amount, category, description, date } = inputs;
     const amountVal = parseFloat(amount.value);
     const transactionDate = new Date(date.value);
@@ -1104,90 +1074,70 @@ async function setupTransactions() {
     if (!category.value) validationErrors.push({ id: 'modal-transaction-category', message: 'Category is required' });
     if (!date.value || isNaN(transactionDate.getTime())) validationErrors.push({ id: 'modal-transaction-date', message: 'Valid date is required' });
     if (description.value.length > 200) validationErrors.push({ id: 'modal-transaction-description', message: 'Description cannot exceed 200 characters' });
-    if (category.value && category.value !== 'add-new') {
-      const categoryDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', category.value)));
-      if (!categoryDoc.exists()) {
-        validationErrors.push({ id: 'modal-transaction-category', message: 'Selected category does not exist' });
-      }
-    }
-    if (validationErrors.length > 0) {
-      validationErrors.forEach(({ id, message }) => showError(id, message));
-      log('handleTransactionAdd', 'Validation', `Errors: ${JSON.stringify(validationErrors)}`);
-      return;
-    }
     await handleFormSubmission({
       inputs,
-      validate: () => [], // Validation already done
+      validate: () => validationErrors,
       dbOperation: async () => {
         const batch = writeBatch(db);
-        try {
-          if (isUpdate && id) {
-            let oldBudgetId = null, newBudgetId = null;
-            const oldDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'transactions', id)));
-            if (!oldDoc.exists()) {
-              throw new Error('Transaction not found');
+        if (isUpdate) {
+          let oldBudgetId = null, newBudgetId = null;
+          const oldDoc = await getDoc(doc(db, 'transactions', id));
+          if (oldDoc.exists() && oldDoc.data().type === TransactionType.DEBIT) {
+            const oldCategory = await getDoc(doc(db, 'categories', oldDoc.data().categoryId));
+            oldBudgetId = oldCategory.exists() ? oldCategory.data().budgetId : null;
+          }
+          if (type.value === TransactionType.DEBIT) {
+            const newCategory = await getDoc(doc(db, 'categories', category.value));
+            newBudgetId = newCategory.exists() ? newCategory.data().budgetId : null;
+          }
+          if (oldBudgetId && oldBudgetId === newBudgetId) {
+            const amountDiff = amountVal - oldDoc.data().amount;
+            if (amountDiff !== 0) {
+              batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(amountDiff) });
             }
-            if (oldDoc.data().type === TransactionType.DEBIT && oldDoc.data().categoryId) {
-              const oldCategory = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', oldDoc.data().categoryId)));
-              oldBudgetId = oldCategory.exists() ? oldCategory.data().budgetId : null;
-            }
-            if (type.value === TransactionType.DEBIT) {
-              const newCategory = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', category.value)));
-              newBudgetId = newCategory.exists() ? newCategory.data().budgetId : null;
-            }
-            if (oldBudgetId && oldBudgetId === newBudgetId) {
-              const amountDiff = amountVal - oldDoc.data().amount;
-              if (amountDiff !== 0 && oldBudgetId) {
-                batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(amountDiff) });
-              }
-            } else {
-              if (oldBudgetId && oldDoc.data().type === TransactionType.DEBIT) {
-                batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(-oldDoc.data().amount) });
-              }
-              if (newBudgetId && type.value === TransactionType.DEBIT) {
-                batch.update(doc(db, 'budgets', newBudgetId), { spent: increment(amountVal) });
-              }
-            }
-            batch.update(doc(db, 'transactions', id), {
-              type: type.value,
-              amount: amountVal,
-              categoryId: category.value,
-              description: sanitizeInput(description.value.trim()),
-              createdAt: transactionDate
-            });
           } else {
-            const txRef = doc(collection(db, 'transactions'));
-            batch.set(txRef, {
-              type: type.value,
-              amount: amountVal,
-              categoryId: category.value,
-              description: sanitizeInput(description.value.trim()),
-              familyCode,
-              createdAt: transactionDate
-            });
-            if (type.value === TransactionType.DEBIT) {
-              const categoryDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', category.value)));
-              if (categoryDoc.exists() && categoryDoc.data().budgetId) {
-                batch.update(doc(db, 'budgets', categoryDoc.data().budgetId), { spent: increment(amountVal) });
-              }
+            if (oldBudgetId && oldDoc.data().type === TransactionType.DEBIT) {
+              batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(-oldDoc.data().amount) });
+            }
+            if (newBudgetId && type.value === TransactionType.DEBIT) {
+              batch.update(doc(db, 'budgets', newBudgetId), { spent: increment(amountVal) });
             }
           }
-          await retryFirestoreOperation(() => batch.commit());
-        } catch (error) {
-          log('handleTransactionAdd', 'Error', `Firestore operation failed: ${error.message}`);
-          throw error;
+          batch.update(doc(db, 'transactions', id), {
+            type: type.value,
+            amount: amountVal,
+            categoryId: category.value,
+            description: sanitizeInput(description.value.trim()),
+            createdAt: transactionDate
+          });
+        } else {
+          const txRef = doc(collection(db, 'transactions'));
+          batch.set(txRef, {
+            type: type.value,
+            amount: amountVal,
+            categoryId: category.value,
+            description: sanitizeInput(description.value.trim()),
+            familyCode,
+            createdAt: transactionDate
+          });
+          if (type.value === TransactionType.DEBIT) {
+            const categoryDoc = await getDoc(doc(db, 'categories', category.value));
+            if (categoryDoc.exists() && categoryDoc.data().budgetId) {
+              batch.update(doc(db, 'budgets', categoryDoc.data().budgetId), { spent: increment(amountVal) });
+            }
+          }
         }
+        await batch.commit();
       },
       successCallback: () => {
         clearTransactionCache();
         resetForm(inputs);
         state.isEditing.transaction = false;
-        state.editingTransactionId = null;
+        state.editingId.transaction = null;
         elements.addItemModal.classList.add('hidden');
         elements.addItemType.value = '';
         elements.addTransactionForm.classList.add('hidden');
         Promise.all([loadBudgets(), loadTransactions(), updateDashboard()]);
-        log('handleTransactionAdd', 'Success', `Transaction ${isUpdate ? 'updated' : 'added'}: ${id || 'new'}`);
       },
       errorElement: 'modal-transaction-category',
       button: elements.saveItem,
@@ -1197,7 +1147,6 @@ async function setupTransactions() {
   elements.transactionTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-transaction')) {
       const id = e.target.dataset.id;
-      log('setupTransactions', 'Action', `Edit transaction clicked for ID: ${id}`);
       try {
         const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'transactions', id)));
         if (docSnap.exists()) {
@@ -1209,41 +1158,28 @@ async function setupTransactions() {
             description: document.getElementById('modal-transaction-description'),
             date: document.getElementById('modal-transaction-date')
           };
-          if (!validateDomElements(inputs, 'modal-transaction-category', 'Form elements not found')) {
-            log('setupTransactions', 'Error', 'Transaction form elements not found');
-            return;
-          }
-          inputs.type.value = data.type || TransactionType.DEBIT;
-          inputs.amount.value = data.amount || '';
-          inputs.category.value = data.categoryId || '';
+          if (!validateDomElements(inputs, 'modal-transaction-category', 'Form elements not found')) return;
+          inputs.type.value = data.type;
+          inputs.amount.value = data.amount;
+          inputs.category.value = data.categoryId;
           inputs.description.value = data.description || '';
           const transactionDate = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
           inputs.date.value = transactionDate.toISOString().split('T')[0];
           state.isEditing.transaction = true;
-          state.editingTransactionId = id;
+          state.editingId.transaction = id;
           elements.addItemModal.classList.remove('hidden');
           elements.addItemType.value = 'transaction';
           elements.addTransactionForm.classList.remove('hidden');
           elements.addBudgetForm.classList.add('hidden');
           elements.addCategoryForm.classList.add('hidden');
-          elements.saveItem.removeEventListener('click', elements.saveItem._transactionUpdateHandler);
-          const updateHandler = async () => {
-            log('setupTransactions', 'Action', `Updating transaction ID: ${id}`);
-            await handleTransactionAdd(inputs, true, id);
-          };
-          elements.saveItem._transactionUpdateHandler = updateHandler;
-          elements.saveItem.addEventListener('click', updateHandler, { once: true });
         } else {
           showError('modal-transaction-category', 'Transaction not found');
-          log('setupTransactions', 'Error', `Transaction not found for ID: ${id}`);
         }
       } catch (error) {
-        log('setupTransactions', 'Error', `Failed to fetch transaction: ${error.message}`);
         showError('modal-transaction-category', `Failed to fetch transaction: ${error.message}`);
       }
     } else if (e.target.classList.contains('delete-transaction')) {
       const id = e.target.dataset.id;
-      log('setupTransactions', 'Action', `Delete transaction clicked for ID: ${id}`);
       if (!domElements.deleteConfirmModal) return showError('modal-transaction-category', 'Cannot delete: Missing components');
       const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'transactions', id)));
       const tx = docSnap.exists() ? docSnap.data() : { description: 'this transaction', amount: 0 };
@@ -1255,19 +1191,17 @@ async function setupTransactions() {
           const batch = writeBatch(db);
           const transaction = docSnap.data();
           if (transaction.type === TransactionType.DEBIT && transaction.categoryId) {
-            const categoryDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', transaction.categoryId)));
+            const categoryDoc = await getDoc(doc(db, 'categories', transaction.categoryId));
             if (categoryDoc.exists() && categoryDoc.data().budgetId) {
               batch.update(doc(db, 'budgets', categoryDoc.data().budgetId), { spent: increment(-transaction.amount) });
             }
           }
           batch.delete(doc(db, 'transactions', id));
-          await retryFirestoreOperation(() => batch.commit());
+          await batch.commit();
           clearTransactionCache();
           await Promise.all([loadBudgets(), loadTransactions(), updateDashboard()]);
           domElements.deleteConfirmModal.classList.add('hidden');
-          log('setupTransactions', 'Success', `Transaction deleted: ${id}`);
         } catch (error) {
-          log('setupTransactions', 'Error', `Failed to delete transaction: ${error.message}`);
           showError('modal-transaction-category', `Failed to delete transaction: ${error.message}`);
         }
         domElements.confirmDelete.removeEventListener('click', confirmHandler);
@@ -1282,6 +1216,7 @@ async function setupTransactions() {
   });
 }
 
+// Child Accounts
 async function loadChildAccounts() {
   log('loadChildAccounts', 'Starting', '');
   if (!domElements.childAccountsSection) {
@@ -1289,16 +1224,17 @@ async function loadChildAccounts() {
     showError('child-user-id', 'Child accounts section not found in the DOM.');
     return;
   }
+  if (!state.currentAccountType) {
+    await loadProfileData();
+  }
   if (state.currentAccountType === AccountType.CHILD) {
     domElements.childAccountsSection.classList.add('hidden');
-    state.currentChildUserId = currentUser.uid;
-    await loadChildTransactions();
     return;
   } else {
     domElements.childAccountsSection.classList.remove('hidden');
   }
   if (!currentUser || !db || !familyCode) {
-    log('loadChildAccounts', 'Error', `Missing dependencies: currentUser=${!!currentUser}, db=${!!db}, familyCode=${familyCode}`);
+    log('loadChildAccounts', 'Error', 'Missing dependencies');
     showError('child-user-id', 'Unable to load child accounts. Missing user or database configuration.');
     return;
   }
@@ -1306,10 +1242,7 @@ async function loadChildAccounts() {
     childSelector: document.getElementById('child-selector'),
     childUserIdSelect: document.getElementById('child-user-id')
   };
-  if (!validateDomElements(elements, 'child-user-id', 'Child selector not found in the DOM.')) {
-    log('loadChildAccounts', 'Error', 'Child selector DOM elements not found');
-    return;
-  }
+  if (!validateDomElements(elements, 'child-user-id', 'Child selector not found in the DOM.')) return;
   try {
     log('loadChildAccounts', 'Checking', `account type ${state.currentAccountType}`);
     if (state.currentAccountType === AccountType.ADMIN) {
@@ -1317,33 +1250,127 @@ async function loadChildAccounts() {
       elements.childSelector.classList.remove('hidden');
       elements.childUserIdSelect.innerHTML = '<option value="">Select a Child</option>';
       const usersQuery = query(collection(db, 'users'), where('familyCode', '==', familyCode), where('accountType', '==', AccountType.CHILD));
-      log('loadChildAccounts', 'Query', `Fetching users with familyCode=${familyCode}`);
       const snapshot = await retryFirestoreOperation(() => getDocs(usersQuery));
       if (snapshot.empty) {
         log('loadChildAccounts', 'No', 'child accounts found');
         elements.childUserIdSelect.innerHTML = '<option value="">No children found</option>';
-        const table = document.getElementById('child-transaction-table');
-        if (table) table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No child accounts available</td></tr>';
-        const balance = document.getElementById('child-balance');
-        if (balance) balance.textContent = await formatCurrency(0, 'INR');
       } else {
         log('loadChildAccounts', 'Found', `${snapshot.docs.length} child accounts`);
-        const fragment = document.createDocumentFragment();
         snapshot.forEach(doc => {
           const option = document.createElement('option');
           option.value = doc.id;
           option.textContent = doc.data().email || `Child Account ${doc.id.substring(0, 8)}`;
-          fragment.appendChild(option);
+          elements.childUserIdSelect.appendChild(option);
         });
-        elements.childUserIdSelect.appendChild(fragment);
       }
       state.currentChildUserId = elements.childUserIdSelect.value || null;
-      await loadChildTransactions();
+    } else {
+      log('loadChildAccounts', 'Child', 'mode, setting current user');
+      elements.childSelector.classList.add('hidden');
+      state.currentChildUserId = currentUser.uid;
     }
+    log('loadChildAccounts', 'Loading', 'child transactions');
+    await loadChildTransactions();
   } catch (error) {
     log('loadChildAccounts', 'Error', `loading child accounts: ${error.message}`);
     showError('child-user-id', `Failed to load child accounts: ${error.message}`);
     elements.childUserIdSelect.innerHTML = '<option value="">Error loading children</option>';
+  }
+}
+
+async function loadChildTransactions() {
+  log('loadChildTransactions', 'Starting', { currentChildUserId: state.currentChildUserId });
+  if (!db || !state.currentChildUserId) {
+    log('loadChildTransactions', 'Error', 'Missing database or user ID');
+    showError('child-transaction-description', 'No user selected');
+    const table = document.getElementById('child-transaction-table');
+    if (table) {
+      table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No user selected</td></tr>';
+    }
+    const balance = document.getElementById('child-balance');
+    if (balance) {
+      balance.textContent = await formatCurrency(0, 'INR');
+    }
+    return;
+  }
+  const elements = {
+    table: document.getElementById('child-transaction-table'),
+    balance: document.getElementById('child-balance'),
+    dateHeader: document.getElementById('child-transaction-date-header')
+  };
+  if (!validateDomElements(elements, 'child-transaction-description', 'Required components not found')) return;
+  try {
+    elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
+    const filter = domElements.dashboardFilter?.value || 'thisMonth';
+    const { start, end } = getDateRangeWrapper(filter);
+    elements.dateHeader.textContent = filter !== 'thisMonth' ? start.toLocaleString('en-US', { month: 'short' }) : new Date().toLocaleString('en-US', { month: 'short' });
+    let totalBalance = 0;
+    const allTransactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', state.currentChildUserId));
+    const allSnapshot = await retryFirestoreOperation(() => getDocs(allTransactionsQuery));
+    totalBalance = allSnapshot.docs.reduce((sum, doc) => {
+      const tx = doc.data();
+      if (!tx.amount || typeof tx.amount !== 'number' || !['credit', 'debit'].includes(tx.type)) {
+        log('loadChildTransactions', 'Warning', `Invalid transaction data for ${doc.id}: amount=${tx.amount}, type=${tx.type}`);
+        return sum;
+      }
+      return sum + (tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount);
+    }, 0);
+    const transactionsQuery = query(
+      collection(db, 'childTransactions'),
+      where('userId', '==', state.currentChildUserId),
+      where('createdAt', '>=', start),
+      where('createdAt', '<=', end)
+    );
+    log('loadChildTransactions', 'Fetching', `transactions for user ${state.currentChildUserId}`);
+    const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
+    elements.table.innerHTML = '';
+    const transactions = snapshot.docs
+      .map(doc => {
+        const data = doc.data();
+        let createdAt = data.createdAt?.toDate?.() || (typeof data.createdAt === 'string' ? new Date(data.createdAt) : new Date());
+        if (isNaN(createdAt.getTime())) {
+          log('loadChildTransactions', 'Warning', `Invalid transaction date for ${doc.id}`);
+          createdAt = new Date();
+        }
+        if (!data.amount || typeof data.amount !== 'number' || !['credit', 'debit'].includes(data.type)) {
+          log('loadChildTransactions', 'Warning', `Invalid transaction data for ${doc.id}: amount=${data.amount}, type=${data.type}`);
+          return null;
+        }
+        return { id: doc.id, ...data, createdAt };
+      })
+      .filter(tx => tx !== null)
+      .sort((a, b) => b.createdAt - a.createdAt);
+    log('loadChildTransactions', 'Found', `${transactions.length} valid transactions`);
+    if (transactions.length === 0) {
+      elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
+    } else {
+      const fragment = document.createDocumentFragment();
+      for (const tx of transactions) {
+        const formattedAmount = await formatCurrency(tx.amount, 'INR');
+        const tr = document.createElement('tr');
+        tr.classList.add('table-row');
+        tr.innerHTML = `
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.type || 'Unknown'}</td>
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formattedAmount}</td>
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.description || ''}</td>
+          <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.createdAt.toLocaleString('en-US', { day: 'numeric' })}</td>
+          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
+            <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}" aria-label="Edit child transaction ${tx.description || 'ID ' + tx.id}">Edit</button>
+            <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}" aria-label="Delete child transaction ${tx.description || 'ID ' + tx.id}">Delete</button>
+          </td>
+        `;
+        fragment.appendChild(tr);
+      }
+      elements.table.appendChild(fragment);
+    }
+    const formattedBalance = await formatCurrency(totalBalance, 'INR');
+    elements.balance.textContent = formattedBalance;
+    log('loadChildTransactions', 'Balance', `Total: ${totalBalance} (${formattedBalance})`);
+  } catch (error) {
+    log('loadChildTransactions', 'Error', `loading transactions: ${error.message}`);
+    showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
+    elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+    elements.balance.textContent = await formatCurrency(0, 'INR');
   }
 }
 
@@ -1404,7 +1431,7 @@ async function loadChildTiles() {
     }
     childTiles.appendChild(fragment);
   } catch (error) {
-    log('loadChildTiles', 'Error', `Loading child balances: ${error.message}`);
+    log('loadChildTiles', 'Error', `loading child balances: ${error.message}`);
     showError('child-tiles', `Failed to load child balances: ${error.message}`);
     childTiles.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
   }
@@ -1435,16 +1462,15 @@ async function setupChildAccounts() {
       inputs,
       validate: () => validationErrors,
       dbOperation: async () => {
-        if (isUpdate && id) {
-          await retryFirestoreOperation(() => updateDoc(doc(db, 'childTransactions', id), {
+        if (isUpdate) {
+          await updateDoc(doc(db, 'childTransactions', id), {
             type: type.value,
             amount: amountVal,
-            description: sanitizeInput(description.value.trim()),
-            createdAt: serverTimestamp()
-          }));
+            description: sanitizeInput(description.value.trim())
+          });
         } else {
           const txId = `tx-${transactionUserId}-${type.value}-${amountVal}-${description.value.trim()}-${now}`.replace(/[^a-zA-Z0-9-]/g, '-');
-          await retryFirestoreOperation(() => setDoc(doc(db, 'childTransactions', txId), {
+          await setDoc(doc(db, 'childTransactions', txId), {
             type: type.value,
             amount: amountVal,
             description: sanitizeInput(description.value.trim()),
@@ -1452,7 +1478,7 @@ async function setupChildAccounts() {
             familyCode,
             txId,
             createdAt: serverTimestamp()
-          }));
+          });
         }
       },
       successCallback: () => {
@@ -1460,7 +1486,6 @@ async function setupChildAccounts() {
         elements.addChildTransaction.innerHTML = 'Add Transaction';
         state.isEditing.childTransaction = false;
         Promise.all([loadChildTransactions(), loadChildTiles()]);
-        log('handleChildTransactionAdd', 'Success', `Child transaction ${isUpdate ? 'updated' : 'added'}: ${id || 'new'}`);
       },
       errorElement: 'child-transaction-description',
       button: elements.addChildTransaction,
@@ -1480,7 +1505,6 @@ async function setupChildAccounts() {
   elements.childTransactionTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-child-transaction')) {
       const id = e.target.dataset.id;
-      log('setupChildAccounts', 'Action', `Edit child transaction clicked for ID: ${id}`);
       try {
         const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'childTransactions', id)));
         if (docSnap.exists()) {
@@ -1490,32 +1514,24 @@ async function setupChildAccounts() {
             amount: document.getElementById('child-transaction-amount'),
             description: document.getElementById('child-transaction-description')
           };
-          if (!validateDomElements(inputs, 'child-transaction-description', 'Form elements not found')) {
-            log('setupChildAccounts', 'Error', 'Child transaction form elements not found');
-            return;
-          }
+          if (!validateDomElements(inputs, 'child-transaction-description', 'Form elements not found')) return;
           inputs.type.value = data.type || TransactionType.DEBIT;
           inputs.amount.value = data.amount || '';
           inputs.description.value = data.description || '';
-          state.isEditing.childTransaction = true;
           elements.addChildTransaction.innerHTML = 'Update Transaction';
+          state.isEditing.childTransaction = true;
+          const updateHandler = () => handleChildTransactionAdd(inputs, true, id);
           elements.addChildTransaction.removeEventListener('click', elements.addChildTransaction._updateHandler);
-          const updateHandler = async () => {
-            await handleChildTransactionAdd(inputs, true, id);
-          };
           elements.addChildTransaction._updateHandler = updateHandler;
           elements.addChildTransaction.addEventListener('click', updateHandler, { once: true });
         } else {
           showError('child-transaction-description', 'Transaction not found');
-          log('setupChildAccounts', 'Error', `Child transaction not found for ID: ${id}`);
         }
       } catch (error) {
-        log('setupChildAccounts', 'Error', `Failed to fetch transaction: ${error.message}`);
         showError('child-transaction-description', `Failed to fetch transaction: ${error.message}`);
       }
     } else if (e.target.classList.contains('delete-child-transaction')) {
       const id = e.target.dataset.id;
-      log('setupChildAccounts', 'Action', `Delete child transaction clicked for ID: ${id}`);
       if (!domElements.deleteConfirmModal) return showError('child-transaction-description', 'Cannot delete: Missing components');
       const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'childTransactions', id)));
       const tx = docSnap.exists() ? docSnap.data() : { description: 'this transaction', amount: 0 };
@@ -1527,9 +1543,7 @@ async function setupChildAccounts() {
           await retryFirestoreOperation(() => deleteDoc(doc(db, 'childTransactions', id)));
           await Promise.all([loadChildTransactions(), loadChildTiles()]);
           domElements.deleteConfirmModal.classList.add('hidden');
-          log('setupChildAccounts', 'Success', `Child transaction deleted: ${id}`);
         } catch (error) {
-          log('setupChildAccounts', 'Error', `Failed to delete transaction: ${error.message}`);
           showError('child-transaction-description', `Failed to delete transaction: ${error.message}`);
         }
         domElements.confirmDelete.removeEventListener('click', confirmHandler);
@@ -1685,7 +1699,7 @@ async function updateDashboard() {
       }
     }
   } catch (error) {
-    log('updateDashboard', 'Error', `Updating dashboard: ${error.message}`);
+    log('updateDashboard', 'Error', `updating dashboard: ${error.message}`);
     showError('balance', `Failed to update dashboard: ${error.message}`);
   }
 }
@@ -1716,21 +1730,17 @@ async function setupLogout() {
               log('setupLogout', 'Success', 'Sign out successful');
               break;
             } catch (error) {
-              log('setupLogout', 'Warning', `Sign out attempt ${attempt} failed: ${error.message}`);
+              log('setupLogout', 'Warning', `Sign out attempt ${attempt} failed: ${error}`);
               if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 1000));
             }
           }
           if (signOutSuccess) {
             state.currentChildUserId = null;
             state.currentAccountType = null;
-            state.isEditing = { transaction: false, budget: false, category: false, profile: false, childTransaction: false };
-            state.editingTransactionId = null;
-            state.editingBudgetId = null;
-            state.editingCategoryId = null;
-            const authSection = document.getElementById('auth-section');
+            const loginSection = document.getElementById('login-section');
             const appSection = document.getElementById('app-section');
             const pageTitle = document.getElementById('page-title');
-            if (authSection) authSection.classList.remove('hidden');
+            if (loginSection) loginSection.classList.remove('hidden');
             if (appSection) appSection.classList.add('hidden');
             if (pageTitle) pageTitle.textContent = 'Login';
             logoutButton.classList.add('hidden');
@@ -1753,12 +1763,95 @@ async function setupLogout() {
   }, 500);
 }
 
+async function setupAddItemModal() {
+  const elements = {
+    addItemButton: document.getElementById('add-item-button'),
+    addItemModal: document.getElementById('add-item-modal'),
+    addItemType: document.getElementById('add-item-type'),
+    addTransactionForm: document.getElementById('add-transaction-form'),
+    addBudgetForm: document.getElementById('add-budget-form'),
+    addCategoryForm: document.getElementById('add-category-form'),
+    saveItem: document.getElementById('save-item'),
+    cancelItem: document.getElementById('cancel-item')
+  };
+  if (!validateDomElements(elements, 'add-item-type', 'Add item modal components not found')) return;
+  elements.addItemButton.addEventListener('click', () => {
+    elements.addItemModal.classList.remove('hidden');
+    elements.addItemType.value = '';
+    elements.addTransactionForm.classList.add('hidden');
+    elements.addBudgetForm.classList.add('hidden');
+    elements.addCategoryForm.classList.add('hidden');
+  });
+  elements.addItemType.addEventListener('change', () => {
+    const value = elements.addItemType.value;
+    elements.addTransactionForm.classList.toggle('hidden', value !== 'transaction');
+    elements.addBudgetForm.classList.toggle('hidden', value !== 'budget');
+    elements.addCategoryForm.classList.toggle('hidden', value !== 'category');
+  });
+  elements.cancelItem.addEventListener('click', () => {
+    elements.addItemModal.classList.add('hidden');
+    elements.addItemType.value = '';
+    resetForm({
+      transactionType: document.getElementById('modal-transaction-type'),
+      transactionAmount: document.getElementById('modal-transaction-amount'),
+      transactionCategory: document.getElementById('modal-transaction-category'),
+      transactionDescription: document.getElementById('modal-transaction-description'),
+      transactionDate: document.getElementById('modal-transaction-date'),
+      budgetName: document.getElementById('modal-budget-name'),
+      budgetAmount: document.getElementById('modal-budget-amount'),
+      categoryName: document.getElementById('modal-category-name'),
+      categoryType: document.getElementById('modal-category-type'),
+      categoryBudget: document.getElementById('modal-category-budget')
+    });
+    elements.addTransactionForm.classList.add('hidden');
+    elements.addBudgetForm.classList.add('hidden');
+    elements.addCategoryForm.classList.add('hidden');
+    state.isEditing.transaction = false;
+    state.isEditing.budget = false;
+    state.isEditing.category = false;
+    state.editingId.transaction = null;
+    state.editingId.budget = null;
+    state.editingId.category = null;
+  });
+  elements.saveItem.addEventListener('click', async () => {
+    const itemType = elements.addItemType.value;
+    if (itemType === 'transaction') {
+      const inputs = {
+        type: document.getElementById('modal-transaction-type'),
+        amount: document.getElementById('modal-transaction-amount'),
+        category: document.getElementById('modal-transaction-category'),
+        description: document.getElementById('modal-transaction-description'),
+        date: document.getElementById('modal-transaction-date')
+      };
+      if (!validateDomElements(inputs, 'modal-transaction-category', 'Transaction form elements not found')) return;
+      await handleTransaction(inputs, state.isEditing.transaction, state.editingId.transaction);
+    } else if (itemType === 'budget') {
+      const inputs = {
+        name: document.getElementById('modal-budget-name'),
+        amount: document.getElementById('modal-budget-amount')
+      };
+      if (!validateDomElements(inputs, 'modal-budget-name', 'Budget form elements not found')) return;
+      await handleBudget(inputs.name, inputs.amount, state.isEditing.budget, state.editingId.budget);
+    } else if (itemType === 'category') {
+      const inputs = {
+        name: document.getElementById('modal-category-name'),
+        type: document.getElementById('modal-category-type'),
+        budget: document.getElementById('modal-category-budget')
+      };
+      if (!validateDomElements(inputs, 'modal-category-name', 'Category form elements not found')) return;
+      await handleCategory(inputs.name, inputs.type, inputs.budget, state.isEditing.category, state.editingId.category);
+    } else {
+      showError('add-item-type', 'Please select an item type');
+    }
+  });
+}
+
 async function initApp() {
   log('initApp', 'Starting', '');
   try {
     if (currentUser && state.currentAccountType === AccountType.ADMIN && db && familyCode) {
       log('initApp', 'Resetting', 'budgets for admin');
-      await resetBudgetsForNewMonth(db, familyCode, state.currentAccountType);
+      await resetBudgetsForNewMonth(db, familyCode);
     }
     setupTabs();
     setupProfile();
