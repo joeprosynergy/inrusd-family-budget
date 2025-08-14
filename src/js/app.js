@@ -25,7 +25,6 @@ const AccountType = {
   ADMIN: 'admin',
   CHILD: 'child'
 };
-
 const TransactionType = {
   DEBIT: 'debit',
   CREDIT: 'credit'
@@ -90,7 +89,7 @@ async function handleFormSubmission({ inputs, validate, dbOperation, successCall
     showToast(`Operation failed: ${error.message}`, 'error');
   } finally {
     button.disabled = false;
-    button.textContent = isUpdate ? 'Update' : 'Add';
+    button.textContent = isUpdate ? 'Update' : 'Save';
   }
 }
 
@@ -159,7 +158,7 @@ async function loadAppData() {
     }
     if (categoriesResult.status === 'rejected') {
       log('loadAppData', 'Error', 'Failed to load categories');
-      showError('category-name', 'Failed to load categories.');
+      showError('category-table', 'Failed to load categories.');
     }
     if (dashboardResult.status === 'rejected') {
       log('loadAppData', 'Error', 'Failed to update dashboard');
@@ -193,8 +192,9 @@ function setupTabs() {
         state.loadedTabs.budgets = true;
       }
     }},
-    { id: 'categories', name: 'Categories', section: domElements.categoriesSection, show: () => {
+    { id: 'categories', name: 'Categories', section: domElements.categoriesSection, show: async () => {
       log('setupTabs', 'Showing', 'categories');
+      await loadCategories();
     }},
     { id: 'child-accounts', name: 'Child Accounts', section: domElements.childAccountsSection, show: async () => {
       log('setupTabs', 'Showing', 'child-accounts');
@@ -486,32 +486,43 @@ async function loadProfileData() {
 // Categories
 async function loadCategories() {
   const elements = {
-    categorySelect: document.getElementById('category'),
-    categoryBudgetSelect: document.getElementById('category-budget-select'),
-    newCategoryBudgetSelect: document.getElementById('new-category-budget'),
-    categoryTable: document.getElementById('category-table')
+    categoryTable: document.getElementById('category-table'),
+    categorySelect: document.getElementById('modal-transaction-category'), // Optional
+    categoryBudgetSelect: document.getElementById('modal-category-budget'), // Optional
+    newCategoryBudgetSelect: document.getElementById('new-category-budget') // Optional
   };
-  if (!validateDomElements(elements, 'category-name', 'Required components not available')) return;
+  if (!elements.categoryTable) {
+    showError('category-table', 'Category table not found');
+    return;
+  }
   if (!db || !familyCode) {
-    showError('category-name', 'Database service not available');
+    showError('category-table', 'Database service not available');
     elements.categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
     return;
   }
   try {
-    elements.categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
-    elements.categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
-    elements.newCategoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
+    if (elements.categorySelect) {
+      elements.categorySelect.innerHTML = '<option value="">Select Category</option><option value="add-new">Add New</option>';
+    }
+    if (elements.categoryBudgetSelect) {
+      elements.categoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
+    }
+    if (elements.newCategoryBudgetSelect) {
+      elements.newCategoryBudgetSelect.innerHTML = '<option value="none">None</option><option value="add-new">Add New</option>';
+    }
     elements.categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
     const budgetsQuery = query(collection(db, 'budgets'), where('familyCode', '==', familyCode));
     const budgetsSnapshot = await retryFirestoreOperation(() => getDocs(budgetsQuery));
     const budgetMap = new Map();
     budgetsSnapshot.forEach(doc => {
       budgetMap.set(doc.id, doc.data().name);
-      const option = document.createElement('option');
-      option.value = doc.id;
-      option.textContent = doc.data().name;
-      elements.categoryBudgetSelect.insertBefore(option, elements.categoryBudgetSelect.lastChild);
-      elements.newCategoryBudgetSelect.insertBefore(option.cloneNode(true), elements.newCategoryBudgetSelect.lastChild);
+      if (elements.categoryBudgetSelect && elements.newCategoryBudgetSelect) {
+        const option = document.createElement('option');
+        option.value = doc.id;
+        option.textContent = doc.data().name;
+        elements.categoryBudgetSelect.insertBefore(option, elements.categoryBudgetSelect.lastChild);
+        elements.newCategoryBudgetSelect.insertBefore(option.cloneNode(true), elements.newCategoryBudgetSelect.lastChild);
+      }
     });
     const categoriesQuery = query(collection(db, 'categories'), where('familyCode', '==', familyCode));
     const categoriesSnapshot = await retryFirestoreOperation(() => getDocs(categoriesQuery));
@@ -520,12 +531,14 @@ async function loadCategories() {
       elements.categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4">No categories found</td></tr>';
       return;
     }
-    categoriesSnapshot.forEach(doc => {
-      const option = document.createElement('option');
-      option.value = doc.id;
-      option.textContent = doc.data().name;
-      elements.categorySelect.insertBefore(option, elements.categorySelect.lastChild);
-    });
+    if (elements.categorySelect) {
+      categoriesSnapshot.forEach(doc => {
+        const option = document.createElement('option');
+        option.value = doc.id;
+        option.textContent = doc.data().name;
+        elements.categorySelect.insertBefore(option, elements.categorySelect.lastChild);
+      });
+    }
     const fragment = document.createDocumentFragment();
     categoriesSnapshot.forEach(doc => {
       const category = doc.data();
@@ -536,36 +549,41 @@ async function loadCategories() {
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${category.type || 'Unknown'}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${category.budgetId ? budgetMap.get(category.budgetId) || 'Unknown' : 'None'}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
-          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-category" data-id="${doc.id}">Edit</button>
-          <button class="text-red-600 hover:text-red-800 delete-category" data-id="${doc.id}">Delete</button>
+          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-category" data-id="${doc.id}" aria-label="Edit category ${category.name || 'Unknown'}">Edit</button>
+          <button class="text-red-600 hover:text-red-800 delete-category" data-id="${doc.id}" aria-label="Delete category ${category.name || 'Unknown'}">Delete</button>
         </td>
       `;
       fragment.appendChild(tr);
     });
     elements.categoryTable.appendChild(fragment);
   } catch (error) {
-    showError('category-name', `Failed to load categories: ${error.message}`);
+    showError('category-table', `Failed to load categories: ${error.message}`);
     elements.categoryTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading categories</td></tr>';
   }
 }
 
 async function setupCategories() {
   const elements = {
-    addCategory: document.getElementById('add-category'),
-    categorySelect: document.getElementById('category'),
     saveCategory: document.getElementById('save-category'),
     cancelCategory: document.getElementById('cancel-category'),
-    categoryTable: document.getElementById('category-table')
+    categoryTable: document.getElementById('category-table'),
+    modalCategory: document.getElementById('add-category-form'),
+    modalTransactionCategory: document.getElementById('modal-transaction-category'),
+    saveItem: document.getElementById('save-item'),
+    addItemModal: document.getElementById('add-item-modal'),
+    addItemType: document.getElementById('add-item-type'),
+    addTransactionForm: document.getElementById('add-transaction-form'),
+    addBudgetForm: document.getElementById('add-budget-form')
   };
-  if (!validateDomElements(elements, 'category-name', 'Category form or table not found')) return;
+  if (!validateDomElements({ categoryTable: elements.categoryTable }, 'category-table', 'Category table not found')) return;
   const handleCategoryAdd = async (nameInput, typeSelect, budgetSelect, isModal = false) => {
     const name = nameInput.value.trim();
     const type = typeSelect.value;
     const budgetId = budgetSelect.value === 'none' ? null : budgetSelect.value;
     const validationErrors = [];
-    if (!name) validationErrors.push({ id: isModal ? 'new-category-name' : 'category-name', message: 'Name is required' });
-    if (name.length > 100) validationErrors.push({ id: isModal ? 'new-category-name' : 'category-name', message: 'Name cannot exceed 100 characters' });
-    if (!type) validationErrors.push({ id: isModal ? 'new-category-type' : 'category-type', message: 'Type is required' });
+    if (!name) validationErrors.push({ id: isModal ? 'new-category-name' : 'modal-category-name', message: 'Name is required' });
+    if (name.length > 100) validationErrors.push({ id: isModal ? 'new-category-name' : 'modal-category-name', message: 'Name cannot exceed 100 characters' });
+    if (!type) validationErrors.push({ id: isModal ? 'new-category-type' : 'modal-category-type', message: 'Type is required' });
     await handleFormSubmission({
       inputs: { nameInput, typeSelect, budgetSelect },
       validate: () => validationErrors,
@@ -583,49 +601,50 @@ async function setupCategories() {
         if (isModal && domElements.addCategoryModal) {
           domElements.addCategoryModal.classList.add('hidden');
         }
+        if (!isModal && elements.addItemModal) {
+          elements.addItemModal.classList.add('hidden');
+          elements.addItemType.value = '';
+          elements.modalCategory.classList.add('hidden');
+        }
         loadCategories();
       },
-      errorElement: isModal ? 'new-category-name' : 'category-name',
-      button: elements.addCategory
+      errorElement: isModal ? 'new-category-name' : 'modal-category-name',
+      button: isModal ? elements.saveCategory : elements.saveItem
     });
   };
-  elements.addCategory.addEventListener('click', async () => {
-    if (state.isEditing.category) return;
-    const inputs = {
-      name: document.getElementById('category-name'),
-      type: document.getElementById('category-type'),
-      budget: document.getElementById('category-budget-select')
-    };
-    if (!validateDomElements(inputs, 'category-name', 'Form elements not found')) return;
-    await handleCategoryAdd(inputs.name, inputs.type, inputs.budget);
-  });
-  elements.categorySelect.addEventListener('change', () => {
-    if (elements.categorySelect.value === 'add-new') {
-      if (domElements.addCategoryModal) {
-        domElements.addCategoryModal.classList.remove('hidden');
-      }
-      elements.categorySelect.value = '';
-    }
-  });
-  elements.saveCategory.addEventListener('click', async () => {
-    const inputs = {
-      name: document.getElementById('new-category-name'),
-      type: document.getElementById('new-category-type'),
-      budget: document.getElementById('new-category-budget')
-    };
-    if (!validateDomElements(inputs, 'new-category-name', 'Modal form elements not found')) return;
-    await handleCategoryAdd(inputs.name, inputs.type, inputs.budget, true);
-  });
-  elements.cancelCategory.addEventListener('click', () => {
-    if (domElements.addCategoryModal) {
-      domElements.addCategoryModal.classList.add('hidden');
-    }
-    resetForm({
-      name: document.getElementById('new-category-name'),
-      type: document.getElementById('new-category-type'),
-      budget: document.getElementById('new-category-budget')
+  if (elements.saveCategory) {
+    elements.saveCategory.addEventListener('click', async () => {
+      const inputs = {
+        name: document.getElementById('new-category-name'),
+        type: document.getElementById('new-category-type'),
+        budget: document.getElementById('new-category-budget')
+      };
+      if (!validateDomElements(inputs, 'new-category-name', 'Modal form elements not found')) return;
+      await handleCategoryAdd(inputs.name, inputs.type, inputs.budget, true);
     });
-  });
+  }
+  if (elements.cancelCategory) {
+    elements.cancelCategory.addEventListener('click', () => {
+      if (domElements.addCategoryModal) {
+        domElements.addCategoryModal.classList.add('hidden');
+      }
+      resetForm({
+        name: document.getElementById('new-category-name'),
+        type: document.getElementById('new-category-type'),
+        budget: document.getElementById('new-category-budget')
+      });
+    });
+  }
+  if (elements.modalTransactionCategory) {
+    elements.modalTransactionCategory.addEventListener('change', () => {
+      if (elements.modalTransactionCategory.value === 'add-new') {
+        if (domElements.addCategoryModal) {
+          domElements.addCategoryModal.classList.remove('hidden');
+        }
+        elements.modalTransactionCategory.value = '';
+      }
+    });
+  }
   elements.categoryTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-category')) {
       const id = e.target.dataset.id;
@@ -634,51 +653,57 @@ async function setupCategories() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           const inputs = {
-            name: document.getElementById('category-name'),
-            type: document.getElementById('category-type'),
-            budget: document.getElementById('category-budget-select')
+            name: document.getElementById('modal-category-name'),
+            type: document.getElementById('modal-category-type'),
+            budget: document.getElementById('modal-category-budget')
           };
-          if (!validateDomElements(inputs, 'category-name', 'Form elements not found')) return;
+          if (!validateDomElements(inputs, 'modal-category-name', 'Form elements not found')) return;
           inputs.name.value = data.name || '';
           inputs.type.value = data.type || 'income';
           inputs.budget.value = data.budgetId || 'none';
-          elements.addCategory.innerHTML = 'Update Category';
           state.isEditing.category = true;
           const updateHandler = async () => {
             const name = inputs.name.value.trim();
             const type = inputs.type.value;
             const budgetId = inputs.budget.value === 'none' ? null : inputs.budget.value;
             const validationErrors = [];
-            if (!name) validationErrors.push({ id: 'category-name', message: 'Name is required' });
-            if (name.length > 100) validationErrors.push({ id: 'category-name', message: 'Name cannot exceed 100 characters' });
-            if (!type) validationErrors.push({ id: 'category-type', message: 'Type is required' });
+            if (!name) validationErrors.push({ id: 'modal-category-name', message: 'Name is required' });
+            if (name.length > 100) validationErrors.push({ id: 'modal-category-name', message: 'Name cannot exceed 100 characters' });
+            if (!type) validationErrors.push({ id: 'modal-category-type', message: 'Type is required' });
             await handleFormSubmission({
               inputs,
               validate: () => validationErrors,
               dbOperation: () => updateDoc(doc(db, 'categories', id), { name: sanitizeInput(name), type, budgetId }),
               successCallback: () => {
                 resetForm(inputs);
-                elements.addCategory.innerHTML = 'Add Category';
                 state.isEditing.category = false;
+                domElements.addItemModal.classList.add('hidden');
+                domElements.addItemType.value = '';
+                elements.modalCategory.classList.add('hidden');
                 loadCategories();
               },
-              errorElement: 'category-name',
-              button: elements.addCategory,
+              errorElement: 'modal-category-name',
+              button: elements.saveItem,
               isUpdate: true
             });
           };
-          elements.addCategory.removeEventListener('click', elements.addCategory._updateHandler);
-          elements.addCategory._updateHandler = updateHandler;
-          elements.addCategory.addEventListener('click', updateHandler, { once: true });
+          elements.saveItem.removeEventListener('click', elements.saveItem._categoryUpdateHandler);
+          elements.saveItem._categoryUpdateHandler = updateHandler;
+          elements.saveItem.addEventListener('click', updateHandler, { once: true });
+          domElements.addItemModal.classList.remove('hidden');
+          domElements.addItemType.value = 'category';
+          elements.modalCategory.classList.remove('hidden');
+          elements.addTransactionForm.classList.add('hidden');
+          elements.addBudgetForm.classList.add('hidden');
         } else {
-          showError('category-name', 'Category not found');
+          showError('modal-category-name', 'Category not found');
         }
       } catch (error) {
-        showError('category-name', `Failed to fetch category: ${error.message}`);
+        showError('modal-category-name', `Failed to fetch category: ${error.message}`);
       }
     } else if (e.target.classList.contains('delete-category')) {
       const id = e.target.dataset.id;
-      if (!domElements.deleteConfirmModal) return showError('category-name', 'Cannot delete: Missing components');
+      if (!domElements.deleteConfirmModal) return showError('modal-category-name', 'Cannot delete: Missing components');
       const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', id)));
       const name = docSnap.exists() ? docSnap.data().name : 'this category';
       domElements.deleteConfirmMessage.textContent = `Are you sure you want to delete ${name}?`;
@@ -689,7 +714,7 @@ async function setupCategories() {
           await loadCategories();
           domElements.deleteConfirmModal.classList.add('hidden');
         } catch (error) {
-          showError('category-name', `Failed to delete category: ${error.message}`);
+          showError('modal-category-name', `Failed to delete category: ${error.message}`);
         }
         domElements.confirmDelete.removeEventListener('click', confirmHandler);
       };
