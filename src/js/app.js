@@ -872,25 +872,25 @@ async function setupBudgets() {
       inputs: { nameInput, amountInput },
       validate: () => validationErrors,
       dbOperation: async () => {
-        if (isUpdate) {
-          await updateDoc(doc(db, 'budgets', id), {
+        if (isUpdate && id) {
+          await retryFirestoreOperation(() => updateDoc(doc(db, 'budgets', id), {
             name: sanitizeInput(name),
             amount
-          });
+          }));
         } else {
           const userDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'users', currentUser.uid)));
           if (!userDoc.exists() || !userDoc.data().familyCode) {
             throw new Error('Invalid user configuration');
           }
           const now = new Date();
-          await addDoc(collection(db, 'budgets'), {
+          await retryFirestoreOperation(() => addDoc(collection(db, 'budgets'), {
             name: sanitizeInput(name),
             amount,
             spent: 0,
             familyCode: userDoc.data().familyCode,
             createdAt: serverTimestamp(),
             lastResetMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-          });
+          }));
         }
         clearTransactionCache();
       },
@@ -965,7 +965,6 @@ async function setupBudgets() {
           elements.addBudgetForm.classList.remove('hidden');
           elements.addTransactionForm.classList.add('hidden');
           elements.addCategoryForm.classList.add('hidden');
-          // Remove any existing listeners to prevent duplicates
           elements.saveItem.removeEventListener('click', elements.saveItem._budgetUpdateHandler);
           const updateHandler = async () => {
             await handleBudgetAdd(inputs.name, inputs.amount, false, true, id);
@@ -1102,60 +1101,79 @@ async function setupTransactions() {
     if (!category.value) validationErrors.push({ id: 'modal-transaction-category', message: 'Category is required' });
     if (!date.value || isNaN(transactionDate.getTime())) validationErrors.push({ id: 'modal-transaction-date', message: 'Valid date is required' });
     if (description.value.length > 200) validationErrors.push({ id: 'modal-transaction-description', message: 'Description cannot exceed 200 characters' });
+    // Validate category exists
+    if (category.value && category.value !== 'add-new') {
+      const categoryDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', category.value)));
+      if (!categoryDoc.exists()) {
+        validationErrors.push({ id: 'modal-transaction-category', message: 'Selected category does not exist' });
+      }
+    }
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(({ id, message }) => showError(id, message));
+      return;
+    }
     await handleFormSubmission({
       inputs,
-      validate: () => validationErrors,
+      validate: () => [], // Validation already done
       dbOperation: async () => {
         const batch = writeBatch(db);
-        if (isUpdate) {
-          let oldBudgetId = null, newBudgetId = null;
-          const oldDoc = await getDoc(doc(db, 'transactions', id));
-          if (oldDoc.exists() && oldDoc.data().type === TransactionType.DEBIT) {
-            const oldCategory = await getDoc(doc(db, 'categories', oldDoc.data().categoryId));
-            oldBudgetId = oldCategory.exists() ? oldCategory.data().budgetId : null;
-          }
-          if (type.value === TransactionType.DEBIT) {
-            const newCategory = await getDoc(doc(db, 'categories', category.value));
-            newBudgetId = newCategory.exists() ? newCategory.data().budgetId : null;
-          }
-          if (oldBudgetId && oldBudgetId === newBudgetId) {
-            const amountDiff = amountVal - oldDoc.data().amount;
-            if (amountDiff !== 0) {
-              batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(amountDiff) });
+        try {
+          if (isUpdate && id) {
+            let oldBudgetId = null, newBudgetId = null;
+            const oldDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'transactions', id)));
+            if (!oldDoc.exists()) {
+              throw new Error('Transaction not found');
             }
+            if (oldDoc.data().type === TransactionType.DEBIT && oldDoc.data().categoryId) {
+              const oldCategory = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', oldDoc.data().categoryId)));
+              oldBudgetId = oldCategory.exists() ? oldCategory.data().budgetId : null;
+            }
+            if (type.value === TransactionType.DEBIT) {
+              const newCategory = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', category.value)));
+              newBudgetId = newCategory.exists() ? newCategory.data().budgetId : null;
+            }
+            if (oldBudgetId && oldBudgetId === newBudgetId) {
+              const amountDiff = amountVal - oldDoc.data().amount;
+              if (amountDiff !== 0 && oldBudgetId) {
+                batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(amountDiff) });
+              }
+            } else {
+              if (oldBudgetId && oldDoc.data().type === TransactionType.DEBIT) {
+                batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(-oldDoc.data().amount) });
+              }
+              if (newBudgetId && type.value === TransactionType.DEBIT) {
+                batch.update(doc(db, 'budgets', newBudgetId), { spent: increment(amountVal) });
+              }
+            }
+            batch.update(doc(db, 'transactions', id), {
+              type: type.value,
+              amount: amountVal,
+              categoryId: category.value,
+              description: sanitizeInput(description.value.trim()),
+              createdAt: transactionDate
+            });
           } else {
-            if (oldBudgetId && oldDoc.data().type === TransactionType.DEBIT) {
-              batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(-oldDoc.data().amount) });
-            }
-            if (newBudgetId && type.value === TransactionType.DEBIT) {
-              batch.update(doc(db, 'budgets', newBudgetId), { spent: increment(amountVal) });
-            }
-          }
-          batch.update(doc(db, 'transactions', id), {
-            type: type.value,
-            amount: amountVal,
-            categoryId: category.value,
-            description: sanitizeInput(description.value.trim()),
-            createdAt: transactionDate
-          });
-        } else {
-          const txRef = doc(collection(db, 'transactions'));
-          batch.set(txRef, {
-            type: type.value,
-            amount: amountVal,
-            categoryId: category.value,
-            description: sanitizeInput(description.value.trim()),
-            familyCode,
-            createdAt: transactionDate
-          });
-          if (type.value === TransactionType.DEBIT) {
-            const categoryDoc = await getDoc(doc(db, 'categories', category.value));
-            if (categoryDoc.exists() && categoryDoc.data().budgetId) {
-              batch.update(doc(db, 'budgets', categoryDoc.data().budgetId), { spent: increment(amountVal) });
+            const txRef = doc(collection(db, 'transactions'));
+            batch.set(txRef, {
+              type: type.value,
+              amount: amountVal,
+              categoryId: category.value,
+              description: sanitizeInput(description.value.trim()),
+              familyCode,
+              createdAt: transactionDate
+            });
+            if (type.value === TransactionType.DEBIT) {
+              const categoryDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', category.value)));
+              if (categoryDoc.exists() && categoryDoc.data().budgetId) {
+                batch.update(doc(db, 'budgets', categoryDoc.data().budgetId), { spent: increment(amountVal) });
+              }
             }
           }
+          await retryFirestoreOperation(() => batch.commit());
+        } catch (error) {
+          log('handleTransactionAdd', 'Error', `Firestore operation failed: ${error.message}`);
+          throw error;
         }
-        await batch.commit();
       },
       successCallback: () => {
         clearTransactionCache();
@@ -1187,8 +1205,8 @@ async function setupTransactions() {
             date: document.getElementById('modal-transaction-date')
           };
           if (!validateDomElements(inputs, 'modal-transaction-category', 'Form elements not found')) return;
-          inputs.type.value = data.type;
-          inputs.amount.value = data.amount;
+          inputs.type.value = data.type || TransactionType.DEBIT;
+          inputs.amount.value = data.amount || '';
           inputs.category.value = data.categoryId || '';
           inputs.description.value = data.description || '';
           const transactionDate = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
@@ -1200,7 +1218,6 @@ async function setupTransactions() {
           elements.addTransactionForm.classList.remove('hidden');
           elements.addBudgetForm.classList.add('hidden');
           elements.addCategoryForm.classList.add('hidden');
-          // Remove any existing listeners to prevent duplicates
           elements.saveItem.removeEventListener('click', elements.saveItem._transactionUpdateHandler);
           const updateHandler = async () => {
             await handleTransactionAdd(inputs, true, id);
@@ -1226,13 +1243,13 @@ async function setupTransactions() {
           const batch = writeBatch(db);
           const transaction = docSnap.data();
           if (transaction.type === TransactionType.DEBIT && transaction.categoryId) {
-            const categoryDoc = await getDoc(doc(db, 'categories', transaction.categoryId));
+            const categoryDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'categories', transaction.categoryId)));
             if (categoryDoc.exists() && categoryDoc.data().budgetId) {
               batch.update(doc(db, 'budgets', categoryDoc.data().budgetId), { spent: increment(-transaction.amount) });
             }
           }
           batch.delete(doc(db, 'transactions', id));
-          await batch.commit();
+          await retryFirestoreOperation(() => batch.commit());
           clearTransactionCache();
           await Promise.all([loadBudgets(), loadTransactions(), updateDashboard()]);
           domElements.deleteConfirmModal.classList.add('hidden');
@@ -1307,101 +1324,6 @@ async function loadChildAccounts() {
     log('loadChildAccounts', 'Error', `loading child accounts: ${error.message}`);
     showError('child-user-id', `Failed to load child accounts: ${error.message}`);
     elements.childUserIdSelect.innerHTML = '<option value="">Error loading children</option>';
-  }
-}
-
-async function loadChildTransactions() {
-  log('loadChildTransactions', 'Starting', { currentChildUserId: state.currentChildUserId });
-  if (!db || !state.currentChildUserId) {
-    log('loadChildTransactions', 'Error', 'Missing database or user ID');
-    showError('child-transaction-description', 'No user selected');
-    const table = document.getElementById('child-transaction-table');
-    if (table) {
-      table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No user selected</td></tr>';
-    }
-    const balance = document.getElementById('child-balance');
-    if (balance) {
-      balance.textContent = await formatCurrency(0, 'INR');
-    }
-    return;
-  }
-  const elements = {
-    table: document.getElementById('child-transaction-table'),
-    balance: document.getElementById('child-balance'),
-    dateHeader: document.getElementById('child-transaction-date-header')
-  };
-  if (!validateDomElements(elements, 'child-transaction-description', 'Required components not found')) return;
-  try {
-    elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
-    const filter = domElements.dashboardFilter?.value || 'thisMonth';
-    const { start, end } = getDateRangeWrapper(filter);
-    elements.dateHeader.textContent = filter !== 'thisMonth' ? start.toLocaleString('en-US', { month: 'short' }) : new Date().toLocaleString('en-US', { month: 'short' });
-    const allTransactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', state.currentChildUserId));
-    const allSnapshot = await retryFirestoreOperation(() => getDocs(allTransactionsQuery));
-    const totalBalance = allSnapshot.docs.reduce((sum, doc) => {
-      const tx = doc.data();
-      if (!tx.amount || typeof tx.amount !== 'number' || !['credit', 'debit'].includes(tx.type)) {
-        log('loadChildTransactions', 'Warning', `Invalid transaction data for ${doc.id}: amount=${tx.amount}, type=${tx.type}`);
-        return sum;
-      }
-      return sum + (tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount);
-    }, 0);
-    const transactionsQuery = query(
-      collection(db, 'childTransactions'),
-      where('userId', '==', state.currentChildUserId),
-      where('createdAt', '>=', start),
-      where('createdAt', '<=', end)
-    );
-    log('loadChildTransactions', 'Fetching', `transactions for user ${state.currentChildUserId}`);
-    const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
-    elements.table.innerHTML = '';
-    const transactions = snapshot.docs
-      .map(doc => {
-        const data = doc.data();
-        let createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : (typeof data.createdAt === 'string' ? new Date(data.createdAt) : new Date());
-        if (isNaN(createdAt.getTime())) {
-          log('loadChildTransactions', 'Warning', `Invalid transaction date for ${doc.id}`);
-          createdAt = new Date();
-        }
-        if (!data.amount || typeof data.amount !== 'number' || !['credit', 'debit'].includes(data.type)) {
-          log('loadChildTransactions', 'Warning', `Invalid transaction data for ${doc.id}: amount=${data.amount}, type=${data.type}`);
-          return null;
-        }
-        return { id: doc.id, ...data, createdAt };
-      })
-      .filter(tx => tx !== null)
-      .sort((a, b) => b.createdAt - a.createdAt);
-    log('loadChildTransactions', 'Found', `${transactions.length} valid transactions`);
-    if (transactions.length === 0) {
-      elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
-    } else {
-      const fragment = document.createDocumentFragment();
-      for (const tx of transactions) {
-        const formattedAmount = await formatCurrency(tx.amount, 'INR');
-        const tr = document.createElement('tr');
-        tr.classList.add('table-row');
-        tr.innerHTML = `
-          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.type || 'Unknown'}</td>
-          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formattedAmount}</td>
-          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.description || ''}</td>
-          <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.createdAt.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-          <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
-            <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}" aria-label="Edit child transaction ${tx.description || 'ID ' + tx.id}">Edit</button>
-            <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}" aria-label="Delete child transaction ${tx.description || 'ID ' + tx.id}">Delete</button>
-          </td>
-        `;
-        fragment.appendChild(tr);
-      }
-      elements.table.appendChild(fragment);
-    }
-    const formattedBalance = await formatCurrency(totalBalance, 'INR');
-    elements.balance.textContent = formattedBalance;
-    log('loadChildTransactions', 'Balance', `Total: ${totalBalance} (${formattedBalance})`);
-  } catch (error) {
-    log('loadChildTransactions', 'Error', `loading transactions: ${error.message}`);
-    showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
-    elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
-    elements.balance.textContent = await formatCurrency(0, 'INR');
   }
 }
 
@@ -1493,16 +1415,16 @@ async function setupChildAccounts() {
       inputs,
       validate: () => validationErrors,
       dbOperation: async () => {
-        if (isUpdate) {
-          await updateDoc(doc(db, 'childTransactions', id), {
+        if (isUpdate && id) {
+          await retryFirestoreOperation(() => updateDoc(doc(db, 'childTransactions', id), {
             type: type.value,
             amount: amountVal,
             description: sanitizeInput(description.value.trim()),
             createdAt: serverTimestamp()
-          });
+          }));
         } else {
           const txId = `tx-${transactionUserId}-${type.value}-${amountVal}-${description.value.trim()}-${now}`.replace(/[^a-zA-Z0-9-]/g, '-');
-          await setDoc(doc(db, 'childTransactions', txId), {
+          await retryFirestoreOperation(() => setDoc(doc(db, 'childTransactions', txId), {
             type: type.value,
             amount: amountVal,
             description: sanitizeInput(description.value.trim()),
@@ -1510,7 +1432,7 @@ async function setupChildAccounts() {
             familyCode,
             txId,
             createdAt: serverTimestamp()
-          });
+          }));
         }
       },
       successCallback: () => {
@@ -1800,6 +1722,9 @@ async function setupAddItemModal() {
       categoryType: document.getElementById('modal-category-type'),
       categoryBudget: document.getElementById('modal-category-budget')
     });
+    elements.saveItem.removeEventListener('click', elements.saveItem._transactionUpdateHandler);
+    elements.saveItem.removeEventListener('click', elements.saveItem._budgetUpdateHandler);
+    elements.saveItem.removeEventListener('click', elements.saveItem._categoryUpdateHandler);
   });
   elements.cancelItem.addEventListener('click', () => {
     elements.addItemModal.classList.add('hidden');
@@ -1832,9 +1757,11 @@ async function setupAddItemModal() {
   if (elements.modalTransactionCategory) {
     elements.modalTransactionCategory.addEventListener('change', () => {
       if (elements.modalTransactionCategory.value === 'add-new') {
-        if (domElements.addCategoryModal) {
-          domElements.addCategoryModal.classList.remove('hidden');
-        }
+        elements.addItemModal.classList.add('hidden');
+        elements.addItemType.value = 'category';
+        elements.addCategoryForm.classList.remove('hidden');
+        elements.addTransactionForm.classList.add('hidden');
+        elements.addBudgetForm.classList.add('hidden');
         elements.modalTransactionCategory.value = '';
       }
     });
@@ -1888,20 +1815,20 @@ async function setupAddItemModal() {
       inputs: { nameInput, typeSelect, budgetSelect },
       validate: () => validationErrors,
       dbOperation: async () => {
-        if (isUpdate) {
-          await updateDoc(doc(db, 'categories', id), {
+        if (isUpdate && id) {
+          await retryFirestoreOperation(() => updateDoc(doc(db, 'categories', id), {
             name: sanitizeInput(name),
             type,
             budgetId
-          });
+          }));
         } else {
-          await addDoc(collection(db, 'categories'), {
+          await retryFirestoreOperation(() => addDoc(collection(db, 'categories'), {
             name: sanitizeInput(name),
             type,
             budgetId,
             familyCode,
             createdAt: serverTimestamp()
-          });
+          }));
         }
       },
       successCallback: () => {
