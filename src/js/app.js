@@ -1347,6 +1347,11 @@ async function loadChildAccounts() {
   }
 }
 
+
+
+
+
+
 async function loadChildTransactions() {
   log('loadChildTransactions', 'Starting', { currentChildUserId: state.currentChildUserId });
   const elements = {
@@ -1355,7 +1360,13 @@ async function loadChildTransactions() {
     dateHeader: document.getElementById('child-transaction-date-header')
   };
   if (!validateDomElements(elements, 'child-transaction-description', 'Required components not found')) {
-    elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Required components not found</td></tr>';
+    log('loadChildTransactions', 'Error', 'Missing required DOM elements');
+    if (elements.table) {
+      elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Required components not found</td></tr>';
+    }
+    if (elements.balance) {
+      elements.balance.textContent = '₹0';
+    }
     return;
   }
   if (!db || !state.currentChildUserId) {
@@ -1367,12 +1378,26 @@ async function loadChildTransactions() {
   }
   try {
     elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
+    elements.balance.textContent = '₹0'; // Reset balance display
     const filter = domElements.dashboardFilter?.value || 'thisMonth';
     const { start, end } = getDateRangeWrapper(filter);
     elements.dateHeader.textContent = filter !== 'thisMonth' ? start.toLocaleString('en-US', { month: 'short' }) : new Date().toLocaleString('en-US', { month: 'short' });
+
+    // Verify user exists
+    const userDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'users', state.currentChildUserId)));
+    if (!userDoc.exists()) {
+      log('loadChildTransactions', 'Error', `User ${state.currentChildUserId} not found`);
+      showError('child-transaction-description', 'Selected child account does not exist');
+      elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Child account not found</td></tr>';
+      elements.balance.textContent = '₹0';
+      return;
+    }
+
+    // Calculate total balance
     let totalBalance = 0;
     const allTransactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', state.currentChildUserId));
     const allSnapshot = await retryFirestoreOperation(() => getDocs(allTransactionsQuery));
+    log('loadChildTransactions', 'Fetched', `all transactions for user ${state.currentChildUserId}, count: ${allSnapshot.docs.length}`);
     totalBalance = allSnapshot.docs.reduce((sum, doc) => {
       const tx = doc.data();
       if (!tx.amount || typeof tx.amount !== 'number' || !['credit', 'debit'].includes(tx.type)) {
@@ -1381,13 +1406,16 @@ async function loadChildTransactions() {
       }
       return sum + (tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount);
     }, 0);
+
+    // Fetch filtered transactions
     const transactionsQuery = query(
       collection(db, 'childTransactions'),
       where('userId', '==', state.currentChildUserId),
       where('createdAt', '>=', start),
-      where('createdAt', '<=', end)
+      where('createdAt', '<=', end),
+      orderBy('createdAt', 'desc')
     );
-    log('loadChildTransactions', 'Fetching', `transactions for user ${state.currentChildUserId}`);
+    log('loadChildTransactions', 'Fetching', `filtered transactions for user ${state.currentChildUserId}`);
     const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
     elements.table.innerHTML = '';
     const transactions = snapshot.docs
@@ -1395,7 +1423,7 @@ async function loadChildTransactions() {
         const data = doc.data();
         let createdAt = data.createdAt?.toDate?.() || (typeof data.createdAt === 'string' ? new Date(data.createdAt) : new Date());
         if (isNaN(createdAt.getTime())) {
-          log('loadChildTransactions', 'Warning', `Invalid transaction date for ${doc.id}`);
+          log('loadChildTransactions', 'Warning', `Invalid transaction date for ${doc.id}, using current date`);
           createdAt = new Date();
         }
         if (!data.amount || typeof data.amount !== 'number' || !['credit', 'debit'].includes(data.type)) {
@@ -1404,8 +1432,8 @@ async function loadChildTransactions() {
         }
         return { id: doc.id, ...data, createdAt };
       })
-      .filter(tx => tx !== null)
-      .sort((a, b) => b.createdAt - a.createdAt);
+      .filter(tx => tx !== null);
+
     log('loadChildTransactions', 'Found', `${transactions.length} valid transactions`);
     if (transactions.length === 0) {
       elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
@@ -1419,7 +1447,7 @@ async function loadChildTransactions() {
           <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.type || 'Unknown'}</td>
           <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formattedAmount}</td>
           <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.description || ''}</td>
-          <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.createdAt.toLocaleString('en-US', { day: 'numeric' })}</td>
+          <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.createdAt.toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
           <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
             <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}" aria-label="Edit child transaction ${tx.description || 'ID ' + tx.id}">Edit</button>
             <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}" aria-label="Delete child transaction ${tx.description || 'ID ' + tx.id}">Delete</button>
@@ -1429,13 +1457,14 @@ async function loadChildTransactions() {
       }
       elements.table.appendChild(fragment);
     }
+
     const formattedBalance = await formatCurrency(totalBalance, 'INR');
     elements.balance.textContent = formattedBalance;
     log('loadChildTransactions', 'Balance', `Total: ${totalBalance} (${formattedBalance})`);
   } catch (error) {
     log('loadChildTransactions', 'Error', `loading transactions: ${error.message}`);
     showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
-    elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+    elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions: ${error.message}</td></tr>';
     elements.balance.textContent = '₹0';
   }
 }
