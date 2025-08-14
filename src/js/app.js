@@ -905,6 +905,7 @@ async function setupBudgets() {
           elements.addBudgetForm.classList.add('hidden');
         }
         state.isEditing.budget = false;
+        state.editingBudgetId = null;
         Promise.all([loadBudgets(), loadCategories()]);
       },
       errorElement: isModal ? 'new-budget-name' : 'modal-budget-name',
@@ -933,6 +934,16 @@ async function setupBudgets() {
       });
     });
   }
+  if (domElements.categoryBudgetSelect) {
+    domElements.categoryBudgetSelect.addEventListener('change', () => {
+      if (domElements.categoryBudgetSelect.value === 'add-new') {
+        if (domElements.addBudgetModal) {
+          domElements.addBudgetModal.classList.remove('hidden');
+        }
+        domElements.categoryBudgetSelect.value = 'none';
+      }
+    });
+  }
   elements.budgetTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-budget')) {
       const id = e.target.dataset.id;
@@ -948,6 +959,7 @@ async function setupBudgets() {
           inputs.name.value = data.name;
           inputs.amount.value = data.amount;
           state.isEditing.budget = true;
+          state.editingBudgetId = id;
           elements.addItemModal.classList.remove('hidden');
           elements.addItemType.value = 'budget';
           elements.addBudgetForm.classList.remove('hidden');
@@ -1149,6 +1161,7 @@ async function setupTransactions() {
         clearTransactionCache();
         resetForm(inputs);
         state.isEditing.transaction = false;
+        state.editingTransactionId = null;
         elements.addItemModal.classList.add('hidden');
         elements.addItemType.value = '';
         elements.addTransactionForm.classList.add('hidden');
@@ -1181,6 +1194,7 @@ async function setupTransactions() {
           const transactionDate = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
           inputs.date.value = transactionDate.toISOString().split('T')[0];
           state.isEditing.transaction = true;
+          state.editingTransactionId = id;
           elements.addItemModal.classList.remove('hidden');
           elements.addItemType.value = 'transaction';
           elements.addTransactionForm.classList.remove('hidden');
@@ -1222,11 +1236,12 @@ async function setupTransactions() {
           clearTransactionCache();
           await Promise.all([loadBudgets(), loadTransactions(), updateDashboard()]);
           domElements.deleteConfirmModal.classList.add('hidden');
-        } catch (error) {
-          showError('modal-transaction-category', `Failed to delete transaction: ${error.message}`);
+        } else {
+          showError('modal-transaction-category', 'Transaction not found');
         }
-        domElements.confirmDelete.removeEventListener('click', confirmHandler);
-      };
+      } catch (error) {
+        showError('modal-transaction-category', `Failed to delete transaction: ${error.message}`);
+      }
       const cancelHandler = () => {
         domElements.deleteConfirmModal.classList.add('hidden');
         domElements.cancelDelete.removeEventListener('click', cancelHandler);
@@ -1346,7 +1361,7 @@ async function loadChildTransactions() {
     const transactions = snapshot.docs
       .map(doc => {
         const data = doc.data();
-        let createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : (typeof data.createdAt === 'string' ? new Date(data.createdAt) : new Date());
+        let createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : (typeof data.createdAt === 'string' ? New Date(data.createdAt) : new Date());
         if (isNaN(createdAt.getTime())) {
           log('loadChildTransactions', 'Warning', `Invalid transaction date for ${doc.id}`);
           createdAt = new Date();
@@ -1746,6 +1761,24 @@ async function setupAddItemModal() {
     elements.addTransactionForm.classList.add('hidden');
     elements.addBudgetForm.classList.add('hidden');
     elements.addCategoryForm.classList.add('hidden');
+    state.isEditing.transaction = false;
+    state.isEditing.budget = false;
+    state.isEditing.category = false;
+    state.editingTransactionId = null;
+    state.editingBudgetId = null;
+    state.editingCategoryId = null;
+    resetForm({
+      transactionType: document.getElementById('modal-transaction-type'),
+      transactionAmount: document.getElementById('modal-transaction-amount'),
+      transactionCategory: document.getElementById('modal-transaction-category'),
+      transactionDescription: document.getElementById('modal-transaction-description'),
+      transactionDate: document.getElementById('modal-transaction-date'),
+      budgetName: document.getElementById('modal-budget-name'),
+      budgetAmount: document.getElementById('modal-budget-amount'),
+      categoryName: document.getElementById('modal-category-name'),
+      categoryType: document.getElementById('modal-category-type'),
+      categoryBudget: document.getElementById('modal-category-budget')
+    });
     // Ensure category dropdown is populated
     loadCategories();
   });
@@ -1757,6 +1790,9 @@ async function setupAddItemModal() {
     state.isEditing.transaction = false;
     state.isEditing.budget = false;
     state.isEditing.category = false;
+    state.editingTransactionId = null;
+    state.editingBudgetId = null;
+    state.editingCategoryId = null;
     resetForm({
       transactionType: document.getElementById('modal-transaction-type'),
       transactionAmount: document.getElementById('modal-transaction-amount'),
@@ -1791,6 +1827,13 @@ async function setupAddItemModal() {
     state.isEditing.transaction = false;
     state.isEditing.budget = false;
     state.isEditing.category = false;
+    state.editingTransactionId = null;
+    state.editingBudgetId = null;
+    state.editingCategoryId = null;
+    // Remove any existing saveItem listeners to prevent stacking
+    elements.saveItem.removeEventListener('click', elements.saveItem._transactionUpdateHandler);
+    elements.saveItem.removeEventListener('click', elements.saveItem._budgetUpdateHandler);
+    elements.saveItem.removeEventListener('click', elements.saveItem._categoryUpdateHandler);
   });
   if (elements.modalTransactionCategory) {
     elements.modalTransactionCategory.addEventListener('change', () => {
@@ -1813,14 +1856,14 @@ async function setupAddItemModal() {
         date: document.getElementById('modal-transaction-date')
       };
       if (!validateDomElements(inputs, 'modal-transaction-category', 'Transaction form elements not found')) return;
-      await handleTransactionAdd(inputs, state.isEditing.transaction, state.isEditing.transaction ? state.editingTransactionId : null);
+      await setupTransactions.handleTransactionAdd(inputs, state.isEditing.transaction, state.editingTransactionId);
     } else if (itemType === 'budget') {
       const inputs = {
         name: document.getElementById('modal-budget-name'),
         amount: document.getElementById('modal-budget-amount')
       };
       if (!validateDomElements(inputs, 'modal-budget-name', 'Budget form elements not found')) return;
-      await handleBudgetAdd(inputs.name, inputs.amount, false, state.isEditing.budget, state.isEditing.budget ? state.editingBudgetId : null);
+      await setupBudgets.handleBudgetAdd(inputs.name, inputs.amount, false, state.isEditing.budget, state.editingBudgetId);
     } else if (itemType === 'category') {
       const inputs = {
         name: document.getElementById('modal-category-name'),
@@ -1828,145 +1871,19 @@ async function setupAddItemModal() {
         budget: document.getElementById('modal-category-budget')
       };
       if (!validateDomElements(inputs, 'modal-category-name', 'Category form elements not found')) return;
-      await handleCategoryAdd(inputs.name, inputs.type, inputs.budget, false, state.isEditing.category, state.isEditing.category ? state.editingCategoryId : null);
+      await setupCategories.handleCategoryAdd(inputs.name, inputs.type, inputs.budget, false, state.isEditing.category, state.editingCategoryId);
     } else {
       showError('add-item-type', 'Please select an item type');
     }
   });
-  // Expose handle functions
-  const handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
-    const { type, amount, category, description, date } = inputs;
-    const amountVal = parseFloat(amount.value);
-    const transactionDate = new Date(date.value);
-    const validationErrors = [];
-    if (!amountVal || amountVal <= 0) validationErrors.push({ id: 'modal-transaction-amount', message: 'Valid amount is required' });
-    if (!category.value) validationErrors.push({ id: 'modal-transaction-category', message: 'Category is required' });
-    if (!date.value || isNaN(transactionDate.getTime())) validationErrors.push({ id: 'modal-transaction-date', message: 'Valid date is required' });
-    if (description.value.length > 200) validationErrors.push({ id: 'modal-transaction-description', message: 'Description cannot exceed 200 characters' });
-    await handleFormSubmission({
-      inputs,
-      validate: () => validationErrors,
-      dbOperation: async () => {
-        const batch = writeBatch(db);
-        if (isUpdate) {
-          let oldBudgetId = null, newBudgetId = null;
-          const oldDoc = await getDoc(doc(db, 'transactions', id));
-          if (oldDoc.exists() && oldDoc.data().type === TransactionType.DEBIT) {
-            const oldCategory = await getDoc(doc(db, 'categories', oldDoc.data().categoryId));
-            oldBudgetId = oldCategory.exists() ? oldCategory.data().budgetId : null;
-          }
-          if (type.value === TransactionType.DEBIT) {
-            const newCategory = await getDoc(doc(db, 'categories', category.value));
-            newBudgetId = newCategory.exists() ? newCategory.data().budgetId : null;
-          }
-          if (oldBudgetId && oldBudgetId === newBudgetId) {
-            const amountDiff = amountVal - oldDoc.data().amount;
-            if (amountDiff !== 0) {
-              batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(amountDiff) });
-            }
-          } else {
-            if (oldBudgetId && oldDoc.data().type === TransactionType.DEBIT) {
-              batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(-oldDoc.data().amount) });
-            }
-            if (newBudgetId && type.value === TransactionType.DEBIT) {
-              batch.update(doc(db, 'budgets', newBudgetId), { spent: increment(amountVal) });
-            }
-          }
-          batch.update(doc(db, 'transactions', id), {
-            type: type.value,
-            amount: amountVal,
-            categoryId: category.value,
-            description: sanitizeInput(description.value.trim()),
-            createdAt: transactionDate
-          });
-        } else {
-          const txRef = doc(collection(db, 'transactions'));
-          batch.set(txRef, {
-            type: type.value,
-            amount: amountVal,
-            categoryId: category.value,
-            description: sanitizeInput(description.value.trim()),
-            familyCode,
-            createdAt: transactionDate
-          });
-          if (type.value === TransactionType.DEBIT) {
-            const categoryDoc = await getDoc(doc(db, 'categories', category.value));
-            if (categoryDoc.exists() && categoryDoc.data().budgetId) {
-              batch.update(doc(db, 'budgets', categoryDoc.data().budgetId), { spent: increment(amountVal) });
-            }
-          }
-        }
-        await batch.commit();
-      },
-      successCallback: () => {
-        clearTransactionCache();
-        resetForm(inputs);
-        state.isEditing.transaction = false;
-        state.editingTransactionId = null;
-        elements.addItemModal.classList.add('hidden');
-        elements.addItemType.value = '';
-        elements.addTransactionForm.classList.add('hidden');
-        Promise.all([loadBudgets(), loadTransactions(), updateDashboard()]);
-      },
-      errorElement: 'modal-transaction-category',
-      button: elements.saveItem,
-      isUpdate
-    });
+  // Expose handle functions for setupAddItemModal
+  setupTransactions.handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
+    await handleTransactionAdd(inputs, isUpdate, id);
   };
-  const handleBudgetAdd = async (nameInput, amountInput, isModal = false, isUpdate = false, id = null) => {
-    const name = nameInput.value.trim();
-    const amount = parseFloat(amountInput.value);
-    const validationErrors = [];
-    if (!name) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Budget name is required' });
-    if (name.length > 100) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Name cannot exceed 100 characters' });
-    if (isNaN(amount) || amount <= 0) validationErrors.push({ id: isModal ? 'new-budget-amount' : 'modal-budget-amount', message: 'Valid positive amount is required' });
-    if (state.currentAccountType !== AccountType.ADMIN) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Only admins can add or edit budgets' });
-    await handleFormSubmission({
-      inputs: { nameInput, amountInput },
-      validate: () => validationErrors,
-      dbOperation: async () => {
-        if (isUpdate) {
-          await updateDoc(doc(db, 'budgets', id), {
-            name: sanitizeInput(name),
-            amount
-          });
-        } else {
-          const userDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'users', currentUser.uid)));
-          if (!userDoc.exists() || !userDoc.data().familyCode) {
-            throw new Error('Invalid user configuration');
-          }
-          const now = new Date();
-          await addDoc(collection(db, 'budgets'), {
-            name: sanitizeInput(name),
-            amount,
-            spent: 0,
-            familyCode: userDoc.data().familyCode,
-            createdAt: serverTimestamp(),
-            lastResetMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-          });
-        }
-        clearTransactionCache();
-      },
-      successCallback: () => {
-        resetForm({ nameInput, amountInput });
-        if (isModal && domElements.addBudgetModal) {
-          domElements.addBudgetModal.classList.add('hidden');
-        }
-        if (!isModal && elements.addItemModal) {
-          elements.addItemModal.classList.add('hidden');
-          elements.addItemType.value = '';
-          elements.addBudgetForm.classList.add('hidden');
-        }
-        state.isEditing.budget = false;
-        state.editingBudgetId = null;
-        Promise.all([loadBudgets(), loadCategories()]);
-      },
-      errorElement: isModal ? 'new-budget-name' : 'modal-budget-name',
-      button: isModal ? document.getElementById('save-budget') : elements.saveItem,
-      isUpdate
-    });
+  setupBudgets.handleBudgetAdd = async (nameInput, amountInput, isModal = false, isUpdate = false, id = null) => {
+    await handleBudgetAdd(nameInput, amountInput, isModal, isUpdate, id);
   };
-  const handleCategoryAdd = async (nameInput, typeSelect, budgetSelect, isModal = false, isUpdate = false, id = null) => {
+  setupCategories.handleCategoryAdd = async (nameInput, typeSelect, budgetSelect, isModal = false, isUpdate = false, id = null) => {
     const name = nameInput.value.trim();
     const type = typeSelect.value;
     const budgetId = budgetSelect.value === 'none' ? null : budgetSelect.value;
@@ -2013,10 +1930,6 @@ async function setupAddItemModal() {
       isUpdate
     });
   };
-  // Expose handle functions for setupAddItemModal
-  setupTransactions.handleTransactionAdd = handleTransactionAdd;
-  setupBudgets.handleBudgetAdd = handleBudgetAdd;
-  setupCategories.handleCategoryAdd = handleCategoryAdd;
 }
 
 async function setupLogout() {
@@ -2087,7 +2000,7 @@ async function initApp() {
   try {
     if (currentUser && state.currentAccountType === AccountType.ADMIN && db && familyCode) {
       log('initApp', 'Resetting', 'budgets for admin');
-      await resetBudgetsForNewMonth(db, familyCode);
+      await resetBudgetsForNewMonth(db, familyCode, state.currentAccountType);
     }
     setupTabs();
     setupProfile();
@@ -2095,10 +2008,12 @@ async function initApp() {
     setupBudgets();
     setupTransactions();
     setupChildAccounts();
+    setupAddItemModal();
     setupLogout();
   } catch (error) {
     log('initApp', 'Error', `Failed to initialize app: ${error.message}`);
     showError('page-title', 'Failed to initialize app.');
   }
 }
+
 export { loadAppData, initApp };
