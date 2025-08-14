@@ -1636,12 +1636,26 @@ async function setupChildAccounts() {
     }
   });
 
-  elements.childUserId.addEventListener('change', debounce(() => {
+  elements.childUserId.addEventListener('change', debounce(async () => {
     log('childUserId', 'Change', 'event triggered');
-    state.currentChildUserId = elements.childUserId.value || null;
+    const newChildUserId = elements.childUserId.value || null;
+    if (newChildUserId === state.currentChildUserId) {
+      log('childUserId', 'No change', 'Same child user selected');
+      return;
+    }
+    state.currentChildUserId = newChildUserId;
     if (state.currentChildUserId) {
       log('childUserId', 'Loading', `transactions for child ${state.currentChildUserId}`);
-      loadChildTransactions();
+      try {
+        await loadChildTransactions();
+      } catch (error) {
+        log('childUserId', 'Error', `Failed to load transactions: ${error.message}`);
+        showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
+        const table = document.getElementById('child-transaction-table');
+        if (table) table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
+        const balance = document.getElementById('child-balance');
+        if (balance) balance.textContent = '₹0';
+      }
     } else {
       log('childUserId', 'No', 'child selected');
       const table = document.getElementById('child-transaction-table');
