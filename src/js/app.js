@@ -1236,12 +1236,11 @@ async function setupTransactions() {
           clearTransactionCache();
           await Promise.all([loadBudgets(), loadTransactions(), updateDashboard()]);
           domElements.deleteConfirmModal.classList.add('hidden');
-        } else {
-          showError('modal-transaction-category', 'Transaction not found');
+        } catch (error) {
+          showError('modal-transaction-category', `Failed to delete transaction: ${error.message}`);
         }
-      } catch (error) {
-        showError('modal-transaction-category', `Failed to delete transaction: ${error.message}`);
-      }
+        domElements.confirmDelete.removeEventListener('click', confirmHandler);
+      };
       const cancelHandler = () => {
         domElements.deleteConfirmModal.classList.add('hidden');
         domElements.cancelDelete.removeEventListener('click', cancelHandler);
@@ -1337,7 +1336,6 @@ async function loadChildTransactions() {
     const filter = domElements.dashboardFilter?.value || 'thisMonth';
     const { start, end } = getDateRangeWrapper(filter);
     elements.dateHeader.textContent = filter !== 'thisMonth' ? start.toLocaleString('en-US', { month: 'short' }) : new Date().toLocaleString('en-US', { month: 'short' });
-    // Calculate all-time balance
     const allTransactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', state.currentChildUserId));
     const allSnapshot = await retryFirestoreOperation(() => getDocs(allTransactionsQuery));
     const totalBalance = allSnapshot.docs.reduce((sum, doc) => {
@@ -1348,7 +1346,6 @@ async function loadChildTransactions() {
       }
       return sum + (tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount);
     }, 0);
-    // Fetch filtered transactions
     const transactionsQuery = query(
       collection(db, 'childTransactions'),
       where('userId', '==', state.currentChildUserId),
@@ -1361,7 +1358,7 @@ async function loadChildTransactions() {
     const transactions = snapshot.docs
       .map(doc => {
         const data = doc.data();
-        let createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : (typeof data.createdAt === 'string' ? New Date(data.createdAt) : new Date());
+        let createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : (typeof data.createdAt === 'string' ? new Date(data.createdAt) : new Date());
         if (isNaN(createdAt.getTime())) {
           log('loadChildTransactions', 'Warning', `Invalid transaction date for ${doc.id}`);
           createdAt = new Date();
@@ -1555,7 +1552,6 @@ async function setupChildAccounts() {
           inputs.description.value = data.description || '';
           state.isEditing.childTransaction = true;
           elements.addChildTransaction.innerHTML = 'Update Transaction';
-          // Remove any existing listeners to prevent duplicates
           elements.addChildTransaction.removeEventListener('click', elements.addChildTransaction._updateHandler);
           const updateHandler = async () => {
             await handleChildTransactionAdd(inputs, true, id);
@@ -1779,7 +1775,6 @@ async function setupAddItemModal() {
       categoryType: document.getElementById('modal-category-type'),
       categoryBudget: document.getElementById('modal-category-budget')
     });
-    // Ensure category dropdown is populated
     loadCategories();
   });
   elements.addItemType.addEventListener('change', () => {
@@ -1830,7 +1825,6 @@ async function setupAddItemModal() {
     state.editingTransactionId = null;
     state.editingBudgetId = null;
     state.editingCategoryId = null;
-    // Remove any existing saveItem listeners to prevent stacking
     elements.saveItem.removeEventListener('click', elements.saveItem._transactionUpdateHandler);
     elements.saveItem.removeEventListener('click', elements.saveItem._budgetUpdateHandler);
     elements.saveItem.removeEventListener('click', elements.saveItem._categoryUpdateHandler);
@@ -1876,7 +1870,6 @@ async function setupAddItemModal() {
       showError('add-item-type', 'Please select an item type');
     }
   });
-  // Expose handle functions for setupAddItemModal
   setupTransactions.handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
     await handleTransactionAdd(inputs, isUpdate, id);
   };
