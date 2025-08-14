@@ -1377,21 +1377,28 @@ async function loadChildTransactions() {
     return;
   }
   try {
+    // Validate Firebase configuration
+    if (!db.app || !db.app.options) {
+      log('loadChildTransactions', 'Error', 'Firebase database configuration invalid');
+      throw new Error('Firebase database configuration invalid');
+    }
+
     elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     elements.balance.textContent = '₹0'; // Reset balance display
     const filter = domElements.dashboardFilter?.value || 'thisMonth';
     const { start, end } = getDateRangeWrapper(filter);
-    elements.dateHeader.textContent = filter !== 'thisMonth' ? start.toLocaleString('en-US', { month: 'short' }) : new Date().toLocaleString('en-US', { month: 'short' });
+    elements.dateHeader.textContent = filter !== 'thisMonth' ? start.toLocaleString('en-US', { month: 'short', year: 'numeric' }) : new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' });
 
-    // Verify user exists
+    // Verify user exists and has correct familyCode
     const userDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'users', state.currentChildUserId)));
-    if (!userDoc.exists()) {
-      log('loadChildTransactions', 'Error', `User ${state.currentChildUserId} not found`);
-      showError('child-transaction-description', 'Selected child account does not exist');
-      elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Child account not found</td></tr>';
+    if (!userDoc.exists() || userDoc.data().familyCode !== familyCode) {
+      log('loadChildTransactions', 'Error', `User ${state.currentChildUserId} not found or invalid familyCode`);
+      showError('child-transaction-description', 'Selected child account does not exist or is not part of your family');
+      elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Invalid child account</td></tr>';
       elements.balance.textContent = '₹0';
       return;
     }
+    log('loadChildTransactions', 'Validated', `User ${state.currentChildUserId} exists with familyCode ${familyCode}`);
 
     // Calculate total balance
     let totalBalance = 0;
@@ -1401,11 +1408,12 @@ async function loadChildTransactions() {
     totalBalance = allSnapshot.docs.reduce((sum, doc) => {
       const tx = doc.data();
       if (!tx.amount || typeof tx.amount !== 'number' || !['credit', 'debit'].includes(tx.type)) {
-        log('loadChildTransactions', 'Warning', `Invalid transaction data for ${doc.id}: amount=${tx.amount}, type=${tx.type}`);
+        log('loadChildTransactions', 'Warning', `Invalid transaction data for ${doc.id}: amount=${tx.amount}, type=${tx.type}, data=${JSON.stringify(tx)}`);
         return sum;
       }
       return sum + (tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount);
     }, 0);
+    log('loadChildTransactions', 'Calculated', `Total balance: ${totalBalance}`);
 
     // Fetch filtered transactions
     const transactionsQuery = query(
@@ -1415,7 +1423,7 @@ async function loadChildTransactions() {
       where('createdAt', '<=', end),
       orderBy('createdAt', 'desc')
     );
-    log('loadChildTransactions', 'Fetching', `filtered transactions for user ${state.currentChildUserId}`);
+    log('loadChildTransactions', 'Fetching', `filtered transactions for user ${state.currentChildUserId} from ${start} to ${end}`);
     const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
     elements.table.innerHTML = '';
     const transactions = snapshot.docs
@@ -1427,7 +1435,7 @@ async function loadChildTransactions() {
           createdAt = new Date();
         }
         if (!data.amount || typeof data.amount !== 'number' || !['credit', 'debit'].includes(data.type)) {
-          log('loadChildTransactions', 'Warning', `Invalid transaction data for ${doc.id}: amount=${data.amount}, type=${data.type}`);
+          log('loadChildTransactions', 'Warning', `Invalid transaction data for ${doc.id}: amount=${data.amount}, type=${data.type}, data=${JSON.stringify(data)}`);
           return null;
         }
         return { id: doc.id, ...data, createdAt };
@@ -1460,11 +1468,11 @@ async function loadChildTransactions() {
 
     const formattedBalance = await formatCurrency(totalBalance, 'INR');
     elements.balance.textContent = formattedBalance;
-    log('loadChildTransactions', 'Balance', `Total: ${totalBalance} (${formattedBalance})`);
+    log('loadChildTransactions', 'Success', `Total: ${totalBalance} (${formattedBalance}), transactions displayed: ${transactions.length}`);
   } catch (error) {
-    log('loadChildTransactions', 'Error', `loading transactions: ${error.message}`);
+    log('loadChildTransactions', 'Error', `Failed to load transactions: ${error.message}, code: ${error.code || 'none'}`);
     showError('child-transaction-description', `Failed to load child transactions: ${error.message}`);
-    elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions: ${error.message}</td></tr>';
+    elements.table.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading transactions: ${error.message}</td></tr>`;
     elements.balance.textContent = '₹0';
   }
 }
