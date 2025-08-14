@@ -738,10 +738,9 @@ async function setupCategories() {
 
 
 
-// Budgets
 async function loadBudgets() {
   if (!db) {
-    showError('budget-name', 'Database service not available');
+    showError('modal-budget-name', 'Database service not available');
     return;
   }
   if (state.currentAccountType === AccountType.ADMIN) {
@@ -755,7 +754,7 @@ async function loadBudgets() {
     budgetTable: document.getElementById('budget-table'),
     budgetTiles: document.getElementById('budget-tiles')
   };
-  if (!validateDomElements(elements, 'budget-name', 'Budget table or tiles not found')) return;
+  if (!validateDomElements(elements, 'modal-budget-name', 'Budget table or tiles not found')) return;
   try {
     elements.budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     elements.budgetTiles.innerHTML = '<div class="text-center py-4">Loading...</div>';
@@ -803,8 +802,8 @@ async function loadBudgets() {
         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formattedSpent}</td>
         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formattedRemaining}</td>
         <td class="px-6 py-4 whitespace-nowrap text-sm">
-          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}">Edit</button>
-          <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}">Delete</button>
+          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-budget" data-id="${doc.id}" aria-label="Edit budget ${budget.name}">Edit</button>
+          <button class="text-red-600 hover:text-red-800 delete-budget" data-id="${doc.id}" aria-label="Delete budget ${budget.name}">Delete</button>
         </td>
       `;
       tableFragment.appendChild(tr);
@@ -842,7 +841,7 @@ async function loadBudgets() {
       totalRemainingElement.textContent = formattedTotalRemaining;
     }
   } catch (error) {
-    showError('budget-name', `Failed to load budgets: ${error.message}`);
+    showError('modal-budget-name', `Failed to load budgets: ${error.message}`);
     elements.budgetTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-600">Error loading budgets</td></tr>';
     elements.budgetTiles.innerHTML = '<div class="text-center py-4 text-red-600">Error loading budgets</div>';
   }
@@ -850,20 +849,25 @@ async function loadBudgets() {
 
 async function setupBudgets() {
   const elements = {
-    addBudget: document.getElementById('add-budget'),
     saveBudget: document.getElementById('save-budget'),
     cancelBudget: document.getElementById('cancel-budget'),
-    budgetTable: document.getElementById('budget-table')
+    budgetTable: document.getElementById('budget-table'),
+    saveItem: document.getElementById('save-item'),
+    addItemModal: document.getElementById('add-item-modal'),
+    addItemType: document.getElementById('add-item-type'),
+    addBudgetForm: document.getElementById('add-budget-form'),
+    addTransactionForm: document.getElementById('add-transaction-form'),
+    addCategoryForm: document.getElementById('add-category-form')
   };
-  if (!validateDomElements(elements, 'budget-name', 'Budget form or table not found')) return;
+  if (!validateDomElements({ budgetTable: elements.budgetTable }, 'modal-budget-name', 'Budget table not found')) return;
   const handleBudgetAdd = async (nameInput, amountInput, isModal = false) => {
     const name = nameInput.value.trim();
     const amount = parseFloat(amountInput.value);
     const validationErrors = [];
-    if (!name) validationErrors.push({ id: isModal ? 'new-budget-name' : 'budget-name', message: 'Budget name is required' });
-    if (name.length > 100) validationErrors.push({ id: isModal ? 'new-budget-name' : 'budget-name', message: 'Name cannot exceed 100 characters' });
-    if (isNaN(amount) || amount <= 0) validationErrors.push({ id: isModal ? 'new-budget-amount' : 'budget-amount', message: 'Valid positive amount is required' });
-    if (state.currentAccountType !== AccountType.ADMIN) validationErrors.push({ id: isModal ? 'new-budget-name' : 'budget-name', message: 'Only admins can add budgets' });
+    if (!name) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Budget name is required' });
+    if (name.length > 100) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Name cannot exceed 100 characters' });
+    if (isNaN(amount) || amount <= 0) validationErrors.push({ id: isModal ? 'new-budget-amount' : 'modal-budget-amount', message: 'Valid positive amount is required' });
+    if (state.currentAccountType !== AccountType.ADMIN) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Only admins can add budgets' });
     await handleFormSubmission({
       inputs: { nameInput, amountInput },
       validate: () => validationErrors,
@@ -890,21 +894,17 @@ async function setupBudgets() {
         if (isModal && domElements.addBudgetModal) {
           domElements.addBudgetModal.classList.add('hidden');
         }
+        if (!isModal && elements.addItemModal) {
+          elements.addItemModal.classList.add('hidden');
+          elements.addItemType.value = '';
+          elements.addBudgetForm.classList.add('hidden');
+        }
         Promise.all([loadBudgets(), loadCategories()]);
       },
-      errorElement: isModal ? 'new-budget-name' : 'budget-name',
-      button: elements.addBudget
+      errorElement: isModal ? 'new-budget-name' : 'modal-budget-name',
+      button: isModal ? elements.saveBudget : elements.saveItem
     });
   };
-  elements.addBudget.addEventListener('click', async () => {
-    if (state.isEditing.budget) return;
-    const inputs = {
-      name: document.getElementById('budget-name'),
-      amount: document.getElementById('budget-amount')
-    };
-    if (!validateDomElements(inputs, 'budget-name', 'Form inputs not found')) return;
-    await handleBudgetAdd(inputs.name, inputs.amount);
-  });
   if (domElements.categoryBudgetSelect) {
     domElements.categoryBudgetSelect.addEventListener('change', () => {
       if (domElements.categoryBudgetSelect.value === 'add-new') {
@@ -915,23 +915,27 @@ async function setupBudgets() {
       }
     });
   }
-  elements.saveBudget.addEventListener('click', async () => {
-    const inputs = {
-      name: document.getElementById('new-budget-name'),
-      amount: document.getElementById('new-budget-amount')
-    };
-    if (!validateDomElements(inputs, 'new-budget-name', 'Modal form inputs not found')) return;
-    await handleBudgetAdd(inputs.name, inputs.amount, true);
-  });
-  elements.cancelBudget.addEventListener('click', () => {
-    if (domElements.addBudgetModal) {
-      domElements.addBudgetModal.classList.add('hidden');
-    }
-    resetForm({
-      name: document.getElementById('new-budget-name'),
-      amount: document.getElementById('new-budget-amount')
+  if (elements.saveBudget) {
+    elements.saveBudget.addEventListener('click', async () => {
+      const inputs = {
+        name: document.getElementById('new-budget-name'),
+        amount: document.getElementById('new-budget-amount')
+      };
+      if (!validateDomElements(inputs, 'new-budget-name', 'Modal form inputs not found')) return;
+      await handleBudgetAdd(inputs.name, inputs.amount, true);
     });
-  });
+  }
+  if (elements.cancelBudget) {
+    elements.cancelBudget.addEventListener('click', () => {
+      if (domElements.addBudgetModal) {
+        domElements.addBudgetModal.classList.add('hidden');
+      }
+      resetForm({
+        name: document.getElementById('new-budget-name'),
+        amount: document.getElementById('new-budget-amount')
+      });
+    });
+  }
   elements.budgetTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-budget')) {
       const id = e.target.dataset.id;
@@ -940,20 +944,20 @@ async function setupBudgets() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           const inputs = {
-            name: document.getElementById('budget-name'),
-            amount: document.getElementById('budget-amount')
+            name: document.getElementById('modal-budget-name'),
+            amount: document.getElementById('modal-budget-amount')
           };
+          if (!validateDomElements(inputs, 'modal-budget-name', 'Form inputs not found')) return;
           inputs.name.value = data.name;
           inputs.amount.value = data.amount;
-          elements.addBudget.innerHTML = 'Update Budget';
           state.isEditing.budget = true;
           const updateHandler = async () => {
             const name = inputs.name.value.trim();
             const amount = parseFloat(inputs.amount.value);
             const validationErrors = [];
-            if (!name) validationErrors.push({ id: 'budget-name', message: 'Budget name is required' });
-            if (name.length > 100) validationErrors.push({ id: 'budget-name', message: 'Name cannot exceed 100 characters' });
-            if (isNaN(amount) || amount <= 0) validationErrors.push({ id: 'budget-amount', message: 'Valid positive amount is required' });
+            if (!name) validationErrors.push({ id: 'modal-budget-name', message: 'Budget name is required' });
+            if (name.length > 100) validationErrors.push({ id: 'modal-budget-name', message: 'Name cannot exceed 100 characters' });
+            if (isNaN(amount) || amount <= 0) validationErrors.push({ id: 'modal-budget-amount', message: 'Valid positive amount is required' });
             await handleFormSubmission({
               inputs,
               validate: () => validationErrors,
@@ -961,25 +965,32 @@ async function setupBudgets() {
               successCallback: () => {
                 clearTransactionCache();
                 resetForm(inputs);
-                elements.addBudget.innerHTML = 'Add Budget';
                 state.isEditing.budget = false;
+                elements.addItemModal.classList.add('hidden');
+                elements.addItemType.value = '';
+                elements.addBudgetForm.classList.add('hidden');
                 Promise.all([loadBudgets(), loadCategories()]);
               },
-              errorElement: 'budget-name',
-              button: elements.addBudget,
+              errorElement: 'modal-budget-name',
+              button: elements.saveItem,
               isUpdate: true
             });
           };
-          elements.addBudget.removeEventListener('click', elements.addBudget._updateHandler);
-          elements.addBudget._updateHandler = updateHandler;
-          elements.addBudget.addEventListener('click', updateHandler, { once: true });
+          elements.saveItem.removeEventListener('click', elements.saveItem._budgetUpdateHandler);
+          elements.saveItem._budgetUpdateHandler = updateHandler;
+          elements.saveItem.addEventListener('click', updateHandler, { once: true });
+          elements.addItemModal.classList.remove('hidden');
+          elements.addItemType.value = 'budget';
+          elements.addBudgetForm.classList.remove('hidden');
+          elements.addTransactionForm.classList.add('hidden');
+          elements.addCategoryForm.classList.add('hidden');
         }
       } catch (error) {
-        showError('budget-name', `Failed to fetch budget: ${error.message}`);
+        showError('modal-budget-name', `Failed to fetch budget: ${error.message}`);
       }
     } else if (e.target.classList.contains('delete-budget')) {
       const id = e.target.dataset.id;
-      if (!domElements.deleteConfirmModal) return showError('budget-name', 'Cannot delete: Missing components');
+      if (!domElements.deleteConfirmModal) return showError('modal-budget-name', 'Cannot delete: Missing components');
       const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'budgets', id)));
       const name = docSnap.exists() ? docSnap.data().name : 'this budget';
       domElements.deleteConfirmMessage.textContent = `Are you sure you want to delete ${name}?`;
@@ -991,7 +1002,7 @@ async function setupBudgets() {
           await Promise.all([loadBudgets(), loadCategories()]);
           domElements.deleteConfirmModal.classList.add('hidden');
         } catch (error) {
-          showError('budget-name', `Failed to delete budget: ${error.message}`);
+          showError('modal-budget-name', `Failed to delete budget: ${error.message}`);
         }
         domElements.confirmDelete.removeEventListener('click', confirmHandler);
       };
@@ -1022,12 +1033,12 @@ async function loadTransactions() {
     dateHeader: document.getElementById('transaction-date-header'),
     transactionsFilter: document.getElementById('transactions-filter')
   };
-  if (!validateDomElements(elements, 'transactions-filter', 'Required components not available')) {
+  if (!validateDomElements(elements, 'modal-transaction-category', 'Required components not available')) {
     elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
     return;
   }
   if (!db || !familyCode) {
-    showError('transactions-filter', 'Database service not available');
+    showError('modal-transaction-category', 'Database service not available');
     elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
     return;
   }
@@ -1055,14 +1066,14 @@ async function loadTransactions() {
     }
     const fragment = document.createDocumentFragment();
     for (const transaction of transactions.sort((a, b) => b.createdAt - a.createdAt)) {
-      const tr = document.createElement('tr');
-      tr.classList.add('table-row');
-      let transactionDate = transaction.createdAt.toDate ? transaction.createdAt.toDate() : (typeof transaction.createdAt === 'string' ? new Date(transaction.createdAt) : new Date());
+      let transactionDate = transaction.createdAt.toDate ? transaction.createdAt.toDate() : new Date(transaction.createdAt);
       if (isNaN(transactionDate.getTime())) {
-        log('loadTransactions', 'Warning', `Invalid transaction date for ${transaction.id}`);
+        log('loadTransactions', 'Warning', `Invalid transaction date for ${transaction.id}, using current date`);
         transactionDate = new Date();
       }
       const formattedAmount = await formatCurrency(transaction.amount || 0, 'INR');
+      const tr = document.createElement('tr');
+      tr.classList.add('table-row');
       tr.innerHTML = `
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.type || 'Unknown'}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${formattedAmount}</td>
@@ -1070,36 +1081,41 @@ async function loadTransactions() {
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transaction.description || ''}</td>
         <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${transactionDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
         <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
-          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${transaction.id}">Edit</button>
-          <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${transaction.id}">Delete</button>
+          <button class="text-blue-600 hover:text-blue-800 mr-2 edit-transaction" data-id="${transaction.id}" aria-label="Edit transaction ${transaction.description || 'ID ' + transaction.id}">Edit</button>
+          <button class="text-red-600 hover:text-red-800 delete-transaction" data-id="${transaction.id}" aria-label="Delete transaction ${transaction.description || 'ID ' + transaction.id}">Delete</button>
         </td>
       `;
       fragment.appendChild(tr);
     }
     elements.transactionTable.appendChild(fragment);
   } catch (error) {
-    showError('transactions-filter', `Failed to load transactions: ${error.message}`);
+    showError('modal-transaction-category', `Failed to load transactions: ${error.message}`);
     elements.transactionTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-600">Error loading transactions</td></tr>';
   }
 }
 
 async function setupTransactions() {
   const elements = {
-    addTransaction: document.getElementById('add-transaction'),
     transactionTable: document.getElementById('transaction-table'),
-    transactionsFilter: document.getElementById('transactions-filter')
+    transactionsFilter: document.getElementById('transactions-filter'),
+    saveItem: document.getElementById('save-item'),
+    addItemModal: document.getElementById('add-item-modal'),
+    addItemType: document.getElementById('add-item-type'),
+    addTransactionForm: document.getElementById('add-transaction-form'),
+    addBudgetForm: document.getElementById('add-budget-form'),
+    addCategoryForm: document.getElementById('add-category-form')
   };
-  if (!validateDomElements(elements, 'category', 'Transaction components not found')) return;
+  if (!validateDomElements({ transactionTable: elements.transactionTable, transactionsFilter: elements.transactionsFilter }, 'modal-transaction-category', 'Transaction components not found')) return;
   elements.transactionsFilter.addEventListener('change', debounce(loadTransactions, 300));
   const handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
     const { type, amount, category, description, date } = inputs;
     const amountVal = parseFloat(amount.value);
     const transactionDate = new Date(date.value);
     const validationErrors = [];
-    if (!amountVal || amountVal <= 0) validationErrors.push({ id: 'amount', message: 'Valid amount is required' });
-    if (!category.value) validationErrors.push({ id: 'category', message: 'Category is required' });
-    if (!date.value || isNaN(transactionDate.getTime())) validationErrors.push({ id: 'transaction-date', message: 'Valid date is required' });
-    if (description.value.length > 200) validationErrors.push({ id: 'description', message: 'Description cannot exceed 200 characters' });
+    if (!amountVal || amountVal <= 0) validationErrors.push({ id: 'modal-transaction-amount', message: 'Valid amount is required' });
+    if (!category.value) validationErrors.push({ id: 'modal-transaction-category', message: 'Category is required' });
+    if (!date.value || isNaN(transactionDate.getTime())) validationErrors.push({ id: 'modal-transaction-date', message: 'Valid date is required' });
+    if (description.value.length > 200) validationErrors.push({ id: 'modal-transaction-description', message: 'Description cannot exceed 200 characters' });
     await handleFormSubmission({
       inputs,
       validate: () => validationErrors,
@@ -1158,27 +1174,17 @@ async function setupTransactions() {
       successCallback: () => {
         clearTransactionCache();
         resetForm(inputs);
-        elements.addTransaction.innerHTML = 'Add Transaction';
         state.isEditing.transaction = false;
+        elements.addItemModal.classList.add('hidden');
+        elements.addItemType.value = '';
+        elements.addTransactionForm.classList.add('hidden');
         Promise.all([loadBudgets(), loadTransactions(), updateDashboard()]);
       },
-      errorElement: 'category',
-      button: elements.addTransaction,
+      errorElement: 'modal-transaction-category',
+      button: elements.saveItem,
       isUpdate
     });
   };
-  elements.addTransaction.addEventListener('click', async () => {
-    if (state.isEditing.transaction) return;
-    const inputs = {
-      type: document.getElementById('type'),
-      amount: document.getElementById('amount'),
-      category: document.getElementById('category'),
-      description: document.getElementById('description'),
-      date: document.getElementById('transaction-date')
-    };
-    if (!validateDomElements(inputs, 'category', 'Form elements not found')) return;
-    await handleTransactionAdd(inputs);
-  });
   elements.transactionTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-transaction')) {
       const id = e.target.dataset.id;
@@ -1187,33 +1193,38 @@ async function setupTransactions() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           const inputs = {
-            type: document.getElementById('type'),
-            amount: document.getElementById('amount'),
-            category: document.getElementById('category'),
-            description: document.getElementById('description'),
-            date: document.getElementById('transaction-date')
+            type: document.getElementById('modal-transaction-type'),
+            amount: document.getElementById('modal-transaction-amount'),
+            category: document.getElementById('modal-transaction-category'),
+            description: document.getElementById('modal-transaction-description'),
+            date: document.getElementById('modal-transaction-date')
           };
+          if (!validateDomElements(inputs, 'modal-transaction-category', 'Form elements not found')) return;
           inputs.type.value = data.type;
           inputs.amount.value = data.amount;
           inputs.category.value = data.categoryId;
           inputs.description.value = data.description || '';
           const transactionDate = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
           inputs.date.value = transactionDate.toISOString().split('T')[0];
-          elements.addTransaction.innerHTML = 'Update Transaction';
           state.isEditing.transaction = true;
           const updateHandler = () => handleTransactionAdd(inputs, true, id);
-          elements.addTransaction.removeEventListener('click', elements.addTransaction._updateHandler);
-          elements.addTransaction._updateHandler = updateHandler;
-          elements.addTransaction.addEventListener('click', updateHandler, { once: true });
+          elements.saveItem.removeEventListener('click', elements.saveItem._transactionUpdateHandler);
+          elements.saveItem._transactionUpdateHandler = updateHandler;
+          elements.saveItem.addEventListener('click', updateHandler, { once: true });
+          elements.addItemModal.classList.remove('hidden');
+          elements.addItemType.value = 'transaction';
+          elements.addTransactionForm.classList.remove('hidden');
+          elements.addBudgetForm.classList.add('hidden');
+          elements.addCategoryForm.classList.add('hidden');
         } else {
-          showError('category', 'Transaction not found');
+          showError('modal-transaction-category', 'Transaction not found');
         }
       } catch (error) {
-        showError('category', `Failed to fetch transaction: ${error.message}`);
+        showError('modal-transaction-category', `Failed to fetch transaction: ${error.message}`);
       }
     } else if (e.target.classList.contains('delete-transaction')) {
       const id = e.target.dataset.id;
-      if (!domElements.deleteConfirmModal) return showError('category', 'Cannot delete: Missing components');
+      if (!domElements.deleteConfirmModal) return showError('modal-transaction-category', 'Cannot delete: Missing components');
       const docSnap = await retryFirestoreOperation(() => getDoc(doc(db, 'transactions', id)));
       const tx = docSnap.exists() ? docSnap.data() : { description: 'this transaction', amount: 0 };
       const formattedAmount = await formatCurrency(tx.amount, 'INR');
@@ -1235,7 +1246,7 @@ async function setupTransactions() {
           await Promise.all([loadBudgets(), loadTransactions(), updateDashboard()]);
           domElements.deleteConfirmModal.classList.add('hidden');
         } catch (error) {
-          showError('category', `Failed to delete transaction: ${error.message}`);
+          showError('modal-transaction-category', `Failed to delete transaction: ${error.message}`);
         }
         domElements.confirmDelete.removeEventListener('click', confirmHandler);
       };
@@ -1331,10 +1342,26 @@ async function loadChildTransactions() {
   if (!validateDomElements(elements, 'child-transaction-description', 'Required components not found')) return;
   try {
     elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
-    const { start, end } = getDateRangeWrapper(domElements.dashboardFilter?.value || 'thisMonth');
-    elements.dateHeader.textContent = domElements.dashboardFilter?.value !== 'thisMonth' ? start.toLocaleString('en-US', { month: 'short' }) : new Date().toLocaleString('en-US', { month: 'short' });
+    const filter = domElements.dashboardFilter?.value || 'thisMonth';
+    const { start, end } = getDateRangeWrapper(filter);
+    elements.dateHeader.textContent = filter !== 'thisMonth' ? start.toLocaleString('en-US', { month: 'short' }) : new Date().toLocaleString('en-US', { month: 'short' });
     let totalBalance = 0;
-    const transactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', state.currentChildUserId));
+    const allTransactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', state.currentChildUserId));
+    const allSnapshot = await retryFirestoreOperation(() => getDocs(allTransactionsQuery));
+    totalBalance = allSnapshot.docs.reduce((sum, doc) => {
+      const tx = doc.data();
+      if (!tx.amount || typeof tx.amount !== 'number' || !['credit', 'debit'].includes(tx.type)) {
+        log('loadChildTransactions', 'Warning', `Invalid transaction data for ${doc.id}: amount=${tx.amount}, type=${tx.type}`);
+        return sum;
+      }
+      return sum + (tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount);
+    }, 0);
+    const transactionsQuery = query(
+      collection(db, 'childTransactions'),
+      where('userId', '==', state.currentChildUserId),
+      where('createdAt', '>=', start),
+      where('createdAt', '<=', end)
+    );
     log('loadChildTransactions', 'Fetching', `transactions for user ${state.currentChildUserId}`);
     const snapshot = await retryFirestoreOperation(() => getDocs(transactionsQuery));
     elements.table.innerHTML = '';
@@ -1352,7 +1379,7 @@ async function loadChildTransactions() {
         }
         return { id: doc.id, ...data, createdAt };
       })
-      .filter(tx => tx && tx.createdAt >= start && tx.createdAt <= end)
+      .filter(tx => tx !== null)
       .sort((a, b) => b.createdAt - a.createdAt);
     log('loadChildTransactions', 'Found', `${transactions.length} valid transactions`);
     if (transactions.length === 0) {
@@ -1360,7 +1387,6 @@ async function loadChildTransactions() {
     } else {
       const fragment = document.createDocumentFragment();
       for (const tx of transactions) {
-        totalBalance += tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount;
         const formattedAmount = await formatCurrency(tx.amount, 'INR');
         const tr = document.createElement('tr');
         tr.classList.add('table-row');
@@ -1370,8 +1396,8 @@ async function loadChildTransactions() {
           <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.description || ''}</td>
           <td class="w-12 px-4 sm:px-6 py-3 text-left text-xs sm:text-sm text-gray-900">${tx.createdAt.toLocaleString('en-US', { day: 'numeric' })}</td>
           <td class="px-4 sm:px-6 py-3 text-left text-xs sm:text-sm">
-            <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}">Edit</button>
-            <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}">Delete</button>
+            <button class="text-blue-600 hover:text-blue-800 mr-2 edit-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}" aria-label="Edit child transaction ${tx.description || 'ID ' + tx.id}">Edit</button>
+            <button class="text-red-600 hover:text-red-800 delete-child-transaction" data-id="${tx.id}" data-user-id="${tx.userId}" aria-label="Delete child transaction ${tx.description || 'ID ' + tx.id}">Delete</button>
           </td>
         `;
         fragment.appendChild(tr);
@@ -1529,6 +1555,7 @@ async function setupChildAccounts() {
             amount: document.getElementById('child-transaction-amount'),
             description: document.getElementById('child-transaction-description')
           };
+          if (!validateDomElements(inputs, 'child-transaction-description', 'Form elements not found')) return;
           inputs.type.value = data.type || TransactionType.DEBIT;
           inputs.amount.value = data.amount || '';
           inputs.description.value = data.description || '';
@@ -1649,7 +1676,6 @@ async function updateDashboard() {
     } else {
       log('updateDashboard', 'Admin', 'account mode');
       let totalBalance = 0, totalBudgetAmount = 0, totalSpent = 0;
-      // Fetch all transactions for balance (no date filter)
       const allTransactionsQuery = query(collection(db, 'transactions'), where('familyCode', '==', familyCode));
       const allTransactionsSnapshot = await retryFirestoreOperation(() => getDocs(allTransactionsQuery));
       totalBalance = allTransactionsSnapshot.docs.reduce((sum, doc) => {
@@ -1663,7 +1689,6 @@ async function updateDashboard() {
         return sum + amount;
       }, 0);
       log('updateDashboard', 'Admin Balance', `Total Balance: ${totalBalance}`);
-      // Fetch transactions for budget calculations (with date filter)
       const filteredTransactionsQuery = query(
         collection(db, 'transactions'),
         where('familyCode', '==', familyCode),
@@ -1779,6 +1804,246 @@ async function setupLogout() {
   }, 500);
 }
 
+async function setupAddItemModal() {
+  const elements = {
+    addItemButton: document.getElementById('add-item-button'),
+    addItemModal: document.getElementById('add-item-modal'),
+    addItemType: document.getElementById('add-item-type'),
+    addTransactionForm: document.getElementById('add-transaction-form'),
+    addBudgetForm: document.getElementById('add-budget-form'),
+    addCategoryForm: document.getElementById('add-category-form'),
+    saveItem: document.getElementById('save-item'),
+    cancelItem: document.getElementById('cancel-item')
+  };
+  if (!validateDomElements(elements, 'add-item-type', 'Add item modal components not found')) return;
+  elements.addItemButton.addEventListener('click', () => {
+    elements.addItemModal.classList.remove('hidden');
+    elements.addItemType.value = '';
+    elements.addTransactionForm.classList.add('hidden');
+    elements.addBudgetForm.classList.add('hidden');
+    elements.addCategoryForm.classList.add('hidden');
+  });
+  elements.addItemType.addEventListener('change', () => {
+    const value = elements.addItemType.value;
+    elements.addTransactionForm.classList.toggle('hidden', value !== 'transaction');
+    elements.addBudgetForm.classList.toggle('hidden', value !== 'budget');
+    elements.addCategoryForm.classList.toggle('hidden', value !== 'category');
+  });
+  elements.cancelItem.addEventListener('click', () => {
+    elements.addItemModal.classList.add('hidden');
+    elements.addItemType.value = '';
+    resetForm({
+      transactionType: document.getElementById('modal-transaction-type'),
+      transactionAmount: document.getElementById('modal-transaction-amount'),
+      transactionCategory: document.getElementById('modal-transaction-category'),
+      transactionDescription: document.getElementById('modal-transaction-description'),
+      transactionDate: document.getElementById('modal-transaction-date'),
+      budgetName: document.getElementById('modal-budget-name'),
+      budgetAmount: document.getElementById('modal-budget-amount'),
+      categoryName: document.getElementById('modal-category-name'),
+      categoryType: document.getElementById('modal-category-type'),
+      categoryBudget: document.getElementById('modal-category-budget')
+    });
+    elements.addTransactionForm.classList.add('hidden');
+    elements.addBudgetForm.classList.add('hidden');
+    elements.addCategoryForm.classList.add('hidden');
+    state.isEditing.transaction = false;
+    state.isEditing.budget = false;
+    state.isEditing.category = false;
+  });
+  elements.saveItem.addEventListener('click', async () => {
+    const itemType = elements.addItemType.value;
+    if (itemType === 'transaction') {
+      const inputs = {
+        type: document.getElementById('modal-transaction-type'),
+        amount: document.getElementById('modal-transaction-amount'),
+        category: document.getElementById('modal-transaction-category'),
+        description: document.getElementById('modal-transaction-description'),
+        date: document.getElementById('modal-transaction-date')
+      };
+      if (!validateDomElements(inputs, 'modal-transaction-category', 'Transaction form elements not found')) return;
+      await setupTransactions.handleTransactionAdd(inputs);
+    } else if (itemType === 'budget') {
+      const inputs = {
+        name: document.getElementById('modal-budget-name'),
+        amount: document.getElementById('modal-budget-amount')
+      };
+      if (!validateDomElements(inputs, 'modal-budget-name', 'Budget form elements not found')) return;
+      await setupBudgets.handleBudgetAdd(inputs.name, inputs.amount);
+    } else if (itemType === 'category') {
+      const inputs = {
+        name: document.getElementById('modal-category-name'),
+        type: document.getElementById('modal-category-type'),
+        budget: document.getElementById('modal-category-budget')
+      };
+      if (!validateDomElements(inputs, 'modal-category-name', 'Category form elements not found')) return;
+      await setupCategories.handleCategoryAdd(inputs.name, inputs.type, inputs.budget);
+    } else {
+      showError('add-item-type', 'Please select an item type');
+    }
+  });
+  // Expose handle functions for external use
+  setupTransactions.handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
+    const { type, amount, category, description, date } = inputs;
+    const amountVal = parseFloat(amount.value);
+    const transactionDate = new Date(date.value);
+    const validationErrors = [];
+    if (!amountVal || amountVal <= 0) validationErrors.push({ id: 'modal-transaction-amount', message: 'Valid amount is required' });
+    if (!category.value) validationErrors.push({ id: 'modal-transaction-category', message: 'Category is required' });
+    if (!date.value || isNaN(transactionDate.getTime())) validationErrors.push({ id: 'modal-transaction-date', message: 'Valid date is required' });
+    if (description.value.length > 200) validationErrors.push({ id: 'modal-transaction-description', message: 'Description cannot exceed 200 characters' });
+    await handleFormSubmission({
+      inputs,
+      validate: () => validationErrors,
+      dbOperation: async () => {
+        const batch = writeBatch(db);
+        if (isUpdate) {
+          let oldBudgetId = null, newBudgetId = null;
+          const oldDoc = await getDoc(doc(db, 'transactions', id));
+          if (oldDoc.exists() && oldDoc.data().type === TransactionType.DEBIT) {
+            const oldCategory = await getDoc(doc(db, 'categories', oldDoc.data().categoryId));
+            oldBudgetId = oldCategory.exists() ? oldCategory.data().budgetId : null;
+          }
+          if (type.value === TransactionType.DEBIT) {
+            const newCategory = await getDoc(doc(db, 'categories', category.value));
+            newBudgetId = newCategory.exists() ? newCategory.data().budgetId : null;
+          }
+          if (oldBudgetId && oldBudgetId === newBudgetId) {
+            const amountDiff = amountVal - oldDoc.data().amount;
+            if (amountDiff !== 0) {
+              batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(amountDiff) });
+            }
+          } else {
+            if (oldBudgetId && oldDoc.data().type === TransactionType.DEBIT) {
+              batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(-oldDoc.data().amount) });
+            }
+            if (newBudgetId && type.value === TransactionType.DEBIT) {
+              batch.update(doc(db, 'budgets', newBudgetId), { spent: increment(amountVal) });
+            }
+          }
+          batch.update(doc(db, 'transactions', id), {
+            type: type.value,
+            amount: amountVal,
+            categoryId: category.value,
+            description: sanitizeInput(description.value.trim()),
+            createdAt: transactionDate
+          });
+        } else {
+          const txRef = doc(collection(db, 'transactions'));
+          batch.set(txRef, {
+            type: type.value,
+            amount: amountVal,
+            categoryId: category.value,
+            description: sanitizeInput(description.value.trim()),
+            familyCode,
+            createdAt: transactionDate
+          });
+          if (type.value === TransactionType.DEBIT) {
+            const categoryDoc = await getDoc(doc(db, 'categories', category.value));
+            if (categoryDoc.exists() && categoryDoc.data().budgetId) {
+              batch.update(doc(db, 'budgets', categoryDoc.data().budgetId), { spent: increment(amountVal) });
+            }
+          }
+        }
+        await batch.commit();
+      },
+      successCallback: () => {
+        clearTransactionCache();
+        resetForm(inputs);
+        state.isEditing.transaction = false;
+        elements.addItemModal.classList.add('hidden');
+        elements.addItemType.value = '';
+        elements.addTransactionForm.classList.add('hidden');
+        Promise.all([loadBudgets(), loadTransactions(), updateDashboard()]);
+      },
+      errorElement: 'modal-transaction-category',
+      button: elements.saveItem,
+      isUpdate
+    });
+  };
+  setupBudgets.handleBudgetAdd = async (nameInput, amountInput, isModal = false) => {
+    const name = nameInput.value.trim();
+    const amount = parseFloat(amountInput.value);
+    const validationErrors = [];
+    if (!name) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Budget name is required' });
+    if (name.length > 100) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Name cannot exceed 100 characters' });
+    if (isNaN(amount) || amount <= 0) validationErrors.push({ id: isModal ? 'new-budget-amount' : 'modal-budget-amount', message: 'Valid positive amount is required' });
+    if (state.currentAccountType !== AccountType.ADMIN) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Only admins can add budgets' });
+    await handleFormSubmission({
+      inputs: { nameInput, amountInput },
+      validate: () => validationErrors,
+      dbOperation: async () => {
+        const userDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'users', currentUser.uid)));
+        if (!userDoc.exists() || !userDoc.data().familyCode) {
+          throw new Error('Invalid user configuration');
+        }
+        const now = new Date();
+        const budgetData = {
+          name: sanitizeInput(name),
+          amount,
+          spent: 0,
+          familyCode: userDoc.data().familyCode,
+          createdAt: serverTimestamp(),
+          lastResetMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+        };
+        await addDoc(collection(db, 'budgets'), budgetData);
+        clearTransactionCache();
+      },
+      successCallback: () => {
+        nameInput.value = '';
+        amountInput.value = '';
+        if (isModal && domElements.addBudgetModal) {
+          domElements.addBudgetModal.classList.add('hidden');
+        }
+        if (!isModal && elements.addItemModal) {
+          elements.addItemModal.classList.add('hidden');
+          elements.addItemType.value = '';
+          elements.addBudgetForm.classList.add('hidden');
+        }
+        Promise.all([loadBudgets(), loadCategories()]);
+      },
+      errorElement: isModal ? 'new-budget-name' : 'modal-budget-name',
+      button: isModal ? elements.saveBudget : elements.saveItem
+    });
+  };
+  setupCategories.handleCategoryAdd = async (nameInput, typeSelect, budgetSelect, isModal = false) => {
+    const name = nameInput.value.trim();
+    const type = typeSelect.value;
+    const budgetId = budgetSelect.value === 'none' ? null : budgetSelect.value;
+    const validationErrors = [];
+    if (!name) validationErrors.push({ id: isModal ? 'new-category-name' : 'modal-category-name', message: 'Name is required' });
+    if (name.length > 100) validationErrors.push({ id: isModal ? 'new-category-name' : 'modal-category-name', message: 'Name cannot exceed 100 characters' });
+    if (!type) validationErrors.push({ id: isModal ? 'new-category-type' : 'modal-category-type', message: 'Type is required' });
+    await handleFormSubmission({
+      inputs: { nameInput, typeSelect, budgetSelect },
+      validate: () => validationErrors,
+      dbOperation: () => addDoc(collection(db, 'categories'), {
+        name: sanitizeInput(name),
+        type,
+        budgetId,
+        familyCode,
+        createdAt: serverTimestamp()
+      }),
+      successCallback: () => {
+        nameInput.value = '';
+        typeSelect.value = 'income';
+        budgetSelect.value = 'none';
+        if (isModal && domElements.addCategoryModal) {
+          domElements.addCategoryModal.classList.add('hidden');
+        }
+        if (!isModal && elements.addItemModal) {
+          elements.addItemModal.classList.add('hidden');
+          elements.addItemType.value = '';
+          elements.addCategoryForm.classList.add('hidden');
+        }
+        loadCategories();
+      },
+      errorElement: isModal ? 'new-category-name' : 'modal-category-name',
+      button: isModal ? document.getElementById('save-category') : elements.saveItem
+    });
+  };
+}
+
 async function initApp() {
   log('initApp', 'Starting', '');
   try {
@@ -1792,6 +2057,7 @@ async function initApp() {
     setupBudgets();
     setupTransactions();
     setupChildAccounts();
+    setupAddItemModal();
     setupLogout();
   } catch (error) {
     log('initApp', 'Error', `Failed to initialize app: ${error.message}`);
