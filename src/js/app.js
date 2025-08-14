@@ -1289,8 +1289,7 @@ async function loadChildAccounts() {
     domElements.childAccountsSection.classList.remove('hidden');
   }
   if (!currentUser || !db || !familyCode) {
-    log('loadChildAccounts', 'Error', 'Missing dependencies: ' + 
-        `currentUser=${!!currentUser}, db=${!!db}, familyCode=${familyCode}`);
+    log('loadChildAccounts', 'Error', `Missing dependencies: currentUser=${!!currentUser}, db=${!!db}, familyCode=${familyCode}`);
     showError('child-user-id', 'Unable to load child accounts. Missing user or database configuration.');
     return;
   }
@@ -1320,18 +1319,20 @@ async function loadChildAccounts() {
         if (balance) balance.textContent = await formatCurrency(0, 'INR');
       } else {
         log('loadChildAccounts', 'Found', `${snapshot.docs.length} child accounts`);
+        const fragment = document.createDocumentFragment();
         snapshot.forEach(doc => {
           const option = document.createElement('option');
           option.value = doc.id;
           option.textContent = doc.data().email || `Child Account ${doc.id.substring(0, 8)}`;
-          elements.childUserIdSelect.appendChild(option);
+          fragment.appendChild(option);
         });
+        elements.childUserIdSelect.appendChild(fragment);
       }
       state.currentChildUserId = elements.childUserIdSelect.value || null;
       await loadChildTransactions();
     }
   } catch (error) {
-    log('loadChildAccounts', 'Error', `loading child accounts: ${error.message}`);
+    log('loadChildAccounts', 'Error', `Loading child accounts: ${error.message}`);
     showError('child-user-id', `Failed to load child accounts: ${error.message}`);
     elements.childUserIdSelect.innerHTML = '<option value="">Error loading children</option>';
   }
@@ -1394,7 +1395,7 @@ async function loadChildTiles() {
     }
     childTiles.appendChild(fragment);
   } catch (error) {
-    log('loadChildTiles', 'Error', `loading child balances: ${error.message}`);
+    log('loadChildTiles', 'Error', `Loading child balances: ${error.message}`);
     showError('child-tiles', `Failed to load child balances: ${error.message}`);
     childTiles.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
   }
@@ -1689,7 +1690,6 @@ async function setupAddItemModal() {
     return;
   }
   const resetModalState = () => {
-    elements.addItemModal.classList.add('hidden');
     elements.addItemType.value = '';
     elements.addTransactionForm.classList.add('hidden');
     elements.addBudgetForm.classList.add('hidden');
@@ -1728,14 +1728,10 @@ async function setupAddItemModal() {
     elements.addTransactionForm.classList.toggle('hidden', value !== 'transaction');
     elements.addBudgetForm.classList.toggle('hidden', value !== 'budget');
     elements.addCategoryForm.classList.toggle('hidden', value !== 'category');
-    resetModalState();
-    elements.addItemType.value = value;
-    elements.addTransactionForm.classList.toggle('hidden', value !== 'transaction');
-    elements.addBudgetForm.classList.toggle('hidden', value !== 'budget');
-    elements.addCategoryForm.classList.toggle('hidden', value !== 'category');
   });
   elements.cancelItem.addEventListener('click', () => {
     log('setupAddItemModal', 'Action', 'Cancel button clicked');
+    elements.addItemModal.classList.add('hidden');
     resetModalState();
   });
   if (elements.modalTransactionCategory) {
