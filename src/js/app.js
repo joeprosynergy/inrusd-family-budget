@@ -1458,6 +1458,7 @@ async function loadChildTiles() {
   const childTiles = document.getElementById('child-tiles');
   if (!childTiles) {
     log('loadChildTiles', 'Error', 'Child tiles element not found');
+    showError('child-tiles', 'Child tiles element not found');
     return;
   }
   try {
@@ -1510,6 +1511,7 @@ async function loadChildTiles() {
     childTiles.innerHTML = '<div class="text-center py-4 text-red-600">Failed to load child balances.</div>';
   }
 }
+
 async function setupChildAccounts() {
   log('setupChildAccounts', 'Starting', '');
   const elements = {
@@ -1518,8 +1520,10 @@ async function setupChildAccounts() {
     childUserId: document.getElementById('child-user-id')
   };
   if (!validateDomElements(elements, 'child-transaction-description', 'Child transaction components not found')) return;
+
   let lastClickTime = 0;
   const DEBOUNCE_MS = 5000;
+
   const handleChildTransactionAdd = async (inputs, isUpdate = false, id = null) => {
     const now = Date.now();
     if (now - lastClickTime < DEBOUNCE_MS) return;
@@ -1556,7 +1560,7 @@ async function setupChildAccounts() {
       },
       successCallback: () => {
         resetForm(inputs);
-        elements.addChildTransaction.innerHTML = 'Add Transaction';
+        elements.addChildTransaction.innerHTML = isUpdate ? 'Add Transaction' : 'Add Transaction';
         state.isEditing.childTransaction = false;
         Promise.all([loadChildTransactions(), loadChildTiles()]);
       },
@@ -1565,6 +1569,7 @@ async function setupChildAccounts() {
       isUpdate
     });
   };
+
   elements.addChildTransaction.addEventListener('click', async () => {
     if (state.isEditing.childTransaction) return;
     const inputs = {
@@ -1575,6 +1580,7 @@ async function setupChildAccounts() {
     if (!validateDomElements(inputs, 'child-transaction-description', 'Form elements not found')) return;
     await handleChildTransactionAdd(inputs);
   });
+
   elements.childTransactionTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-child-transaction')) {
       const id = e.target.dataset.id;
@@ -1593,10 +1599,10 @@ async function setupChildAccounts() {
           inputs.description.value = data.description || '';
           elements.addChildTransaction.innerHTML = 'Update Transaction';
           state.isEditing.childTransaction = true;
-          const updateHandler = () => handleChildTransactionAdd(inputs, true, id);
           elements.addChildTransaction.removeEventListener('click', elements.addChildTransaction._updateHandler);
+          const updateHandler = () => handleChildTransactionAdd(inputs, true, id);
           elements.addChildTransaction._updateHandler = updateHandler;
-          elements.addChildTransaction.addEventListener('click', updateHandler, { once: true });
+          elements.addChildTransaction.addEventListener('click', updateHandler);
         } else {
           showError('child-transaction-description', 'Transaction not found');
         }
@@ -1629,19 +1635,23 @@ async function setupChildAccounts() {
       domElements.cancelDelete.addEventListener('click', cancelHandler, { once: true });
     }
   });
-  elements.childUserId.addEventListener('change', () => {
+
+  elements.childUserId.addEventListener('change', debounce(() => {
     log('childUserId', 'Change', 'event triggered');
     state.currentChildUserId = elements.childUserId.value || null;
     if (state.currentChildUserId) {
+      log('childUserId', 'Loading', `transactions for child ${state.currentChildUserId}`);
       loadChildTransactions();
     } else {
+      log('childUserId', 'No', 'child selected');
       const table = document.getElementById('child-transaction-table');
       if (table) table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No child selected</td></tr>';
       const balance = document.getElementById('child-balance');
       if (balance) balance.textContent = '₹0';
     }
-  });
+  }, 300));
 }
+
 async function calculateChildBalance(userId) {
   if (!db || !userId) {
     log('calculateChildBalance', 'Error', 'Missing database or user ID');
@@ -1667,6 +1677,7 @@ async function calculateChildBalance(userId) {
     return 0;
   }
 }
+
 async function updateDashboard() {
   log('updateDashboard', 'Starting', '');
   if (!db || !currentUser) {
@@ -1697,7 +1708,7 @@ async function updateDashboard() {
       `;
       elements.childTiles.style.display = 'block';
       ['balance', 'afterBudget', 'totalBudget'].forEach(id => {
-        if (elements[id].parentElement) {
+        if (elements[id]?.parentElement) {
           elements[id].parentElement.classList.add('hidden');
           elements[id].textContent = 'N/A';
         }
@@ -1774,6 +1785,7 @@ async function updateDashboard() {
     showError('balance', `Failed to update dashboard: ${error.message}`);
   }
 }
+
 async function setupLogout() {
   log('setupLogout', 'Starting', '');
   const maxAttempts = 10;
@@ -1832,6 +1844,7 @@ async function setupLogout() {
     }
   }, 500);
 }
+
 async function setupAddItemModal() {
   const elements = {
     addItemButton: document.getElementById('add-item-button'),
@@ -1844,19 +1857,37 @@ async function setupAddItemModal() {
     cancelItem: document.getElementById('cancel-item')
   };
   if (!validateDomElements(elements, 'add-item-type', 'Add item modal components not found')) return;
+
   elements.addItemButton.addEventListener('click', () => {
     elements.addItemModal.classList.remove('hidden');
     elements.addItemType.value = '';
     elements.addTransactionForm.classList.add('hidden');
     elements.addBudgetForm.classList.add('hidden');
     elements.addCategoryForm.classList.add('hidden');
+    state.isEditing.transaction = false;
+    state.isEditing.budget = false;
+    state.isEditing.category = false;
+    resetForm({
+      transactionType: document.getElementById('modal-transaction-type'),
+      transactionAmount: document.getElementById('modal-transaction-amount'),
+      transactionCategory: document.getElementById('modal-transaction-category'),
+      transactionDescription: document.getElementById('modal-transaction-description'),
+      transactionDate: document.getElementById('modal-transaction-date'),
+      budgetName: document.getElementById('modal-budget-name'),
+      budgetAmount: document.getElementById('modal-budget-amount'),
+      categoryName: document.getElementById('modal-category-name'),
+      categoryType: document.getElementById('modal-category-type'),
+      categoryBudget: document.getElementById('modal-category-budget')
+    });
   });
+
   elements.addItemType.addEventListener('change', () => {
     const value = elements.addItemType.value;
     elements.addTransactionForm.classList.toggle('hidden', value !== 'transaction');
     elements.addBudgetForm.classList.toggle('hidden', value !== 'budget');
     elements.addCategoryForm.classList.toggle('hidden', value !== 'category');
   });
+
   elements.cancelItem.addEventListener('click', () => {
     elements.addItemModal.classList.add('hidden');
     elements.addItemType.value = '';
@@ -1878,13 +1909,18 @@ async function setupAddItemModal() {
     state.isEditing.transaction = false;
     state.isEditing.budget = false;
     state.isEditing.category = false;
+    elements.saveItem.removeEventListener('click', elements.saveItem._transactionUpdateHandler);
+    elements.saveItem.removeEventListener('click', elements.saveItem._budgetUpdateHandler);
+    elements.saveItem.removeEventListener('click', elements.saveItem._categoryUpdateHandler);
   });
+
   elements.saveItem.addEventListener('click', async () => {
     const itemType = elements.addItemType.value;
-    if (state.isEditing[itemType]) {
+    if (!itemType) {
+      showError('add-item-type', 'Please select an item type');
       return;
     }
-    if (itemType === 'transaction') {
+    if (itemType === 'transaction' && !state.isEditing.transaction) {
       const inputs = {
         type: document.getElementById('modal-transaction-type'),
         amount: document.getElementById('modal-transaction-amount'),
@@ -1894,14 +1930,14 @@ async function setupAddItemModal() {
       };
       if (!validateDomElements(inputs, 'modal-transaction-category', 'Transaction form elements not found')) return;
       await setupTransactions.handleTransactionAdd(inputs);
-    } else if (itemType === 'budget') {
+    } else if (itemType === 'budget' && !state.isEditing.budget) {
       const inputs = {
         name: document.getElementById('modal-budget-name'),
         amount: document.getElementById('modal-budget-amount')
       };
       if (!validateDomElements(inputs, 'modal-budget-name', 'Budget form elements not found')) return;
       await setupBudgets.handleBudgetAdd(inputs.name, inputs.amount);
-    } else if (itemType === 'category') {
+    } else if (itemType === 'category' && !state.isEditing.category) {
       const inputs = {
         name: document.getElementById('modal-category-name'),
         type: document.getElementById('modal-category-type'),
@@ -1909,11 +1945,9 @@ async function setupAddItemModal() {
       };
       if (!validateDomElements(inputs, 'modal-category-name', 'Category form elements not found')) return;
       await setupCategories.handleCategoryAdd(inputs.name, inputs.type, inputs.budget);
-    } else {
-      showError('add-item-type', 'Please select an item type');
     }
   });
-  // Expose handle functions for external use
+
   setupTransactions.handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
     const { type, amount, category, description, date } = inputs;
     const amountVal = parseFloat(amount.value);
@@ -1992,6 +2026,7 @@ async function setupAddItemModal() {
       isUpdate
     });
   };
+
   setupBudgets.handleBudgetAdd = async (nameInput, amountInput, isModal = false) => {
     const name = nameInput.value.trim();
     const amount = parseFloat(amountInput.value);
@@ -2021,8 +2056,7 @@ async function setupAddItemModal() {
         clearTransactionCache();
       },
       successCallback: () => {
-        nameInput.value = '';
-        amountInput.value = '';
+        resetForm({ nameInput, amountInput });
         if (isModal && domElements.addBudgetModal) {
           domElements.addBudgetModal.classList.add('hidden');
         }
@@ -2034,9 +2068,10 @@ async function setupAddItemModal() {
         Promise.all([loadBudgets(), loadCategories()]);
       },
       errorElement: isModal ? 'new-budget-name' : 'modal-budget-name',
-      button: isModal ? elements.saveBudget : elements.saveItem
+      button: isModal ? document.getElementById('save-budget') : elements.saveItem
     });
   };
+
   setupCategories.handleCategoryAdd = async (nameInput, typeSelect, budgetSelect, isModal = false) => {
     const name = nameInput.value.trim();
     const type = typeSelect.value;
@@ -2056,9 +2091,7 @@ async function setupAddItemModal() {
         createdAt: serverTimestamp()
       }),
       successCallback: () => {
-        nameInput.value = '';
-        typeSelect.value = 'income';
-        budgetSelect.value = 'none';
+        resetForm({ nameInput, typeSelect, budgetSelect });
         if (isModal && domElements.addCategoryModal) {
           domElements.addCategoryModal.classList.add('hidden');
         }
@@ -2074,6 +2107,7 @@ async function setupAddItemModal() {
     });
   };
 }
+
 async function initApp() {
   log('initApp', 'Starting', '');
   try {
@@ -2095,4 +2129,5 @@ async function initApp() {
     showError('page-title', 'Failed to initialize app.');
   }
 }
+
 export { loadAppData, initApp };
