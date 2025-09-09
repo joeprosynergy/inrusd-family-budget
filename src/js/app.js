@@ -1933,7 +1933,7 @@ async function setupAddItemModal() {
   elements.addItemButton.addEventListener('mouseenter', () => {
     if (!isMobile()) {
       const rect = elements.addItemButton.getBoundingClientRect();
-      showPopup(rect.right + 5, rect.top);
+      showPopup(rect.left + 5, rect.top + 5);
     }
   });
 
