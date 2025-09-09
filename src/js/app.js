@@ -1528,10 +1528,8 @@ async function setupChildAccounts() {
     childUserId: document.getElementById('child-user-id')
   };
   if (!validateDomElements(elements, 'child-transaction-description', 'Child transaction components not found')) return;
-
   let lastClickTime = 0;
   const DEBOUNCE_MS = 5000;
-
   const handleChildTransactionAdd = async (inputs, isUpdate = false, id = null) => {
     const now = Date.now();
     if (now - lastClickTime < DEBOUNCE_MS) return;
@@ -1577,7 +1575,6 @@ async function setupChildAccounts() {
       isUpdate
     });
   };
-
   elements.addChildTransaction.addEventListener('click', async () => {
     if (state.isEditing.childTransaction) return;
     const inputs = {
@@ -1588,7 +1585,6 @@ async function setupChildAccounts() {
     if (!validateDomElements(inputs, 'child-transaction-description', 'Form elements not found')) return;
     await handleChildTransactionAdd(inputs);
   });
-
   elements.childTransactionTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-child-transaction')) {
       const id = e.target.dataset.id;
@@ -1643,7 +1639,6 @@ async function setupChildAccounts() {
       domElements.cancelDelete.addEventListener('click', cancelHandler, { once: true });
     }
   });
-
   elements.childUserId.addEventListener('change', debounce(async () => {
     log('childUserId', 'Change', 'event triggered');
     const newChildUserId = elements.childUserId.value || null;
@@ -1880,27 +1875,118 @@ async function setupAddItemModal() {
   };
   if (!validateDomElements(elements, 'add-item-type', 'Add item modal components not found')) return;
 
-  elements.addItemButton.addEventListener('click', () => {
-    elements.addItemModal.classList.remove('hidden');
-    elements.addItemType.value = '';
-    elements.addTransactionForm.classList.add('hidden');
-    elements.addBudgetForm.classList.add('hidden');
-    elements.addCategoryForm.classList.add('hidden');
-    state.isEditing.transaction = false;
-    state.isEditing.budget = false;
-    state.isEditing.category = false;
-    resetForm({
-      transactionType: document.getElementById('modal-transaction-type'),
-      transactionAmount: document.getElementById('modal-transaction-amount'),
-      transactionCategory: document.getElementById('modal-transaction-category'),
-      transactionDescription: document.getElementById('modal-transaction-description'),
-      transactionDate: document.getElementById('modal-transaction-date'),
-      budgetName: document.getElementById('modal-budget-name'),
-      budgetAmount: document.getElementById('modal-budget-amount'),
-      categoryName: document.getElementById('modal-category-name'),
-      categoryType: document.getElementById('modal-category-type'),
-      categoryBudget: document.getElementById('modal-category-budget')
-    });
+  // Create popup menu
+  const popupMenu = document.createElement('div');
+  popupMenu.id = 'add-item-popup';
+  popupMenu.className = 'absolute hidden bg-white border border-gray-300 rounded-lg shadow-lg py-2 z-50';
+  popupMenu.innerHTML = `
+    <button class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-type="transaction">Add Transaction</button>
+    <button class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-type="budget">Add Budget</button>
+    <button class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-type="category">Add Category</button>
+  `;
+  document.body.appendChild(popupMenu);
+
+  // Function to show popup
+  const showPopup = (x, y) => {
+    popupMenu.style.left = `${x}px`;
+    popupMenu.style.top = `${y}px`;
+    popupMenu.classList.remove('hidden');
+  };
+
+  // Function to hide popup
+  const hidePopup = () => {
+    popupMenu.classList.add('hidden');
+  };
+
+  // Handle popup selection
+  popupMenu.addEventListener('click', (e) => {
+    const type = e.target.dataset.type;
+    if (type) {
+      elements.addItemType.value = type;
+      elements.addItemModal.classList.remove('hidden');
+      elements.addTransactionForm.classList.toggle('hidden', type !== 'transaction');
+      elements.addBudgetForm.classList.toggle('hidden', type !== 'budget');
+      elements.addCategoryForm.classList.toggle('hidden', type !== 'category');
+      hidePopup();
+      resetForm({
+        transactionType: document.getElementById('modal-transaction-type'),
+        transactionAmount: document.getElementById('modal-transaction-amount'),
+        transactionCategory: document.getElementById('modal-transaction-category'),
+        transactionDescription: document.getElementById('modal-transaction-description'),
+        transactionDate: document.getElementById('modal-transaction-date'),
+        budgetName: document.getElementById('modal-budget-name'),
+        budgetAmount: document.getElementById('modal-budget-amount'),
+        categoryName: document.getElementById('modal-category-name'),
+        categoryType: document.getElementById('modal-category-type'),
+        categoryBudget: document.getElementById('modal-category-budget')
+      });
+      state.isEditing.transaction = false;
+      state.isEditing.budget = false;
+      state.isEditing.category = false;
+    }
+  });
+
+  // Detect mobile or desktop
+  const isMobile = () => window.matchMedia('(max-width: 768px)').matches;
+
+  // Desktop: Show popup on hover
+  elements.addItemButton.addEventListener('mouseenter', () => {
+    if (!isMobile()) {
+      const rect = elements.addItemButton.getBoundingClientRect();
+      showPopup(rect.right + 5, rect.top);
+    }
+  });
+
+  elements.addItemButton.addEventListener('mouseleave', () => {
+    if (!isMobile()) {
+      hidePopup();
+    }
+  });
+
+  // Mobile: Show popup on tap
+  let tapTimeout;
+  elements.addItemButton.addEventListener('click', (e) => {
+    if (isMobile()) {
+      e.preventDefault(); // Prevent default click behavior
+      if (popupMenu.classList.contains('hidden')) {
+        const rect = elements.addItemButton.getBoundingClientRect();
+        showPopup(rect.right + 5, rect.top);
+        // Auto-hide after 5 seconds
+        tapTimeout = setTimeout(hidePopup, 5000);
+      } else {
+        hidePopup();
+        clearTimeout(tapTimeout);
+      }
+    } else {
+      // Desktop: Open modal directly if not hovering
+      if (popupMenu.classList.contains('hidden')) {
+        elements.addItemModal.classList.remove('hidden');
+        elements.addItemType.value = '';
+        elements.addTransactionForm.classList.add('hidden');
+        elements.addBudgetForm.classList.add('hidden');
+        elements.addCategoryForm.classList.add('hidden');
+        resetForm({
+          transactionType: document.getElementById('modal-transaction-type'),
+          transactionAmount: document.getElementById('modal-transaction-amount'),
+          transactionCategory: document.getElementById('modal-transaction-category'),
+          transactionDescription: document.getElementById('modal-transaction-description'),
+          transactionDate: document.getElementById('modal-transaction-date'),
+          budgetName: document.getElementById('modal-budget-name'),
+          budgetAmount: document.getElementById('modal-budget-amount'),
+          categoryName: document.getElementById('modal-category-name'),
+          categoryType: document.getElementById('modal-category-type'),
+          categoryBudget: document.getElementById('modal-category-budget')
+        });
+      }
+    }
+  });
+
+  // Close popup when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!popupMenu.contains(e.target) && !elements.addItemButton.contains(e.target)) {
+      hidePopup();
+      clearTimeout(tapTimeout);
+    }
   });
 
   elements.addItemType.addEventListener('change', () => {
@@ -1934,6 +2020,7 @@ async function setupAddItemModal() {
     elements.saveItem.removeEventListener('click', elements.saveItem._transactionUpdateHandler);
     elements.saveItem.removeEventListener('click', elements.saveItem._budgetUpdateHandler);
     elements.saveItem.removeEventListener('click', elements.saveItem._categoryUpdateHandler);
+    hidePopup();
   });
 
   elements.saveItem.addEventListener('click', async () => {
