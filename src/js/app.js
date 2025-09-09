@@ -2088,15 +2088,6 @@ async function setupAddItemModal() {
       await setupCategories.handleCategoryAdd(inputs.name, inputs.type, inputs.budget);
     }
   });
-}
-
-
-
-
-
-
-
-
 
   setupTransactions.handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
     const { type, amount, category, description, date } = inputs;
