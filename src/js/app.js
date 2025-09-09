@@ -230,7 +230,6 @@ function setupTabs() {
     }
     return true;
   });
-
   let currentTabIndex = 0;
   const switchTab = (tabId) => {
     log('switchTab', 'Switching', `to ${tabId}`);
@@ -285,7 +284,6 @@ function setupTabs() {
     }
     currentTabIndex = tabs.findIndex(t => t.id === tabId);
   };
-
   tabs.forEach(tab => {
     const propName = toCamelCase(tab.id) + 'Tab';
     const tabElement = domElements[propName];
@@ -297,7 +295,6 @@ function setupTabs() {
       });
     }
   });
-
   const menuToggle = document.getElementById('menu-toggle');
   const menuItems = document.getElementById('menu-items');
   if (menuToggle && menuItems) {
@@ -311,7 +308,6 @@ function setupTabs() {
   } else {
     log('setupTabs', 'Warning', 'Mobile menu elements not found');
   }
-
   const swipeContainer = document.getElementById('swipeable-tabs');
   if (swipeContainer && window.matchMedia('(max-width: 768px)').matches) {
     let touchStartX = 0;
@@ -379,11 +375,9 @@ async function setupProfile() {
       domElements.saveProfile.classList.toggle('hidden', !enable);
     }
   };
-
   if (domElements.editProfile) {
     domElements.editProfile.addEventListener('click', () => toggleEditMode(true));
   }
-
   if (domElements.saveProfile) {
     domElements.saveProfile.addEventListener('click', async () => {
       const email = domElements.profileEmail?.value.trim();
@@ -433,7 +427,6 @@ async function setupProfile() {
       }
     });
   }
-
   if (domElements.currencyToggle) {
     domElements.currencyToggle.addEventListener('change', debounce(async () => {
       const newCurrency = domElements.currencyToggle.value;
@@ -455,7 +448,6 @@ async function setupProfile() {
       }
     }, 300));
   }
-
   if (domElements.dashboardFilter) {
     domElements.dashboardFilter.addEventListener('change', debounce(() => {
       if (domElements.customDateRange) {
@@ -586,7 +578,6 @@ async function setupCategories() {
     addBudgetForm: document.getElementById('add-budget-form')
   };
   if (!validateDomElements({ categoryTable: elements.categoryTable }, 'category-table', 'Category table not found')) return;
-
   const handleCategoryAdd = async (nameInput, typeSelect, budgetSelect, isModal = false) => {
     const name = nameInput.value.trim();
     const type = typeSelect.value;
@@ -621,7 +612,6 @@ async function setupCategories() {
       button: isModal ? elements.saveCategory : elements.saveItem
     });
   };
-
   const handleCategoryUpdate = async (id, nameInput, typeSelect, budgetSelect) => {
     const name = nameInput.value.trim();
     const type = typeSelect.value;
@@ -651,7 +641,6 @@ async function setupCategories() {
       isUpdate: true
     });
   };
-
   if (elements.saveCategory) {
     elements.saveCategory.addEventListener('click', async () => {
       const inputs = {
@@ -663,7 +652,6 @@ async function setupCategories() {
       await handleCategoryAdd(inputs.name, inputs.type, inputs.budget, true);
     });
   }
-
   if (elements.cancelCategory) {
     elements.cancelCategory.addEventListener('click', () => {
       if (domElements.addCategoryModal) {
@@ -676,7 +664,6 @@ async function setupCategories() {
       });
     });
   }
-
   if (elements.modalTransactionCategory) {
     elements.modalTransactionCategory.addEventListener('change', () => {
       if (elements.modalTransactionCategory.value === 'add-new') {
@@ -687,7 +674,6 @@ async function setupCategories() {
       }
     });
   }
-
   elements.categoryTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-category')) {
       const id = e.target.dataset.id;
@@ -872,7 +858,6 @@ async function setupBudgets() {
     addCategoryForm: document.getElementById('add-category-form')
   };
   if (!validateDomElements({ budgetTable: elements.budgetTable }, 'modal-budget-name', 'Budget table not found')) return;
-
   const handleBudgetAdd = async (nameInput, amountInput, isModal = false) => {
     const name = nameInput.value.trim();
     const amount = parseFloat(amountInput.value);
@@ -917,7 +902,6 @@ async function setupBudgets() {
       button: isModal ? elements.saveBudget : elements.saveItem
     });
   };
-
   const handleBudgetUpdate = async (id, nameInput, amountInput) => {
     const name = nameInput.value.trim();
     const amount = parseFloat(amountInput.value);
@@ -943,7 +927,6 @@ async function setupBudgets() {
       isUpdate: true
     });
   };
-
   if (domElements.categoryBudgetSelect) {
     domElements.categoryBudgetSelect.addEventListener('change', () => {
       if (domElements.categoryBudgetSelect.value === 'add-new') {
@@ -954,7 +937,6 @@ async function setupBudgets() {
       }
     });
   }
-
   if (elements.saveBudget) {
     elements.saveBudget.addEventListener('click', async () => {
       const inputs = {
@@ -965,7 +947,6 @@ async function setupBudgets() {
       await handleBudgetAdd(inputs.name, inputs.amount, true);
     });
   }
-
   if (elements.cancelBudget) {
     elements.cancelBudget.addEventListener('click', () => {
       if (domElements.addBudgetModal) {
@@ -977,7 +958,6 @@ async function setupBudgets() {
       });
     });
   }
-
   elements.budgetTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-budget')) {
       const id = e.target.dataset.id;
@@ -1118,9 +1098,7 @@ async function setupTransactions() {
     addCategoryForm: document.getElementById('add-category-form')
   };
   if (!validateDomElements({ transactionTable: elements.transactionTable, transactionsFilter: elements.transactionsFilter }, 'modal-transaction-category', 'Transaction components not found')) return;
-
   elements.transactionsFilter.addEventListener('change', debounce(loadTransactions, 300));
-
   const handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
     const { type, amount, category, description, date } = inputs;
     const amountVal = parseFloat(amount.value);
@@ -1199,7 +1177,6 @@ async function setupTransactions() {
       isUpdate
     });
   };
-
   elements.transactionTable.addEventListener('click', async (e) => {
     if (e.target.classList.contains('edit-transaction')) {
       const id = e.target.dataset.id;
@@ -1275,7 +1252,6 @@ async function setupTransactions() {
       domElements.cancelDelete.addEventListener('click', cancelHandler, { once: true });
     }
   });
-
   setupTransactions.handleTransactionAdd = handleTransactionAdd;
 }
 
@@ -1347,11 +1323,6 @@ async function loadChildAccounts() {
   }
 }
 
-
-
-
-
-
 async function loadChildTransactions() {
   log('loadChildTransactions', 'Starting', { currentChildUserId: state.currentChildUserId });
   const elements = {
@@ -1382,13 +1353,11 @@ async function loadChildTransactions() {
       log('loadChildTransactions', 'Error', 'Firebase database configuration invalid');
       throw new Error('Firebase database configuration invalid');
     }
-
     elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
     elements.balance.textContent = '₹0'; // Reset balance display
     const filter = domElements.dashboardFilter?.value || 'thisMonth';
     const { start, end } = getDateRangeWrapper(filter);
     elements.dateHeader.textContent = filter !== 'thisMonth' ? start.toLocaleString('en-US', { month: 'short', year: 'numeric' }) : new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' });
-
     // Verify user exists and has correct familyCode
     const userDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'users', state.currentChildUserId)));
     if (!userDoc.exists() || userDoc.data().familyCode !== familyCode) {
@@ -1399,7 +1368,6 @@ async function loadChildTransactions() {
       return;
     }
     log('loadChildTransactions', 'Validated', `User ${state.currentChildUserId} exists with familyCode ${familyCode}`);
-
     // Calculate total balance
     let totalBalance = 0;
     const allTransactionsQuery = query(collection(db, 'childTransactions'), where('userId', '==', state.currentChildUserId));
@@ -1414,7 +1382,6 @@ async function loadChildTransactions() {
       return sum + (tx.type === TransactionType.CREDIT ? tx.amount : -tx.amount);
     }, 0);
     log('loadChildTransactions', 'Calculated', `Total balance: ${totalBalance}`);
-
     // Fetch filtered transactions
     const transactionsQuery = query(
       collection(db, 'childTransactions'),
@@ -1434,14 +1401,13 @@ async function loadChildTransactions() {
           log('loadChildTransactions', 'Warning', `Invalid transaction date for ${doc.id}, using current date`);
           createdAt = new Date();
         }
-        if (!data.amount || typeof data.amount !== 'number' || !['credit', 'debit'].includes(data.type)) {
+        if (!data.amount || typeof data.amount !== 'number' || !['credit', 'debit'].includes(tx.type)) {
           log('loadChildTransactions', 'Warning', `Invalid transaction data for ${doc.id}: amount=${data.amount}, type=${data.type}, data=${JSON.stringify(data)}`);
           return null;
         }
         return { id: doc.id, ...data, createdAt };
       })
       .filter(tx => tx !== null);
-
     log('loadChildTransactions', 'Found', `${transactions.length} valid transactions`);
     if (transactions.length === 0) {
       elements.table.innerHTML = '<tr><td colspan="5" class="text-center py-4">No transactions found for this period</td></tr>';
@@ -1465,7 +1431,6 @@ async function loadChildTransactions() {
       }
       elements.table.appendChild(fragment);
     }
-
     const formattedBalance = await formatCurrency(totalBalance, 'INR');
     elements.balance.textContent = formattedBalance;
     log('loadChildTransactions', 'Success', `Total: ${totalBalance} (${formattedBalance}), transactions displayed: ${transactions.length}`);
@@ -1476,6 +1441,12 @@ async function loadChildTransactions() {
     elements.balance.textContent = '₹0';
   }
 }
+
+
+
+
+
+
 
 
 
