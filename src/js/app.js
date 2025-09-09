@@ -1905,7 +1905,7 @@ async function setupAddItemModal() {
     const popupWidth = popupRect.width;
     const popupHeight = popupRect.height;
     const buttonRect = elements.addItemButton.getBoundingClientRect();
-    const offset = 5; // Small offset to avoid overlapping the button
+    const offset = 2; // Reduced offset for closer positioning
 
     // Position above and to the left
     let newX = buttonRect.left - popupWidth + buttonRect.width;
@@ -1961,19 +1961,37 @@ async function setupAddItemModal() {
   // Detect mobile or desktop
   const isMobile = () => window.matchMedia('(max-width: 768px)').matches;
 
-  // Desktop: Show popup on hover
-  elements.addItemButton.addEventListener('mouseenter', () => {
+  // Desktop: Show popup on hover or click, persist until leaving both button and popup
+  let isPopupVisible = false;
+  const handleMouseLeave = (e) => {
     if (!isMobile()) {
+      const relatedTarget = e.relatedTarget || e.toElement;
+      if (!relatedTarget || (!popupMenu.contains(relatedTarget) && !elements.addItemButton.contains(relatedTarget))) {
+        hidePopup();
+        isPopupVisible = false;
+      }
+    }
+  };
+
+  elements.addItemButton.addEventListener('mouseenter', () => {
+    if (!isMobile() && !isPopupVisible) {
       const rect = elements.addItemButton.getBoundingClientRect();
       showPopup(rect.left, rect.top);
+      isPopupVisible = true;
     }
   });
 
-  elements.addItemButton.addEventListener('mouseleave', () => {
-    if (!isMobile()) {
-      hidePopup();
+  elements.addItemButton.addEventListener('click', (e) => {
+    if (!isMobile() && !isPopupVisible) {
+      e.preventDefault();
+      const rect = elements.addItemButton.getBoundingClientRect();
+      showPopup(rect.left, rect.top);
+      isPopupVisible = true;
     }
   });
+
+  elements.addItemButton.addEventListener('mouseleave', handleMouseLeave);
+  popupMenu.addEventListener('mouseleave', handleMouseLeave);
 
   // Mobile: Show popup on tap
   let tapTimeout;
@@ -1989,27 +2007,25 @@ async function setupAddItemModal() {
         hidePopup();
         clearTimeout(tapTimeout);
       }
-    } else {
-      // Desktop: Open modal directly if not hovering
-      if (popupMenu.classList.contains('hidden')) {
-        elements.addItemModal.classList.remove('hidden');
-        elements.addItemType.value = '';
-        elements.addTransactionForm.classList.add('hidden');
-        elements.addBudgetForm.classList.add('hidden');
-        elements.addCategoryForm.classList.add('hidden');
-        resetForm({
-          transactionType: document.getElementById('modal-transaction-type'),
-          transactionAmount: document.getElementById('modal-transaction-amount'),
-          transactionCategory: document.getElementById('modal-transaction-category'),
-          transactionDescription: document.getElementById('modal-transaction-description'),
-          transactionDate: document.getElementById('modal-transaction-date'),
-          budgetName: document.getElementById('modal-budget-name'),
-          budgetAmount: document.getElementById('modal-budget-amount'),
-          categoryName: document.getElementById('modal-category-name'),
-          categoryType: document.getElementById('modal-category-type'),
-          categoryBudget: document.getElementById('modal-category-budget')
-        });
-      }
+    } else if (popupMenu.classList.contains('hidden') && !isPopupVisible) {
+      // Desktop: Open modal directly if popup is not visible
+      elements.addItemModal.classList.remove('hidden');
+      elements.addItemType.value = '';
+      elements.addTransactionForm.classList.add('hidden');
+      elements.addBudgetForm.classList.add('hidden');
+      elements.addCategoryForm.classList.add('hidden');
+      resetForm({
+        transactionType: document.getElementById('modal-transaction-type'),
+        transactionAmount: document.getElementById('modal-transaction-amount'),
+        transactionCategory: document.getElementById('modal-transaction-category'),
+        transactionDescription: document.getElementById('modal-transaction-description'),
+        transactionDate: document.getElementById('modal-transaction-date'),
+        budgetName: document.getElementById('modal-budget-name'),
+        budgetAmount: document.getElementById('modal-budget-amount'),
+        categoryName: document.getElementById('modal-category-name'),
+        categoryType: document.getElementById('modal-category-type'),
+        categoryBudget: document.getElementById('modal-category-budget')
+      });
     }
   });
 
@@ -2017,6 +2033,7 @@ async function setupAddItemModal() {
   document.addEventListener('click', (e) => {
     if (!popupMenu.contains(e.target) && !elements.addItemButton.contains(e.target)) {
       hidePopup();
+      isPopupVisible = false;
       clearTimeout(tapTimeout);
     }
   });
@@ -2053,6 +2070,7 @@ async function setupAddItemModal() {
     elements.saveItem.removeEventListener('click', elements.saveItem._budgetUpdateHandler);
     elements.saveItem.removeEventListener('click', elements.saveItem._categoryUpdateHandler);
     hidePopup();
+    isPopupVisible = false;
   });
 
   elements.saveItem.addEventListener('click', async () => {
@@ -2088,165 +2106,6 @@ async function setupAddItemModal() {
       await setupCategories.handleCategoryAdd(inputs.name, inputs.type, inputs.budget);
     }
   });
-
-  setupTransactions.handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
-    const { type, amount, category, description, date } = inputs;
-    const amountVal = parseFloat(amount.value);
-    const transactionDate = new Date(date.value);
-    const validationErrors = [];
-    if (!amountVal || amountVal <= 0) validationErrors.push({ id: 'modal-transaction-amount', message: 'Valid amount is required' });
-    if (!category.value) validationErrors.push({ id: 'modal-transaction-category', message: 'Category is required' });
-    if (!date.value || isNaN(transactionDate.getTime())) validationErrors.push({ id: 'modal-transaction-date', message: 'Valid date is required' });
-    if (description.value.length > 200) validationErrors.push({ id: 'modal-transaction-description', message: 'Description cannot exceed 200 characters' });
-    await handleFormSubmission({
-      inputs,
-      validate: () => validationErrors,
-      dbOperation: async () => {
-        const batch = writeBatch(db);
-        if (isUpdate) {
-          let oldBudgetId = null, newBudgetId = null;
-          const oldDoc = await getDoc(doc(db, 'transactions', id));
-          if (oldDoc.exists() && oldDoc.data().type === TransactionType.DEBIT) {
-            const oldCategory = await getDoc(doc(db, 'categories', oldDoc.data().categoryId));
-            oldBudgetId = oldCategory.exists() ? oldCategory.data().budgetId : null;
-          }
-          if (type.value === TransactionType.DEBIT) {
-            const newCategory = await getDoc(doc(db, 'categories', category.value));
-            newBudgetId = newCategory.exists() ? newCategory.data().budgetId : null;
-          }
-          if (oldBudgetId && oldBudgetId === newBudgetId) {
-            const amountDiff = amountVal - oldDoc.data().amount;
-            if (amountDiff !== 0) {
-              batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(amountDiff) });
-            }
-          } else {
-            if (oldBudgetId && oldDoc.data().type === TransactionType.DEBIT) {
-              batch.update(doc(db, 'budgets', oldBudgetId), { spent: increment(-oldDoc.data().amount) });
-            }
-            if (newBudgetId && type.value === TransactionType.DEBIT) {
-              batch.update(doc(db, 'budgets', newBudgetId), { spent: increment(amountVal) });
-            }
-          }
-          batch.update(doc(db, 'transactions', id), {
-            type: type.value,
-            amount: amountVal,
-            categoryId: category.value,
-            description: sanitizeInput(description.value.trim()),
-            createdAt: transactionDate
-          });
-        } else {
-          const txRef = doc(collection(db, 'transactions'));
-          batch.set(txRef, {
-            type: type.value,
-            amount: amountVal,
-            categoryId: category.value,
-            description: sanitizeInput(description.value.trim()),
-            familyCode,
-            createdAt: transactionDate
-          });
-          if (type.value === TransactionType.DEBIT) {
-            const categoryDoc = await getDoc(doc(db, 'categories', category.value));
-            if (categoryDoc.exists() && categoryDoc.data().budgetId) {
-              batch.update(doc(db, 'budgets', categoryDoc.data().budgetId), { spent: increment(amountVal) });
-            }
-          }
-        }
-        await batch.commit();
-      },
-      successCallback: () => {
-        clearTransactionCache();
-        resetForm(inputs);
-        state.isEditing.transaction = false;
-        elements.addItemModal.classList.add('hidden');
-        elements.addItemType.value = '';
-        elements.addTransactionForm.classList.add('hidden');
-        Promise.all([loadBudgets(), loadTransactions(), updateDashboard()]);
-      },
-      errorElement: 'modal-transaction-category',
-      button: elements.saveItem,
-      isUpdate
-    });
-  };
-
-  setupBudgets.handleBudgetAdd = async (nameInput, amountInput, isModal = false) => {
-    const name = nameInput.value.trim();
-    const amount = parseFloat(amountInput.value);
-    const validationErrors = [];
-    if (!name) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Budget name is required' });
-    if (name.length > 100) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Name cannot exceed 100 characters' });
-    if (isNaN(amount) || amount <= 0) validationErrors.push({ id: isModal ? 'new-budget-amount' : 'modal-budget-amount', message: 'Valid positive amount is required' });
-    if (state.currentAccountType !== AccountType.ADMIN) validationErrors.push({ id: isModal ? 'new-budget-name' : 'modal-budget-name', message: 'Only admins can add budgets' });
-    await handleFormSubmission({
-      inputs: { nameInput, amountInput },
-      validate: () => validationErrors,
-      dbOperation: async () => {
-        const userDoc = await retryFirestoreOperation(() => getDoc(doc(db, 'users', currentUser.uid)));
-        if (!userDoc.exists() || !userDoc.data().familyCode) {
-          throw new Error('Invalid user configuration');
-        }
-        const now = new Date();
-        const budgetData = {
-          name: sanitizeInput(name),
-          amount,
-          spent: 0,
-          familyCode: userDoc.data().familyCode,
-          createdAt: serverTimestamp(),
-          lastResetMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-        };
-        await addDoc(collection(db, 'budgets'), budgetData);
-        clearTransactionCache();
-      },
-      successCallback: () => {
-        resetForm({ nameInput, amountInput });
-        if (isModal && domElements.addBudgetModal) {
-          domElements.addBudgetModal.classList.add('hidden');
-        }
-        if (!isModal && elements.addItemModal) {
-          elements.addItemModal.classList.add('hidden');
-          elements.addItemType.value = '';
-          elements.addBudgetForm.classList.add('hidden');
-        }
-        Promise.all([loadBudgets(), loadCategories()]);
-      },
-      errorElement: isModal ? 'new-budget-name' : 'modal-budget-name',
-      button: isModal ? document.getElementById('save-budget') : elements.saveItem
-    });
-  };
-
-  setupCategories.handleCategoryAdd = async (nameInput, typeSelect, budgetSelect, isModal = false) => {
-    const name = nameInput.value.trim();
-    const type = typeSelect.value;
-    const budgetId = budgetSelect.value === 'none' ? null : budgetSelect.value;
-    const validationErrors = [];
-    if (!name) validationErrors.push({ id: isModal ? 'new-category-name' : 'modal-category-name', message: 'Name is required' });
-    if (name.length > 100) validationErrors.push({ id: isModal ? 'new-category-name' : 'modal-category-name', message: 'Name cannot exceed 100 characters' });
-    if (!type) validationErrors.push({ id: isModal ? 'new-category-type' : 'modal-category-type', message: 'Type is required' });
-    await handleFormSubmission({
-      inputs: { nameInput, typeSelect, budgetSelect },
-      validate: () => validationErrors,
-      dbOperation: () => addDoc(collection(db, 'categories'), {
-        name: sanitizeInput(name),
-        type,
-        budgetId,
-        familyCode,
-        createdAt: serverTimestamp()
-      }),
-      successCallback: () => {
-        resetForm({ nameInput, typeSelect, budgetSelect });
-        if (isModal && domElements.addCategoryModal) {
-          domElements.addCategoryModal.classList.add('hidden');
-        }
-        if (!isModal && elements.addItemModal) {
-          elements.addItemModal.classList.add('hidden');
-          elements.addItemType.value = '';
-          elements.addCategoryForm.classList.add('hidden');
-        }
-        loadCategories();
-      },
-      errorElement: isModal ? 'new-category-name' : 'modal-category-name',
-      button: isModal ? document.getElementById('save-category') : elements.saveItem
-    });
-  };
 }
 
 async function initApp() {
