@@ -1862,6 +1862,16 @@ async function setupLogout() {
   }, 500);
 }
 
+
+
+
+
+
+
+
+
+
+
 async function setupAddItemModal() {
   const elements = {
     addItemButton: document.getElementById('add-item-button'),
@@ -1888,8 +1898,30 @@ async function setupAddItemModal() {
 
   // Function to show popup
   const showPopup = (x, y) => {
-    popupMenu.style.left = `${x}px`;
-    popupMenu.style.top = `${y}px`;
+    // Ensure popup is visible to measure its dimensions
+    popupMenu.style.visibility = 'hidden';
+    popupMenu.classList.remove('hidden');
+    const popupRect = popupMenu.getBoundingClientRect();
+    const popupWidth = popupRect.width;
+    const popupHeight = popupRect.height;
+    const buttonRect = elements.addItemButton.getBoundingClientRect();
+    const offset = 5; // Small offset to avoid overlapping the button
+
+    // Position above and to the left
+    let newX = buttonRect.left - popupWidth + buttonRect.width;
+    let newY = buttonRect.top - popupHeight - offset;
+
+    // Boundary checks to prevent popup from going off-screen
+    const minX = 0;
+    const minY = 0;
+    const maxX = window.innerWidth - popupWidth;
+    const maxY = window.innerHeight - popupHeight;
+    newX = Math.max(minX, Math.min(newX, maxX));
+    newY = Math.max(minY, Math.min(newY, maxY));
+
+    popupMenu.style.left = `${newX}px`;
+    popupMenu.style.top = `${newY}px`;
+    popupMenu.style.visibility = 'visible';
     popupMenu.classList.remove('hidden');
   };
 
@@ -1933,7 +1965,7 @@ async function setupAddItemModal() {
   elements.addItemButton.addEventListener('mouseenter', () => {
     if (!isMobile()) {
       const rect = elements.addItemButton.getBoundingClientRect();
-      showPopup(rect.left + 25, rect.top + 25);
+      showPopup(rect.left, rect.top);
     }
   });
 
@@ -1950,7 +1982,7 @@ async function setupAddItemModal() {
       e.preventDefault(); // Prevent default click behavior
       if (popupMenu.classList.contains('hidden')) {
         const rect = elements.addItemButton.getBoundingClientRect();
-        showPopup(rect.right + 5, rect.top);
+        showPopup(rect.left, rect.top);
         // Auto-hide after 5 seconds
         tapTimeout = setTimeout(hidePopup, 5000);
       } else {
@@ -2056,6 +2088,15 @@ async function setupAddItemModal() {
       await setupCategories.handleCategoryAdd(inputs.name, inputs.type, inputs.budget);
     }
   });
+}
+
+
+
+
+
+
+
+
 
   setupTransactions.handleTransactionAdd = async (inputs, isUpdate = false, id = null) => {
     const { type, amount, category, description, date } = inputs;
